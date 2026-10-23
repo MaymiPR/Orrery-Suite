@@ -198,7 +198,7 @@ void DevilsParticleEditor::timerCallback()
     lastBlocks = blocks;
     const bool audio = running && jmax (inMeter[0].barDb, inMeter[1].barDb, inMeter[0].peakDb) > -80.0f;
     const float mix = characterOn ? jlimit (0.0f, 1.0f, characterValue / 0.5f) : 0.0f;
-    visualizer.advance (audio, mix, dp::Settings::get().animation());
+    visualizer.advance (audio, mix, dp::Settings::get().animation(), dp::Settings::get().particleStyle() == dp::Settings::Particles::devily);
     content.repaint();
     amountText.repaint();
 }
@@ -208,7 +208,8 @@ void DevilsParticleEditor::setTestLevels (float inDb, float outDb, bool audio)
     frozen = true;
     for (auto& m : inMeter) { m.barDb = inDb - 3.0f; m.peakDb = inDb; m.peakHoldDb = inDb; m.rmsHoldDb = inDb - 3.0f; }
     for (auto& m : outMeter) { m.barDb = outDb - 3.0f; m.peakDb = outDb; m.peakHoldDb = outDb; m.rmsHoldDb = outDb - 3.0f; }
-    if (audio) visualizer.advance (true, characterOn ? jlimit (0.0f, 1.0f, characterValue / 0.5f) : 0.0f, true);
+    if (audio) visualizer.advance (true, characterOn ? jlimit (0.0f, 1.0f, characterValue / 0.5f) : 0.0f, true,
+                                   dp::Settings::get().particleStyle() == dp::Settings::Particles::devily);
     content.repaint();
 }
 
@@ -481,14 +482,9 @@ void DevilsParticleEditor::paintPlate (Graphics& g)
                     const float dx = ((float) x + 0.5f) / dpx - half, dy = ((float) y + 0.5f) / dpx - half;
                     const float d = std::sqrt (dx * dx + dy * dy) - R;
                     if (d < -1.0f || d >= reach) continue;
-                    float a = radiansToDegrees (std::atan2 (dx, -dy));
-                    if (a < 0.0f) a += 360.0f;
-                    const float fa = a / 10.0f, fd = jlimit (0.0f, reach - 1.0f, d);
-                    const int a0 = (int) fa % 36, a1 = (a0 + 1) % 36, d0 = jmin ((int) reach - 2, (int) fd);
-                    const float ta = fa - std::floor (fa), td = fd - (float) d0;
-                    using dp::knobshadow::factor;
-                    const float f = (factor[d0][a0] * (1 - ta) + factor[d0][a1] * ta) * (1 - td)
-                                  + (factor[d0 + 1][a0] * (1 - ta) + factor[d0 + 1][a1] * ta) * td;
+                    const float a = std::atan2 (dx, -dy);                               // from up, clockwise
+                    const float fade = jlimit (0.0f, 1.0f, (reach - d) / 15.0f);       // soft end, no ring
+                    const float f = 1.0f - (1.0f - dp::knobshadow::factor (jmax (0.0f, d), a)) * fade;
                     bd.setPixelColour (x, y, Colours::black.withAlpha (jlimit (0.0f, 1.0f, 1.0f - f)));
                 }
             knobShadowScale = dpx;
@@ -600,7 +596,8 @@ namespace
 class SettingsDialog : public dp::Dialog
 {
 public:
-    SettingsDialog() : Dialog ("settings", { 234.0f, 50.5f, 420.0f, 255.5f }, false) {}
+    // the reference's three rows plus ours: particle style (godly / devily)
+    SettingsDialog() : Dialog ("settings", { 234.0f, 50.5f, 420.0f, 300.0f }, false) {}
     void paint (Graphics& g) override
     {
         Dialog::paint (g);
@@ -608,16 +605,19 @@ public:
         g.setColour (Colour (0xff050505));
         g.fillRect (box.getX(), 145.0f, box.getWidth(), 1.0f);
         g.fillRect (box.getX(), 236.5f, box.getWidth(), 1.0f);
+        g.fillRect (box.getX(), 292.0f, box.getWidth(), 1.0f);
         g.setColour (theme::text);
         g.setFont (theme::font (16.75f));
         theme::textAt (g, "oversampling ratio", 258.0f, 118.5f);
         theme::textAt (g, "I/O metering", 258.0f, 182.0f);
         theme::textAt (g, "particle animation", 258.0f, 274.0f);
+        theme::textAt (g, "particle style", 258.0f, 325.5f);
         const int ratios[4] { 1, 2, 4, 8 };
         int sel = 0;
         for (int i = 0; i < 4; ++i) if (ratios[i] == st.oversampling()) sel = i;
         segments (g, { 454.0f, 101.5f, 167.5f, 23.0f }, { "1", "2", "4", "8" }, sel);
         segments (g, { 454.0f, 257.5f, 84.0f, 23.0f }, { "ON", "OFF" }, st.animation() ? 0 : 1);
+        segments (g, { 454.0f, 309.0f, 128.0f, 23.0f }, { "GODLY", "DEVILY" }, st.particleStyle() == dp::Settings::Particles::devily ? 1 : 0);
         radio (g, 178.0f, "RMS & Peak", st.meterMode() == dp::Settings::Meter::rmsPeak);
         radio (g, 204.0f, "Short-term LUFS & Peak", st.meterMode() == dp::Settings::Meter::lufsPeak);
     }
@@ -627,6 +627,11 @@ public:
         const auto p = e.position;
         if (Rectangle<float> (454.0f, 101.5f, 167.5f, 23.0f).contains (p)) { const int r[4] { 1, 2, 4, 8 }; st.setOversampling (r[jlimit (0, 3, (int) ((p.x - 454.0f) / (167.5f / 4.0f)))]); repaint(); return; }
         if (Rectangle<float> (454.0f, 257.5f, 84.0f, 23.0f).contains (p)) { st.setAnimation (p.x < 496.0f); repaint(); return; }
+        if (Rectangle<float> (454.0f, 309.0f, 128.0f, 23.0f).contains (p))
+        {
+            st.setParticleStyle (p.x < 518.0f ? dp::Settings::Particles::godly : dp::Settings::Particles::devily);
+            repaint(); return;
+        }
         if (Rectangle<float> (450.0f, 168.0f, 190.0f, 20.0f).contains (p)) { st.setMeterMode (dp::Settings::Meter::rmsPeak); repaint(); return; }
         if (Rectangle<float> (450.0f, 194.0f, 190.0f, 20.0f).contains (p)) { st.setMeterMode (dp::Settings::Meter::lufsPeak); repaint(); return; }
         Dialog::mouseDown (e);
@@ -767,30 +772,36 @@ void DevilsParticleEditor::showDialog (std::unique_ptr<dp::Dialog> d)
     dialog = std::move (d);
 }
 
-// the logo's menu, like Chan Sampler's: version, About, repository, issues, licence
+// the logo's menu, like Chan Sampler's (version, About, repository, issues, licence), drawn like the preset list
 void DevilsParticleEditor::showAboutMenu()
 {
+    if (dropList != nullptr) { closePopups(); return; }
     const String version = JucePlugin_VersionString;
-    PopupMenu menu;
-    menu.setLookAndFeel (&menuLook);
-    menu.addSectionHeader ("Devil's Particle v" + version);
-    menu.addItem ("About Devil's Particle", [safe = Component::SafePointer<DevilsParticleEditor> (this), version]
+    dropList = std::make_unique<dp::DropList>();
+    dropList->setItems ({ { "Devil's Particle v" + version, true }, { "About Devil's Particle" }, { "Devil's Particle on GitHub" },
+                          { "Report an Issue" }, { "License (AGPL-3.0)" } }, 24.0f, true);
+    dropList->onPick = [safe = Component::SafePointer<DevilsParticleEditor> (this), version] (int row)
     {
         if (safe == nullptr) return;
-        const auto wrapper = safe->proc.wrapperType;
-        const String format = AudioProcessor::getWrapperTypeDescription (wrapper);
-        safe->showDialog (std::make_unique<dp::InfoDialog> ("about Devil's Particle", std::vector<std::pair<String, String>> {
-            { "Version", version + (wrapper == AudioProcessor::wrapperType_Undefined ? String() : " (" + format + ")") },
-            { {}, {} },
-            { "What it is", "An open-source mix-bus processor modelled on and measured against Cradle's The God Particle" },
-            { "License", "Free software under the GNU Affero General Public License v3" },
-            { "Built with", "JUCE, the VST3 SDK and CLAP; Instrument Sans (SIL OFL). Their licenses come with it" },
-            { "Source", repository.fromFirstOccurrenceOf ("https://", false, false) },
-            { {}, {} },
-            { "Note", "An independent project: not made, endorsed or supported by Cradle or Jaycen Joshua. The God Particle is a trademark of its owner." } }));
-    });
-    menu.addItem ("Devil's Particle on GitHub", [] { URL (repository).launchInDefaultBrowser(); });
-    menu.addItem ("Report an Issue", [] { URL (repository + "/issues/new/choose").launchInDefaultBrowser(); });
-    menu.addItem ("License (AGPL-3.0)", [] { URL (repository + "/blob/main/LICENSE").launchInDefaultBrowser(); });
-    menu.showMenuAsync (PopupMenu::Options().withTargetComponent (&logo));
+        safe->closePopups();
+        if (row == 1)
+        {
+            const auto wrapper = safe->proc.wrapperType;
+            const String format = AudioProcessor::getWrapperTypeDescription (wrapper);
+            safe->showDialog (std::make_unique<dp::InfoDialog> ("about Devil's Particle", std::vector<std::pair<String, String>> {
+                { "Version", version + (wrapper == AudioProcessor::wrapperType_Undefined ? String() : " (" + format + ")") },
+                { {}, {} },
+                { "What it is", "An open-source mix-bus processor modelled on and measured against Cradle's The God Particle" },
+                { "License", "Free software under the GNU Affero General Public License v3" },
+                { "Built with", "JUCE, the VST3 SDK and CLAP; Instrument Sans (SIL OFL). Their licenses come with it" },
+                { "Source", repository.fromFirstOccurrenceOf ("https://", false, false) },
+                { {}, {} },
+                { "Note", "An independent project: not made, endorsed or supported by Cradle or Jaycen Joshua. The God Particle is a trademark of its owner." } }));
+        }
+        else if (row == 2) URL (repository).launchInDefaultBrowser();
+        else if (row == 3) URL (repository + "/issues/new/choose").launchInDefaultBrowser();
+        else if (row == 4) URL (repository + "/blob/main/LICENSE").launchInDefaultBrowser();
+    };
+    dropList->setBounds (4, 27, 214, 24 * 5 - 2);
+    content.addAndMakeVisible (*dropList);
 }

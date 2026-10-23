@@ -3,13 +3,14 @@
 #include <juce_events/juce_events.h>
 
 // The settings page's options. Like the reference they are global (shared by every instance and project), not part
-// of the plug-in state: oversampling ratio, I/O meter mode and the particle animation.
+// of the plug-in state: oversampling ratio, I/O meter mode, the particle animation and (ours) its style.
 namespace dp
 {
 class Settings : public juce::ChangeBroadcaster
 {
 public:
     enum class Meter { rmsPeak, lufsPeak };
+    enum class Particles { godly, devily };
 
     static Settings& get()
     {
@@ -20,10 +21,12 @@ public:
     int oversampling() const { return file->getIntValue ("oversampling", 1); }          // 1, 2, 4 or 8
     Meter meterMode() const { return file->getIntValue ("meterMode", 0) == 1 ? Meter::lufsPeak : Meter::rmsPeak; }
     bool animation() const { return file->getBoolValue ("animation", true); }
+    Particles particleStyle() const { return file->getIntValue ("particleStyle", 0) == 1 ? Particles::devily : Particles::godly; }
 
     void setOversampling (int r) { set ("oversampling", r); }
     void setMeterMode (Meter m) { set ("meterMode", m == Meter::lufsPeak ? 1 : 0); }
     void setAnimation (bool on) { set ("animation", on); }
+    void setParticleStyle (Particles p) { set ("particleStyle", p == Particles::devily ? 1 : 0); }
 
 private:
     Settings()

@@ -171,48 +171,6 @@ void Logo::paint (Graphics& g)
     g.fillPath (tips);
 }
 
-MenuLook::MenuLook()
-{
-    setColour (PopupMenu::backgroundColourId, Colour (0xff0c0c0c));
-    setColour (PopupMenu::textColourId, theme::text);
-    setColour (PopupMenu::highlightedBackgroundColourId, Colour (0xff1d1d1d));
-    setColour (PopupMenu::highlightedTextColourId, theme::text);
-    setColour (PopupMenu::headerTextColourId, Colour (0xff8c8c8c));
-}
-
-Font MenuLook::getPopupMenuFont() { return theme::font (12.0f); }
-
-void MenuLook::drawPopupMenuBackground (Graphics& g, int w, int h)
-{
-    g.fillAll (findColour (PopupMenu::backgroundColourId));
-    g.setColour (theme::text);
-    g.drawRect (0, 0, w, h, 1);
-}
-
-void MenuLook::drawPopupMenuSectionHeader (Graphics& g, const Rectangle<int>& area, const String& text)
-{
-    g.setColour (findColour (PopupMenu::headerTextColourId));
-    g.setFont (theme::font (11.0f));
-    g.drawText (text, area.reduced (8, 0), Justification::centredLeft, true);
-}
-
-void MenuLook::drawPopupMenuItem (Graphics& g, const Rectangle<int>& area, bool isSeparator, bool isActive, bool isHighlighted,
-                                  bool, bool, const String& text, const String&, const Drawable*, const Colour*)
-{
-    if (isSeparator) { g.setColour (theme::divider); g.fillRect (area.reduced (6, 0).withHeight (1).withCentre (area.getCentre())); return; }
-    if (isHighlighted && isActive) { g.setColour (findColour (PopupMenu::highlightedBackgroundColourId)); g.fillRect (area.reduced (1, 0)); }
-    g.setColour (isActive ? theme::text : theme::text.withAlpha (0.4f));
-    g.setFont (getPopupMenuFont());
-    g.drawText (text, area.reduced (8, 0), Justification::centredLeft, true);
-}
-
-void MenuLook::getIdealPopupMenuItemSize (const String& text, bool isSeparator, int, int& w, int& h)
-{
-    if (isSeparator) { w = 50; h = 7; return; }
-    w = GlyphArrangement::getStringWidthInt (getPopupMenuFont(), text) + 24;
-    h = 22;
-}
-
 InfoDialog::InfoDialog (String t, std::vector<std::pair<String, String>> r)
     : Dialog (std::move (t), { 214.0f, 56.0f, 460.0f, 248.0f }, true), rows (std::move (r)) {}
 

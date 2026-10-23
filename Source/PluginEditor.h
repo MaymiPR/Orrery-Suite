@@ -52,7 +52,6 @@ private:
     void showSavePreset();
     void showAboutMenu();
     void showDialog (std::unique_ptr<dp::Dialog>);
-    dp::MenuLook menuLook;
     void updateMeter (Meter&, dp::LevelTap&, float dt);
 
     void paintTopBar (juce::Graphics&);

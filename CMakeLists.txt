@@ -25,7 +25,8 @@ if(DP_CLAP)
     FetchContent_MakeAvailable(clap_juce_extensions)
 endif()
 
-juce_add_binary_data(DevilsParticleData SOURCES resources/fonts/InstrumentSans-Regular.ttf)
+juce_add_binary_data(DevilsParticleData SOURCES resources/fonts/InstrumentSans-Regular.ttf
+    resources/glass/glass_off.png resources/glass/glass_lit.png)
 set_target_properties(DevilsParticleData PROPERTIES POSITION_INDEPENDENT_CODE ON)
 
 set(DP_SOURCES

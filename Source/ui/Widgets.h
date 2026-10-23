@@ -84,20 +84,6 @@ public:
     std::function<void()> onClick;
 };
 
-// Dark popup menus in the editor's style (the logo menu)
-class MenuLook : public juce::LookAndFeel_V4
-{
-public:
-    MenuLook();
-    juce::Font getPopupMenuFont() override;
-    void drawPopupMenuBackground (juce::Graphics&, int w, int h) override;
-    void drawPopupMenuSectionHeader (juce::Graphics&, const juce::Rectangle<int>&, const juce::String&) override;
-    void drawPopupMenuItem (juce::Graphics&, const juce::Rectangle<int>&, bool isSeparator, bool isActive, bool isHighlighted,
-                            bool isTicked, bool hasSubMenu, const juce::String& text, const juce::String& shortcutKeyText,
-                            const juce::Drawable* icon, const juce::Colour* textColour) override;
-    void getIdealPopupMenuItemSize (const juce::String& text, bool isSeparator, int standardMenuItemHeight, int& w, int& h) override;
-    int getPopupMenuBorderSize() override { return 1; }
-};
 
 // List that drops below a DropBox (preset list with captions, UI scale list). Closes on a pick or a click outside.
 class DropList : public juce::Component
