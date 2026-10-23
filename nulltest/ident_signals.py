@@ -2,6 +2,7 @@
 sample by sample from the reference's output). A tone in the middle of the band:
   static    3 s steps -40 -30 -20 -14 -8 -2 +4 dBFS (the slow part settles), then down again
   bursts    from a -50 dBFS bed to -24 / -12 / 0 dBFS for 20 ms, 200 ms and 2 s, 3 s of bed after each
+  noise     the static steps with band-limited noise of the same RMS (noise_signal)
   twotone   the static steps with two equal tones (band frequency x 0.8 and x 1.25) at the same RMS as the one tone:
             3 dB more peak, and a beating envelope, which tells a mean-square detector from ones that react to peaks
 """
@@ -36,6 +37,21 @@ def twotone_signal(band):
     a = tone_segments(f * 0.8, [(STATIC_SECS, l) for l in STATIC_LEVELS])
     b = tone_segments(f * 1.25, [(STATIC_SECS, l) for l in STATIC_LEVELS])
     return ((a + b) / np.sqrt(2)).astype(np.float32)
+
+
+NOISE_BAND = {'low': (40, 110), 'mid': (400, 1200), 'high': (5000, 11000)}
+
+
+def noise_signal(band, seed=17):
+    """the static steps with band-limited noise of the same RMS as the tone (crest factor ~13 dB): a peak detector
+    reads it far higher than a mean-square one"""
+    from scipy.signal import butter, sosfiltfilt
+    rng = np.random.default_rng(seed)
+    n = int(round(STATIC_SECS * FS)) * len(STATIC_LEVELS)
+    w = sosfiltfilt(butter(6, NOISE_BAND[band], 'band', fs=FS, output='sos'), rng.standard_normal(n))
+    w /= np.sqrt(2 * np.mean(w ** 2))                     # RMS of a unit-peak sine
+    g = np.repeat([10 ** (l / 20) for l in STATIC_LEVELS], int(round(STATIC_SECS * FS)))
+    return np.concatenate([np.zeros(PRE), w * g]).astype(np.float32)
 
 
 def burst_signal(band):

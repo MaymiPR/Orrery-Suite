@@ -13,8 +13,8 @@
 // uses the defaults.
 namespace ap::dsp
 {
-// The character section's per-band settings are tabled at amount 0, 25, ..., 200 % and interpolated linearly.
-inline constexpr int kAmountNodes = 9;
+// The character section's per-band settings are tabled at amount 0, 12.5, ..., 200 % and interpolated linearly.
+inline constexpr int kAmountNodes = 17;
 enum BandParam
 {
     bpMakeup,     // dB, gain after the shaper (= the small-signal gain)
@@ -55,6 +55,7 @@ struct Tuning
 
     // limiter (Limiter.h): window ahead and release (samples at 48 kHz), slow envelope, output trim
     double limWindow = 21, limReleaseSteps = 22;
+    double limWindowAt = 0, limReleaseAt = 0;   // > 0: window / release in samples at the current rate (fitting)
     double limSlowAttackMs = 24.47, limSlowReleaseMs = 377.8;
     double limTrimDb = -0.1;              // after the 0 dBFS ceiling: the output's ceiling and small-signal gain
 
@@ -85,14 +86,14 @@ struct Tuning
         }
     }
 
-    // "mid.mix.4 = 0.7" (band.param.node, node 0..8 = 0..200 %), "mid.mix = 0.7" (every node), or a scalar name
+    // "mid.mix.8 = 0.7" (band.param.node, node 0..16 = 0..200 %), "mid.mix = 0.7" (every node), or a scalar name
     bool set (const std::string& key, double v)
     {
         struct S { const char* n; double* p; };
         const S scalars[] { { "coreDelayMs", &coreDelayMs }, { "coreDelaySamples", &coreDelaySamples },
                             { "eqLowHz", &eqLowHz }, { "eqLowQ", &eqLowQ }, { "eqMidHz", &eqMidHz }, { "eqMidQ", &eqMidQ },
                             { "eqHighHz", &eqHighHz }, { "eqHighQ", &eqHighQ }, { "fc1", &fc1 }, { "fc2", &fc2 },
-                            { "limWindow", &limWindow }, { "limReleaseSteps", &limReleaseSteps }, { "limSlowAttackMs", &limSlowAttackMs },
+                            { "limWindow", &limWindow }, { "limWindowAt", &limWindowAt }, { "limReleaseAt", &limReleaseAt }, { "limReleaseSteps", &limReleaseSteps }, { "limSlowAttackMs", &limSlowAttackMs },
                             { "limSlowReleaseMs", &limSlowReleaseMs }, { "limTrimDb", &limTrimDb }, { "ctlChunk", &ctlChunk }, { "paramRampMs", &paramRampMs }, { "gainTauMs", &gainTauMs },
                             { "glideMs", &glideMs }, { "limRampMs", &limRampMs }, { "eqForm", &eqForm }, { "eqPerSample", &eqPerSample }, { "eqGlideDomain", &eqGlideDomain }, { "charZeroRest", &charZeroRest },
                             { "oversampling", &forceOversampling } };

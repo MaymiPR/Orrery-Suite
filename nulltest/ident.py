@@ -22,6 +22,17 @@ def band_firs():
 
 IRS, GAINS = band_firs()
 
+# the bands' small-signal gains (dB) at amount 0, 12.5, ..., 200 % (measured from impulse responses with the band
+# filters known; the nodes of BandFilters.h are every other one)
+GAINS16 = [[0.0, 0.3815, 0.7538, 1.1174, 1.4727, 1.8202, 2.1601, 2.4928, 2.8187, 2.9885, 3.1550, 3.3184, 3.4787, 3.6362, 3.7908, 3.9428, 4.0921],
+           [0.0, 0.5753, 1.1054, 1.5960, 2.0517, 2.4766, 2.8740, 3.2464, 3.5965, 3.9607, 4.3103, 4.6464, 4.9700, 5.2819, 5.5831, 5.8741, 6.1557],
+           [0.0, 0.1934, 0.3619, 0.5067, 0.6289, 0.7296, 0.8093, 0.8687, 0.9082, 1.1760, 1.4358, 1.6881, 1.9333, 2.1717, 2.4037, 2.6298, 2.8500]]
+
+
+def gain_db(band, node):
+    """small-signal gain at a node of the 25 % grid (fractional: 0.5 steps are measured)"""
+    return GAINS16[band][int(round(node * 2))]
+
 # What each band's nonlinear stage (detector and shaper) hears (nlhear.py): its FIR band on the pass side, but beyond
 # the band edge a steep Linkwitz-Riley slope instead of the FIR's shallow stopband (the mid band's FIR passes 8 kHz at
 # -29.5 dB, its nonlinear stage hears it at -40). Only the mid band's high side is made steep: the low band's stage

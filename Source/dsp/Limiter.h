@@ -23,8 +23,16 @@ public:
     {
         fs = rate;
         lookahead = limiterLookahead (fs);
-        window = std::clamp ((int) std::lround (t.limWindow * fs / 48000.0), 1, lookahead - kTaps / 2 - 2);
-        releaseSteps = std::max (1, (int) std::lround (t.limReleaseSteps * fs / 48000.0));
+        // window and release are set per rate, not scaled from 48 kHz (single and paired peaks probed at each rate)
+        struct PerRate { double rate; int window, release; };
+        constexpr PerRate perRate[] { { 44100, 19, 20 }, { 48000, 21, 22 }, { 88200, 39, 40 }, { 96000, 43, 44 }, { 192000, 86, 87 } };
+        double w = t.limWindow * fs / 48000.0, rel = t.limReleaseSteps * fs / 48000.0;
+        for (const auto& pr : perRate)
+            if (std::abs (fs - pr.rate) < 1.0) { w = pr.window * t.limWindow / 21.0; rel = pr.release * t.limReleaseSteps / 22.0; }
+        if (t.limWindowAt > 0) w = t.limWindowAt;
+        if (t.limReleaseAt > 0) rel = t.limReleaseAt;
+        window = std::clamp ((int) std::lround (w), 1, lookahead - kTaps / 2 - 1);
+        releaseSteps = std::max (1, (int) std::lround (rel));
         slowAtt = 1.0 - std::exp (-1.0 / (t.limSlowAttackMs * 1.0e-3 * fs));
         slowRel = std::exp (-1.0 / (t.limSlowReleaseMs * 1.0e-3 * fs));
         trim = std::pow (10.0, t.limTrimDb / 20.0);

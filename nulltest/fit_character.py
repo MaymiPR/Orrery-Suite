@@ -46,7 +46,13 @@ def signal(f):
 def signals(band):
     import nulltest as NT
     cut = lambda x: np.concatenate([np.zeros((2, PRE) if x.ndim == 2 else PRE, np.float32), x[..., :3 * FS]], axis=-1)
-    return [signal(BANDS[band]), cut(NT.sig_noise(-18)), cut(NT.sig_noise(-6)), cut(NT.sig_music(-10)), cut(NT.sig_music(-2))]
+    out = [signal(BANDS[band]), cut(NT.sig_noise(-18)), cut(NT.sig_noise(-6)), cut(NT.sig_music(-10)), cut(NT.sig_music(-2))]
+    if WIDE:          # also drums, a sweep and the crest-factor set (crest.py): keeps the fit from trading them away
+        import crest
+        cs = crest.signals(band, PRE + 3 * FS)
+        out += [cut(NT.sig_drums(-1)), cut(NT.sig_sweep(-6)), (cs['two-tone'] * 10 ** (-10 / 20)).astype(np.float32),
+                (cs['noise'] * 10 ** (-10 / 20)).astype(np.float32), (cs['noise'] * 10 ** (-4 / 20)).astype(np.float32)]
+    return out
 
 
 def residual(ref, y, seg=FS // 4):
@@ -61,8 +67,8 @@ def residual(ref, y, seg=FS // 4):
 def fit(band, node, start, refs, xs, maxfev=260):
     amount = node / 8
     def tune(p):
-        d = {f'{band}.{k}.{node}': v for k, v in zip(FREE, p)}
-        d[f'{band}.makeup.{node}'] = MAKEUP[band][node]
+        d = {f'{band}.{k}.{2 * node}': v for k, v in zip(FREE, p)}         # the plug-in's table has 17 nodes
+        d[f'{band}.makeup.{2 * node}'] = MAKEUP[band][node]
         if PEAK is not None: d[f'{band}.peak'] = PEAK
         if FEEDBACK is not None: d[f'{band}.feedback'] = FEEDBACK
         return d
@@ -105,7 +111,10 @@ DETECTOR = {'low': 0, 'mid': 0, 'high': 1}   # chosen by fitting both (high: pea
 PEAK = None          # detector override for experiments: 0 mean-square, 1 peak
 FEEDBACK = None      # 1: feedback detector
 
+WIDE = '--wide' in sys.argv
+
 if __name__ == '__main__':
+    if '--wide' in sys.argv: sys.argv.remove('--wide')
     if '--peak' in sys.argv: PEAK = 1; sys.argv.remove('--peak')
     if '--ms' in sys.argv: PEAK = 0; sys.argv.remove('--ms')
     if '--fb' in sys.argv: FEEDBACK = 1; sys.argv.remove('--fb')
