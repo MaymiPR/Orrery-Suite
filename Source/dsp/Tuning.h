@@ -32,10 +32,12 @@ enum BandParam
     bpRelease2,   // ms, ... its release
     bpSlowOffset, // dB added to the slow detector's level before the larger of the two is taken
     bpWidth,      // dB, gain of the band output's side signal relative to its mid (after the shaper)
+    bpMixDb,      // 1: the mix scales the reduction in dB (n = g^mix, mix may exceed 1); 0: dry / wet blend
+    bpShapeDry,   // 0 .. 1, share of the band that bypasses the shaper: y = d u + (1 - d) sin (k u) / k
     kBandParams
 };
 inline constexpr const char* bandParamNames[kBandParams] { "makeup", "mix", "cubic", "thresh", "ratio", "knee", "attack", "release", "side",
-                                                          "gainAttack", "gainRelease", "attack2", "release2", "slowOffset", "width" };
+                                                          "gainAttack", "gainRelease", "attack2", "release2", "slowOffset", "width", "mixDb", "shapeDry" };
 inline constexpr const char* bandNames[3] { "low", "mid", "high" };
 
 struct Tuning

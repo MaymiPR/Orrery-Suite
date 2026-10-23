@@ -285,6 +285,36 @@ probe can tell (to about 300 Hz).
 
 The small-signal response is unchanged and still exact.
 
+A steep low edge for the high band's stage, by symmetry, made the broadband nulls worse. A steep edge for the low
+band would need more pre-ringing than the 151 samples the delay allows. So only the mid band's upper edge is steep.
+
+### 3.12 Other sample rates (Phase 4, `nulltest/ident_rate.py`)
+
+At 44.1, 88.2, 96 and 192 kHz the nine small-signal impulse responses again span exactly three filters (rank-3 fit
+error below 1e-7), with the same per-band gains as at 48 kHz.
+
+- The reference does not resample its 48 kHz filters. It designs them for each rate: 608 taps at 44.1 kHz, 1216 at
+  88.2, 1323 at 96 and 2647 at 192 kHz.
+- At 88.2 kHz and above all bands fall away above about 22.5 kHz.
+- Our frequency-sampled redesign of the 48 kHz filters was off by −23 to −57 dB per band. The worst was the high band
+  near the top of the spectrum.
+- Ours now uses the reference's own filters at those rates (BandFiltersRates.h), to −89 … −123 dB. With
+  oversampling the redesign is still used.
+
+### 3.13 The high band's detector (Phase 4, `nulltest/crest.py`)
+
+A sine, two tones and band noise, all at the same RMS, through each band:
+
+| | Mean-square detector | Peak-sensitive detector |
+|---|---|---|
+| Prediction | the same gain for all three | more compression for peakier signals |
+| Mid band | **observed:** ours matches within 0.02 dB | |
+| High band | | **observed:** at 100 % and −10 dB, −1.50 (sine), −2.52 (two tones), −3.24 dB (noise) |
+
+So the high band's detector reacts to peaks. A single tone cannot tell the two kinds apart, which is why the laws
+fitted to an 8 kHz tone missed on broadband material. The broadband fit has a fast peak detector (about 1.2 ms /
+175 ms) and a slow one about 19 dB down. It gets this pattern right but compresses 3–4 % too little.
+
 ## 4. Limiter (`measure_limiter.py`)
 
 | Property | Measured |
@@ -332,6 +362,22 @@ env is the largest of three things:
 Limiter-only nulls are −47.5 (pink noise, gain 5), −62.5 (drums, gain 12) and −60.8 dB (music, gain 5). A pair of
 peaks exactly 24 samples apart still differs for the first 3 samples after the first peak.
 
+**Per rate.** The window and the release are not scaled from 48 kHz. Probed at each rate:
+
+| Rate (kHz) | 44.1 | 48 | 88.2 | 96 | 192 |
+|---|---|---|---|---|---|
+| Look-ahead | 40 | 38 | 50 | 54 | 96 |
+| Window | 19 | 21 | 39 | 43 | 86 |
+| Release (samples) | 20 | 22 | 40 | 44 | 87 |
+
+With these the single-peak and pair probes match to 0.004 at 96 and 192 kHz. Pairs exactly one sample beyond the
+window still differ at 44.1 and 88.2 kHz: after a peak the reference seems to look one sample further than its
+attack from idle.
+
+At 96 kHz one recurring event in a drum loop nulls to only −35 dB. There, a 1e-4 DC pilot changes the reference's
+output by orders of magnitude more than its size, so its peak planning sits on a tie. Matching such ties would need
+the reference's inter-sample interpolator bit-exact.
+
 ## 5. Parameter smoothing (`measure_smoothing.py`)
 
 **Method.** A steady quiet tone, with one parameter jumping at a 64-sample block boundary.
@@ -350,6 +396,41 @@ is included):
 | Character Bypass | switches at 1.1–1.7 | instant, no crossfade |
 | Limiter Bypass | instant | the 38-sample delay changes at once (it can click on program material) |
 | Bypass (main) | instant | |
+
+### 5.1 The control rate (Phase 4, `nulltest/steps.py`, per-sample envelopes of steady tones)
+
+The reference moves its parameters at a control rate.
+
+**Chunks.** It cuts each host block into chunks of up to 128 samples, counted from the block's start. With 64-sample
+blocks the chunks are 64 samples long.
+
+**The input and output gains** are one-pole smoothed once per chunk, by chunk/τ of the remaining distance in linear gain
+(forward Euler, τ = 478.8 samples, about 10 ms). The gain ramps linearly between chunk ends: the slope of the output
+is piecewise constant, in 128-sample pieces.
+
+The input gain has a second stage in front: the parameter itself ramps linearly in dB over 237.6 samples (about 5 ms),
+and its value is read at each chunk's end. So in the first chunk after a change the target is only about halfway
+there. The output gain has no such ramp. This model reproduces the reference's input-gain steps at block sizes 64
+and 128 for +12, +6 and −12 dB to within 0.0005 in gain.
+
+**The EQ gains and the amount** go through the same 5 ms parameter ramp, read at chunk ends. Then they glide linearly
+over 5 ms to each new value; the glide is re-planned only when the value changes. For a step that means a slower
+first chunk, then a straight line to the end, about 368 samples after the change. That is the shape the reference's
+EQ shows. Its EQ filters are state-variable filters (their response while gliding matches; direct forms do not),
+and their gain glides in linear amplitude, not in dB.
+
+**The limiter's input gain** ramps linearly over 10 ms in linear gain, with no chunking (to within 0.003 dB).
+
+**Switches.**
+- The EQ switch follows its own 5 ms ramp and takes effect at the start of the chunk after the one in which the ramp
+  crossed half way. With 512-sample blocks that is 128 samples after the block start.
+- The character section and the limiter switch at once. While switched off they do not run; switched back on, they
+  start from silence (detectors at rest, empty filter and look-ahead buffers). Modelling the stages as kept running
+  left the bypass toggles at −31 dB; this way they null at −60 dB.
+- At amount 0 the character section's detectors keep running. A jump from 0 % settles as fast as one from 100 %.
+
+**Not matched: host blocks shorter than 128 samples.** There the reference switches the character section later
+than we do: 96 samples later at 32-sample blocks, 64 at 64, 96 at 96.
 
 ## 6. Meters (`measure_meters.py`, RefCapture film of `reference/gr_meter_test.f32`)
 

@@ -5,7 +5,7 @@
 The make-up gains are the measured small-signal band gains (BandFilters.h). The detector type (mean-square or peak) is
 per band: the one most of the band's usable nodes were fitted with; nodes fitted with the other fall back to fit_char.json.
 
-    python make_table.py [--min-db -40] [--broad high]     band-law fits worse than this residual are not used;
+    python make_table.py [--min-db -40] [--broad high] [--law bandlaw.json]     band-law fits worse than this residual are not used;
                                                          --broad: bands kept entirely on fit_char.json
 The high band is kept on fit_char.json: its laws fitted to an 8 kHz tone fit the tone to -50 dB but miss loud
 broadband signals badly (pink noise at -6 dBFS RMS: -28 dB against -43 dB with the broadband fit)."""
@@ -16,60 +16,51 @@ DIR = os.path.join(tgp.ROOT, 'measurements', 'character')
 HEADER = os.path.join(tgp.ROOT, 'Source', 'dsp', 'CharacterTable.h')
 NL_HEADER = os.path.join(tgp.ROOT, 'Source', 'dsp', 'NlBandFilters.h')
 NAMES = ['makeup', 'mix', 'cubic', 'thresh', 'ratio', 'knee', 'attack', 'release', 'side', 'gainAttack', 'gainRelease',
-         'attack2', 'release2', 'slowOffset', 'width']
+         'attack2', 'release2', 'slowOffset', 'width', 'mixDb', 'shapeDry']
 BANDS = ['low', 'mid', 'high']
 BROAD_PEAK = {'low': 0, 'mid': 0, 'high': 1}     # the detectors fit_char.json was fitted with
 
 
-def build(min_db=-40.0, broad_bands=()):
-    law = json.load(open(os.path.join(DIR, 'bandlaw.json')))
+def build(min_db=-40.0, broad_bands=(), law_file='bandlaw.json'):
+    """the 17 rows (amount 0, 12.5, ..., 200 %) per band: a fitted law where there is one (law_file, keys
+    'band|node' with node 0 .. 8 in steps of 0.5), else the broadband fit at the 25 % nodes, else the mean of the
+    neighbours; make-up gain and width measured at every row"""
+    law = json.load(open(os.path.join(DIR, law_file)))
     broad = json.load(open(os.path.join(DIR, 'fit_char.json')))
+    width = json.load(open(os.path.join(DIR, 'width.json')))
+    key = lambda b, k: f'{b}|{k // 2}' if k % 2 == 0 else f'{b}|{k / 2}'
     table, peak, source = {}, {}, {}
     for bi, b in enumerate(BANDS):
-        usable = lambda k: f'{b}|{k}' in law and law[f'{b}|{k}']['residual_dB'] < min_db and b not in broad_bands
-        flags = [law[f'{b}|{k}'].get('peak', 0) for k in range(1, 9) if usable(k)]
+        usable = lambda k: key(b, k) in law and law[key(b, k)]['residual_dB'] < min_db and b not in broad_bands
+        flags = [law[key(b, k)].get('peak', 0) for k in range(1, 17) if usable(k)]
         peak[b] = int(sum(flags) * 2 > len(flags)) if flags else BROAD_PEAK[b]
-        rows, src = [], []
-        for k in range(9):
-            e = law.get(f'{b}|{k}')
-            if k == 0:     # amount 0: the section is transparent (MEASUREMENTS.md 3.2)
-                row = dict(mix=0.0, cubic=0.0, thresh=0.0, ratio=1.0, knee=0.0, attack=10.0, release=100.0); src.append('-')
-            elif usable(k) and e.get('peak', 0) == peak[b]:
+        rows, src = [None] * 17, ['-'] * 17
+        for k in range(1, 17):
+            e = law.get(key(b, k))
+            if usable(k) and e.get('peak', 0) == peak[b]:
                 row = {n: e[n] for n in ('mix', 'thresh', 'knee', 'ratio', 'attack', 'release')}
                 row['cubic'] = e['k'] ** 2 / 6
+                row['shapeDry'] = e.get('shapeDry', 0.0); row['mixDb'] = e.get('mixDb', 0.0)
                 if 'attack2' in e: row.update(attack2=e['attack2'], release2=e['release2'], slowOffset=e['slowOffset'])
-                src.append('law')
-            else:
-                row = {n: v for n, v in broad[b][k].items() if n in NAMES}; src.append('broad')
-            row['side'] = 0.0      # the detector hears the mid signal only (anti-phase tones are not compressed)
-            row['makeup'] = float(I.GAINS[bi][k])
-            rows.append(row)
-        # amount 0: the 25 % node's detectors and static law with no wet share and no shaper (transparent, MEASUREMENTS.md
-        # 3.2). The reference keeps its detectors running at 0 %: a jump from 0 % settles like one from 100 %, and
-        # amounts between 0 and 25 % interpolate only the mix and the drive
-        rows[0] = dict(rows[1], mix=0.0, cubic=0.0, makeup=0.0, width=0.0)
+                rows[k], src[k] = row, 'law'
+            elif k % 2 == 0:
+                rows[k], src[k] = {n: v for n, v in broad[b][k // 2].items() if n in NAMES}, 'broad'
+        # amount 0: the 25 % node's detectors and static law with no wet share (transparent, MEASUREMENTS.md 3.2; the
+        # reference keeps its detectors running at 0 %: a jump from 0 % settles like one from 100 %). The bands with a
+        # fitted shaper dry share (d = 1 - amount / 100 %) keep the drive and are all dry at 0 %; the high band's shaper
+        # fades out with its drive
+        if b not in broad_bands: rows[0] = dict(rows[2], mix=0.0, shapeDry=1.0)
+        else: rows[0] = dict(rows[2], mix=0.0, cubic=0.0, shapeDry=0.0)
+        for k in range(1, 17, 2):
+            if rows[k] is None:
+                lo, hi = rows[k - 1], rows[k + 1]
+                rows[k] = {n: 0.5 * (lo.get(n, 0.0) + hi.get(n, 0.0)) for n in NAMES}; src[k] = 'mean'
+        for k in range(17):
+            rows[k]['side'] = 0.0      # the detector hears the mid signal only (anti-phase tones are not compressed)
+            rows[k]['makeup'] = I.GAINS16[bi][k]
+            rows[k]['width'] = width[b][k]
         table[b], source[b] = rows, src
     return table, peak, source
-
-
-def to17(table):
-    """the 9-node rows onto the plug-in's 17-node grid (every 12.5 %): the fitted nodes at the even rows, the odd rows
-    the mean of their neighbours (what interpolating the 9 nodes gives) but with the make-up gain and the width
-    measured there (ident.GAINS16, width.json)"""
-    width = json.load(open(os.path.join(DIR, 'width.json')))
-    out = {}
-    for bi, b in enumerate(BANDS):
-        rows = []
-        for k in range(17):
-            if k % 2 == 0: row = dict(table[b][k // 2])
-            else:
-                lo, hi = table[b][k // 2], table[b][k // 2 + 1]
-                row = {n: 0.5 * (lo.get(n, 0.0) + hi.get(n, 0.0)) for n in NAMES}
-            row['makeup'] = I.GAINS16[bi][k]
-            row['width'] = width[b][k]
-            rows.append(row)
-        out[b] = rows
-    return out
 
 
 def write(table, peak):
@@ -107,8 +98,9 @@ def write_nl_filters():
 if __name__ == '__main__':
     min_db = float(sys.argv[sys.argv.index('--min-db') + 1]) if '--min-db' in sys.argv else -40.0
     broad = [sys.argv[i + 1] for i, a in enumerate(sys.argv) if a == '--broad']
-    table, peak, source = build(min_db, broad)
-    write(to17(table), peak)
+    law_file = sys.argv[sys.argv.index('--law') + 1] if '--law' in sys.argv else 'bandlaw.json'
+    table, peak, source = build(min_db, broad, law_file)
+    write(table, peak)
     write_nl_filters()
     print('detector peak', peak)
     for b in BANDS: print(b, ' '.join(source[b]))

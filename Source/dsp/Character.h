@@ -54,7 +54,8 @@ public:
             // the tables keep c = k^2 / 6, its cubic coefficient
             s.drive = std::sqrt (std::max (0.0, 6.0 * p[bpCubic]));
             s.width = std::pow (10.0, p[bpWidth] / 20.0);
-            dyn[b].configure (p, tune->detectorPeak[b] != 0, tune->feedback[b] != 0, fs);
+            s.dry = std::clamp (p[bpShapeDry], 0.0, 1.0);
+            dyn[b].configure (p, tune->detectorPeak[b], tune->feedback[b] != 0, fs);
         }
     }
 
@@ -82,7 +83,11 @@ public:
             const double n = dyn[b].step (0.5 * (dl[b] + dr[b]), 0.5 * (dl[b] - dr[b]), scL != nullptr);
             grMax[b] = std::max (grMax[b], dyn[b].gr);
             double yl = sl[b] * n, yr = sr[b] * n;
-            if (s.drive > 1.0e-6) { yl = std::sin (s.drive * yl) / s.drive; yr = std::sin (s.drive * yr) / s.drive; }
+            if (s.drive > 1.0e-6)
+            {
+                yl = s.dry * yl + (1.0 - s.dry) * std::sin (s.drive * yl) / s.drive;
+                yr = s.dry * yr + (1.0 - s.dry) * std::sin (s.drive * yr) / s.drive;
+            }
             yl += bl[b] - sl[b];
             yr += br[b] - sr[b];
             const double m = 0.5 * s.makeup * (yl + yr), sd = 0.5 * s.makeup * s.width * (yl - yr);
@@ -98,7 +103,7 @@ public:
     }
 
 private:
-    struct Band { double makeup = 1, drive = 0, width = 1; };
+    struct Band { double makeup = 1, drive = 0, width = 1, dry = 0; };
     double fs = 48000.0, lastAmount = -1.0;
     bool atZero = false;
     const Tuning* tune = nullptr;

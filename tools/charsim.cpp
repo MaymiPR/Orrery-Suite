@@ -10,7 +10,7 @@ void band_gain (const double* mid, const double* side, int n, double fs, const d
                 double* gainOut, double* grOut)
 {
     ap::dsp::BandDynamics d;
-    d.configure (params, peak != 0, feedback != 0, fs);
+    d.configure (params, peak, feedback != 0, fs);
     d.reset();
     for (int i = 0; i < n; ++i)
     {

@@ -20,7 +20,9 @@ FS = tgp.FS
 OUT = os.path.join(tgp.ROOT, 'measurements', 'character', 'bandlaw.json')
 if '--out' in sys.argv: OUT = os.path.join(os.path.dirname(OUT), sys.argv[sys.argv.index('--out') + 1])
 BI = {'low': 0, 'mid': 1, 'high': 2}
-RICH = '--rich' in sys.argv          # also a two-tone and a band-noise staircase (they separate peak from mean-square detectors)
+RICH = '--rich' in sys.argv
+SHAPEDRY = '--shapedry' in sys.argv  # also fit the shaper's dry share (y = d u + (1 - d) sin (k u) / k)
+MIXDB = '--mixdb' in sys.argv        # the mix scales the reduction in dB (BandDynamics mixDb)          # also a two-tone and a band-noise staircase (they separate peak from mean-square detectors)
 
 
 def band_out(xb, law, sb=None):
@@ -28,8 +30,9 @@ def band_out(xb, law, sb=None):
     None: the band signal itself"""
     sb = xb if sb is None else sb
     p = {k: v for k, v in law.items() if k not in ('k', 'residual_dB', 'median_abs_err', 'peak')}
-    g = C.band_gain(sb, p, peak=bool(law.get('peak', 0)))
-    return xb - sb + np.sin(law['k'] * g * sb) / law['k']
+    g = C.band_gain(sb, p, peak=int(law.get('peak', 0)))
+    d = law.get('shapeDry', 0.0)
+    return xb - sb + d * g * sb + (1 - d) * np.sin(law['k'] * g * sb) / law['k']
 
 
 def law_at(table, band, node):
@@ -68,17 +71,19 @@ def fit(band, node, start, dual=False, peak=False, decim=3, table=None, fixed=No
     """fixed: parameters held at given values (the band's shared law); the rest are fitted"""
     data = load(band, node, table)
     fixed = fixed or {}
-    keys = ['k', 'mix', 'thresh', 'knee', 'ratio', 'attack', 'release'] + (['attack2', 'release2', 'slowOffset'] if dual else [])
-    lo = [1e-3, 0.0, -60, 0.0, 1.0, 0.005, 0.5] + ([1, 1, -60] if dual else [])
-    hi = [10, 2.0, 0, 80, 20, 3000, 5000] + ([20000, 20000, 20] if dual else [])
+    keys = ['k', 'mix', 'thresh', 'knee', 'ratio', 'attack', 'release'] + (['attack2', 'release2', 'slowOffset'] if dual else []) + (['shapeDry'] if SHAPEDRY else [])
+    lo = [1e-3, 0.0, -60, 0.0, 1.0, 0.005, 0.5] + ([1, 1, -60] if dual else []) + ([0.0] if SHAPEDRY else [])
+    hi = [10, 4.0 if MIXDB else 2.0, 0, 80, 20, 3000, 5000] + ([20000, 20000, 20] if dual else []) + ([0.99] if SHAPEDRY else [])
+    if MIXDB: fixed = dict(fixed, mixDb=1.0)
     sel = [i for i, k_ in enumerate(keys) if k_ not in fixed]
     keys, lo, hi = [keys[i] for i in sel], [lo[i] for i in sel], [hi[i] for i in sel]
     def resid(q):
         p = dict(zip(keys, q)); p.update(fixed); kk = p.pop('k')
         out = []
+        d = p.get('shapeDry', 0.0)
         for xb, sb, yb in data:
             g = C.band_gain(sb, p, peak=peak)
-            out.append((xb - sb + np.sin(kk * g * sb) / kk - yb)[::decim])
+            out.append((xb - sb + d * g * sb + (1 - d) * np.sin(kk * g * sb) / kk - yb)[::decim])
         return np.concatenate(out)
     p0 = [min(max(start.get(k_, (lo[i] + hi[i]) / 2), lo[i]), hi[i]) for i, k_ in enumerate(keys)]
     r = least_squares(resid, p0, bounds=(lo, hi), loss='soft_l1', f_scale=1e-4, x_scale='jac', max_nfev=400)
@@ -87,7 +92,7 @@ def fit(band, node, start, dual=False, peak=False, decim=3, table=None, fixed=No
     res = dict(zip(keys, [float(v) for v in r.x])); res.update(fixed)
     res['residual_dB'] = float(20 * np.log10(np.sqrt(np.mean(e ** 2)) / ref_rms))
     res['median_abs_err'] = float(np.median(np.abs(e)))
-    res['peak'] = int(peak)
+    res['peak'] = int(peak)               # 0 mean-square, 1 sample peak, 2 true peak
     return res
 
 
@@ -101,11 +106,11 @@ if __name__ == '__main__':
     if '--from-broad' in sys.argv:          # start from the broadband fit (fit_char.json)
         row = json.load(open(os.path.join(os.path.dirname(OUT), 'fit_char.json')))[band][node]
         start = dict(row, k=float(np.sqrt(6 * row['cubic'])))
-    near = sorted((abs(int(k.split('|')[1]) - node), k) for k in table if k.startswith(band + '|'))
+    near = sorted((abs(float(k.split('|')[1]) - node), k) for k in table if k.startswith(band + '|'))
     if not start and near: start = table[near[0][1]]       # the nearest fitted node of the same band
     if not start:   # defaults from the mid band at 100 % (the first one identified)
         start = dict(k=2.5, mix=0.72, thresh=-20, knee=44, ratio=2.2, attack=300, release=90, attack2=500, release2=2000, slowOffset=-20)
-    res = fit(band, node, start, dual='--dual' in sys.argv, peak='--peak' in sys.argv, table=table)
+    res = fit(band, node, start, dual='--dual' in sys.argv, peak=2 if '--truepeak' in sys.argv else '--peak' in sys.argv, table=table)
     print(band, node, {k: round(v, 4) for k, v in res.items()}, flush=True)
     table = json.load(open(OUT))         # again: fits of other bands / nodes may have finished meanwhile
     old = table.get(f'{band}|{node}')
