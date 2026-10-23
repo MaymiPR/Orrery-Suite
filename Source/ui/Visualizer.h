@@ -10,7 +10,7 @@ namespace ap
 //    (the reference's sprite repeats every second and does not restart with the audio), ~290 sparks on screen,
 //    drifting counter-clockwise at ~95 px/s with a large random scatter (median speed ~160 px/s), lifetimes mostly
 //    under 0.2 s, the outer ones pulled inwards;
-//  - on at once when audio starts, off 0.55 s after it stops (0.35 s fade); white at amount 0 % or with the
+//  - on at once when audio starts; ~0.45 s after it stops the sparks dim out in ~0.26 s and the glow in ~0.40 s; white at amount 0 % or with the
 //    character section bypassed, blending linearly to full colour at 100 %.
 //  - our own "antiparticle" style (settings page): bubble-chamber pair creation and annihilation, a 3 s loop.
 // Drawn in editor design coordinates (the component covers the centre column).
@@ -44,7 +44,8 @@ private:
     bool antiStyle = false;
     void paintGodly (juce::Graphics&);
     void paintAntiparticle (juce::Graphics&);
-    float level = 0.0f;           // visibility 0 .. 1
+    float level = 0.0f;           // the sparks' visibility 0 .. 1
+    float glow = 0.0f;            // the lit glass's visibility 0 .. 1 (fades slower than the sparks)
     double silentFor = 10.0;      // seconds since audio was last present
     float colourMix = 1.0f;
     double clock = 0.0;           // free-running animation clock (s)

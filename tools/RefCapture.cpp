@@ -44,6 +44,8 @@ public:
             for (int k = 0; k < block; ++k) { recorded.push_back (buf.getSample (0, k)); recorded.push_back (buf.getSample (1, k)); }
         }
         done = true;
+        std::printf ("feeder done: %d of %d samples\n", (int) recorded.size() / 2, (int) input.size());
+        std::fflush (stdout);
     }
     // the default input: 50 Hz tone bursts (see schedule)
     static std::vector<float> defaultInput()
@@ -259,6 +261,7 @@ class App : public JUCEApplication
 public:
     const String getApplicationName() override { return "RefCapture"; }
     const String getApplicationVersion() override { return "1.0"; }
+    void systemRequestedQuit() override { std::printf ("system requested quit\n"); std::fflush (stdout); quit(); }
     void initialise (const String& cmd) override
     {
         auto args = StringArray::fromTokens (cmd, true);

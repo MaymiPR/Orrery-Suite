@@ -45,7 +45,7 @@ Visualizer::Visualizer()
     auto gauss = [&rng] { return (float) (std::sqrt (-2.0 * std::log (jmax (1.0e-9, rng.nextDouble()))) * std::cos (MathConstants<double>::twoPi * rng.nextDouble())); };
     // hue shares measured on the reference: white, yellow, cyan-blue, blue, orange, violet, magenta, red
     const float shares[8] { 0.245f, 0.25f, 0.165f, 0.105f, 0.105f, 0.08f, 0.03f, 0.02f };
-    sparks.resize (6200);
+    sparks.resize (4600);
     for (auto& s : sparks)
     {
         s.birth = rng.nextFloat();
@@ -129,12 +129,20 @@ void Visualizer::advance (bool audio, float mix, bool animate, bool antiparticle
     const float dt = 1.0f / 30.0f;
     colourMix = mix;
     if (audio) silentFor = 0.0; else silentFor += dt;
-    // measured: on at once; after the audio stops it holds ~0.5 s (0.42 here: detection adds a frame), then fades ~0.35 s
-    const float target = (! animate) ? 0.0f : (audio ? 1.0f : (silentFor < 0.42 ? 1.0f : 0.0f));
-    if (target > level) level = 1.0f;                                  // appears at once
-    else level = jmax (target, level - dt / 0.35f);                    // fades out over 0.35 s
+    // measured through abrupt stops (four per film): on at once; after the audio stops everything holds ~0.45 s (0.39
+    // here: detection adds a frame), then two layers fade at different speeds: the sparks dim out linearly in ~0.26 s,
+    // the glass glow follows (1 - u)^1.6 over ~0.40 s (quick at first, soft tail)
+    const bool wasOn = level > 0.0f || glow > 0.0f;
+    if (! animate) { level = glow = 0.0f; }
+    else if (audio) { level = glow = 1.0f; }
+    else
+    {
+        const float u = (float) silentFor - 0.39f;
+        level = u <= 0.0f ? 1.0f : jmax (0.0f, 1.0f - u / 0.26f);
+        glow = u <= 0.0f ? 1.0f : std::pow (jmax (0.0f, 1.0f - u / 0.40f), 1.6f);
+    }
     clock += dt;                                                       // free-running, like the reference's loop
-    if (level > 0.0f || target > 0.0f) repaint();
+    if (wasOn || level > 0.0f || glow > 0.0f) repaint();
 }
 
 // The glass: a measured field (resources/glass/*.png, tools/fit/fit_glass.py): x = station around the track (25 per
@@ -271,7 +279,7 @@ void Visualizer::paint (Graphics& g)
     const float scale = theme::pixelScale (g, *this);
     if (std::abs (scale - framePx) > 0.001f || frame.isNull()) renderFrame (scale);
     g.drawImage (frame, getLocalBounds().toFloat());
-    if (level <= 0.0f) return;
+    if (level <= 0.0f && glow <= 0.0f) return;
     if (antiStyle) paintAntiparticle (g); else paintGodly (g);
 }
 
@@ -280,13 +288,13 @@ void Visualizer::paintAntiparticle (Graphics& g)
     const auto b = getBounds().toFloat();
     {
         Graphics::ScopedSaveState s0 (g);
-        g.setOpacity (level * colourMix);
+        g.setOpacity (glow * colourMix);
         g.drawImage (litViolet, getLocalBounds().toFloat());
-        g.setOpacity (level * (1.0f - colourMix));
+        g.setOpacity (glow * (1.0f - colourMix));
         g.drawImage (litGrey, getLocalBounds().toFloat());
     }
     g.addTransform (AffineTransform::translation (-b.getX(), -b.getY()));
-    g.setColour (Colour (0xffb07cff).withAlpha (0.25f * level));
+    g.setColour (Colour (0xffb07cff).withAlpha (0.25f * glow));
     g.strokePath (stadiumAround (pillCx, pillCy, pillHalfLength, pillR), PathStrokeType (1.4f));
 
     Graphics::ScopedSaveState s (g);
@@ -427,9 +435,9 @@ void Visualizer::paintGodly (Graphics& g)
         // the glass lit by the sparks (measured as the median of the reference's active frames); desaturated with
         // the sparks' colour mix
         Graphics::ScopedSaveState s0 (g);
-        g.setOpacity (level * colourMix);
+        g.setOpacity (glow * colourMix);
         g.drawImage (lit, getLocalBounds().toFloat());
-        g.setOpacity (level * (1.0f - colourMix));
+        g.setOpacity (glow * (1.0f - colourMix));
         g.drawImage (litGrey, getLocalBounds().toFloat());
     }
 
@@ -441,9 +449,9 @@ void Visualizer::paintGodly (Graphics& g)
     g.addTransform (AffineTransform::translation (-b.getX(), -b.getY()));
 
     // while the sparks show, the pill rim and the outer edge catch their light
-    g.setColour (Colours::white.withAlpha (0.3f * level));
+    g.setColour (Colours::white.withAlpha (0.3f * glow));
     g.strokePath (stadiumAround (cx, cy, halfLength, pillRadius), PathStrokeType (1.4f));
-    g.setColour (Colours::white.withAlpha (0.07f * level));
+    g.setColour (Colours::white.withAlpha (0.07f * glow));
     g.strokePath (stadiumAround (cx, cy, halfLength, outerRadius - 0.5f), PathStrokeType (1.2f));
 
     Graphics::ScopedSaveState s (g);
