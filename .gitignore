@@ -1,0 +1,17 @@
+build/
+_deps/
+.vs/
+*.user
+__pycache__/
+*.pyc
+.DS_Store
+Thumbs.db
+dist/
+
+# Kept out of the public repo (project rule): anything taken from Cradle's plug-in
+# (screenshots, extracted sprites / scripts), every reference render and all measurement data and plots.
+# The text write-ups (RESEARCH.md, MEASUREMENTS.md) are published.
+reference/
+measurements/
+nulltest/renders/
+nulltest/reference_renders/

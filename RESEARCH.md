@@ -1,0 +1,165 @@
+# Devil's Particle — Research
+
+Phase 1 evidence for the first plugin of the collection: **Devil's Particle**, an open-source recreation of Cradle's
+**The God Particle** (mix-bus / master channel processor made with mix engineer Jaycen Joshua). Everything here was
+written before any DSP or UI code.
+
+"Local" sources are the user's own installed copy of The God Particle, read for analysis. Nothing from it (images,
+scripts, fonts, presets, renders, screenshots) is copied into this repository: those files live in the git-ignored
+`reference/` folder.
+
+## Sources
+
+| Id | Source | What it gives |
+|---|---|---|
+| **W1** | Official product page, fetched 2026-10-22: [cradle.app/products/the-god-particle](https://cradle.app/products/the-god-particle) | marketing description, formats, system requirements, price |
+| **W2** | Official support article [GUI Overview](https://support.cradle.app/hc/en-us/articles/4411750433044-GUI-Overview) (updated 2024-04-10), with an annotated 200 % screenshot | the closest thing to a manual: every control described |
+| **W3** | [How do I use The God Particle?](https://support.cradle.app/hc/en-us/articles/6423895706004-How-do-I-use-The-God-Particle) | intended use, meaning of the green targets |
+| **W4** | [What Is The God Particle?](https://support.cradle.app/hc/en-us/articles/4411773820692-What-Is-The-God-Particle) | positioning |
+| **W5** | [Updates and Release notes](https://support.cradle.app/hc/en-us/articles/6423691528468-Updates-and-Release-notes) (updated 2026-10-20) | version history 1.0.2 → 1.2.5, settings page added in 1.2.2 |
+| **W6** | [Oversampling](https://support.cradle.app/hc/en-us/articles/15947880896532-Oversampling) | 1x / 2x / 4x / 8x, latency grows with oversampling |
+| **W7** | [LUFS Metering](https://support.cradle.app/hc/en-us/articles/15947889022484-LUFS-Metering) | RMS & Peak or Short-term LUFS & Peak readouts |
+| **W8** | [How do I export stems using The God Particle?](https://support.cradle.app/hc/en-us/articles/12637616897940-How-do-I-export-stems-using-The-God-Particle) (updated 2025-01-31) | what the side-chain drives (and what it doesn't) |
+| **W9** | FAQ: [targets](https://support.cradle.app/hc/en-us/articles/6424147405076-Why-doesn-t-my-track-hit-all-of-the-gain-reduction-targets), [inner workings](https://support.cradle.app/hc/en-us/articles/6424232645908-Can-you-tell-me-more-about-what-s-going-on-inside-The-God-Particle), [presets](https://support.cradle.app/hc/en-us/articles/6424187550868-Are-there-any-presets-included-in-The-God-Particle) | defaults = Jaycen's settings, Cradle won't publish internals, preset save/load |
+| **W10** | [KVR product page](https://www.kvraudio.com/product/the-god-particle-by-cradle/details) (secondary) | version 1.2.4 listed, formats, price; nothing beyond W1 |
+| **L1** | Local `C:\Program Files\Common Files\VST3\Cradle The God Particle.vst3` — `Contents/Resources/moduleinfo.json` | class IDs, version 1.2.4, VST 3.7.8 SDK, category Fx |
+| **L2** | `tools/ParamDump.cpp` (this repo) run on L1 → `reference/params_48k.txt`, `reference/params_41pt.txt` | every host parameter: names, ranges, defaults, display text; buses, latency, editor size |
+| **L3** | Plug-in state from L2 (`reference/state_default_component.bin`, decoded from JUCE's base64) | names of the internal blocks and how they are grouped |
+| **L4** | Printable strings / RTTI class names of the L1 binary (`reference/strings.txt`) | engine (Cradle engine 0.4.5, Lua 5.4 UI), embedded resource names, fonts, DSP node library |
+| **L5** | Screenshots of the real editor at 100 % (Wavy's `MeterCapture`, 50 Hz tone bursts) → `reference/editor_f*.png` | current (1.2.4) layout, 888 × 359 px |
+| **L6** | `%LOCALAPPDATA%\Cradle\logs\app.cradle.TheGodParticle\log.log` | engine version, build id 8d2af976 (2024-07-04), Lua sprite warnings |
+
+Not done on purpose: the UI/DSP Lua scripts and the global settings file are stored in an encrypted container
+(L4: `PublicKeyPimpl`, hashed class names, `global.json` / `app.cradle.TheGodParticle.json` are encrypted blobs).
+We do not decrypt them. Behaviour is found by measuring the plug-in from the outside (Phase 3).
+
+## Product facts (W1, W4, W10)
+- Cradle, $119. Formats: macOS AU / VST3 / AAX, Windows VST3 / AAX (no CLAP, no Linux). Licensing through Cradle Hub,
+  internet needed (W1). Installed version here: 1.2.4 (Hub says 1.2.5; W5 notes 1.2.5 only changed macOS
+  certificates and still reports 1.2.4).
+- Described as Jaycen Joshua's whole master-channel chain in one plug-in: "a multitude of processing algorithms",
+  harmonic processing, an **adaptive limiter** that keeps dynamics and transients at commercial loudness, and input /
+  gain-reduction targets for gain staging and a balanced EQ (W1).
+- Designed for the master bus, also for drum / instrument busses and single tracks (W3, W4).
+- Defaults = Jaycen's own settings, unchanged on every mix since 2021; he does all adjustments **before** the
+  plug-in's input (W3, W9).
+
+## Documented controls (W2, with L2 for the numbers)
+
+Signal order as described in W2 and confirmed by the state's grouping (L3):
+**Input gain → EQ (low / mid / high) → Character ("Amount": multiband dynamics + processing chain) → Limiter → Output gain**.
+
+| Control (UI) | Host parameter (L2) | Range / display (L2) | Default | Documented behaviour (W2 unless noted) |
+|---|---|---|---|---|
+| **input** knob (bottom left) | `Input Gain` | −12 … +12 dB, linear in the normalised value (2.4 dB per 0.1) | 0 dB | level into the plug-in. Meter: peak readout (red when > 0 dBFS) + RMS readout, both reset by clicking; green target = where Jaycen's mix input lands |
+| **eq high / mid / low** knobs | `EQ High Gain`, `EQ Mid Gain`, `EQ Low Gain` | −6 … +6 dB, linear | 0 dB | "air" / body / low-end warmth; meant to steer each band to its gain-reduction target before the character section |
+| eq power button | `EQ Bypass` | 2 steps (0 = active) | active | bypasses the EQ |
+| **amount** knob (large, centre) | `Character` | 0 … 1 shown in the host; UI shows **0 … 200 %** (0.5 = 100 %) | 100 % | how much "character" is applied: the whole processing chain behind the UI, whose key part is a **multiband dynamics processor** (3 bands: high / mid / low) |
+| amount power button | `Character Bypass` | 2 steps | active | bypasses the character section; W5 1.2.2: lower CPU while bypassed |
+| gain reduction meters + readouts (high / mid / low) | — | dB | — | attenuation per band; green target per band (Jaycen's mix-bus settings) |
+| **Sidechain INT / EXT** (top bar) | none (host-only, saved as `hostOnly.sidechain`, L3) | INT / EXT | INT | EXT: the side-chain bus drives the multiband dynamics. W8: the side-chain only feeds the **character** dynamics; the limiter always detects its own input |
+| **limiter** knob (bottom) | `Limiter Input Gain` | 0 … +12 dB, **non-linear** taper (table below) | +5 dB (0.494206) | gain into an "intelligent adaptive limiter": louder with more gain, never above 0 dBFS; two readouts = limiter GR (L / R) |
+| limiter power button | `Limiter Bypass` | 2 steps | active | bypasses the limiter |
+| **output** knob (bottom right) | `Output Gain` | −12 … +12 dB, linear | 0 dB | final level after the limiter (keep at 0 dB to avoid clipping). Meter like input |
+| Preset menu, ← →, disk icon | — | factory "default", user presets | default | save with the disk icon; user presets under "user" (W9) |
+| UI Scale menu | — (stored in `prefs.uiScaling`, L3) | 100 % / … / 200 % | 100 % | window zoom |
+| Settings (gear, added 1.2.2) | — (global, encrypted file) | Oversampling 1x / 2x / 4x / 8x; meters RMS or Short-term LUFS; animation on / off | to be read in Phase 2/3 | W5, W6, W7. Oversampling adds latency (W6) |
+| — | `Bypass` | Off / On | Off | host bypass (VST3 bypass parameter) |
+
+### Limiter Input Gain taper (L2, 41 points)
+Normalised → dB: 0 → 0.000, 0.25 → 2.351, 0.494206 → 5.000 (default), 0.5 → 5.068, 0.75 → 8.242, 1 → 12.000.
+Not a power law (JUCE skew fits only to ±0.21 dB); `13.96·(e^(0.6193·p) − 1)` fits to ±0.025 dB, a cubic
+`8.830p + 2.038p² + 1.126p³` to ±0.006 dB (display precision is 0.001). Phase 3 will dump 1001 points and pick the
+exact law; until then the table itself is the reference.
+
+### Host-level facts (L1, L2)
+- One effect class, `The God Particle`, vendor Cradle, plug-in code `Tgpj`, manufacturer code `Crdl` (L3).
+- Buses: stereo in, stereo out, plus a **side-chain** input bus (off by default). Mono → mono is **not** supported.
+- **Latency** reported at default settings: 179 samples @ 44.1 kHz, 189 @ 48 kHz, 357 @ 96 kHz (not a fixed time:
+  ~4.0 / 3.9 / 3.7 ms; Phase 3 measures it per sample rate and oversampling factor). Tail: 0.
+- No VST programs; state ≈ 2.5 kB (XML with Cradle's own snapshot text).
+- Editor: **888 × 359 px** at 100 %, not resizable by dragging (scale menu only).
+
+## Internal structure (L3, L4) — hints, to be confirmed by measurement
+
+The saved state names the blocks (L3):
+```
+hostOnly: inputGain, outputGain, sidechain          (not part of presets)
+preset.signalChain:
+    oversampled: lowEQMacro, midEQMacro, highEQMacro, eqBypassMacro, characterMacro (0.5), characterBypass
+    masterLimiter: preGain (5), bypass
+```
+So the **EQ and the character section run inside the oversampled part**, and the **master limiter sits after it**
+(possibly at the base rate). Input / output gain are outside presets: loading a preset keeps them.
+
+The engine (Cradle engine 0.4.5) is a general node library shared by all Cradle products, so the list of linked
+classes (L4) shows what *could* be used, not what The God Particle uses. Relevant ones: `Crossover2…5`,
+`FeedforwardCompressor` / `FeedbackCompressor` (property names `threshold`, `attackTime`, `releaseTime`, `kneeWidth`,
+`levelDetectorMode`, `makeUpGain`, `sidechainEnabled`), `UpwardCompressor`, `Expander`, `BrickwallLimiter` /
+`Maximizer` (`ceiling`, `lookaheadTime`, `releaseTimeHigh`, `releaseTimeLow`, `releaseSwitchThreshold` — a two-speed
+release matches "adaptive limiter"), `ShelvingFilter` / `PeakingEqualizer` (SVF), `DynamicShelvingFilter`,
+`DynamicPeakingEqualizer`, `ParametricEnhancer`, `TransientShaper`, `SpectralTransientShaper`, `StereoWidener`,
+`AsymmetricTanhWaveshaper`, `PolynomialWaveshaper`, `Clipper`, `Distortion`, `SubharmonicSynthesizer`,
+`LinearLoudnessGain`, `LoudnessMeter` (`momentaryLoudness`, `shortTermLoudness`), `DCBlocker`, and the oversampler
+`OversampledAudioGraph<PolyphaseFIRUpsampler, PolyphaseFIRDownsampler>` (`numOversamplingStages` → 2x per stage).
+Also linked: `NeuralModeler` (LSTM / WaveNet, "experimental"). Whether any of these are in TGP's graph is a Phase 3
+question.
+
+Third-party code visible in L4 (for our own notices, nothing is reused): Lua 5.4 + sol2, nlohmann/json, spdlog,
+Crypto++, libcurl, Expat, AVIR (image resizing), libpng.
+
+## GUI (W2 screenshot, L4 resource names, L5 screenshots)
+
+Layout at 100 % (888 × 359), current version 1.2.4 (L5), described here for orientation; Phase 2 measures every
+pixel:
+- **Top bar** (black): Cradle logo icon (left), `Preset` label + drop-down (`default`), ← / → arrows, disk (save)
+  icon, `Sidechain` label + `INT | EXT` segmented toggle (selected segment white), `UI Scale` drop-down (`100%`),
+  settings gear (right).
+- **Main panel** (black, light-grey rounded outline): six columns separated by thin vertical lines:
+  1. input meter: peak readouts L/R (top), RMS readouts L/R, bracket-shaped green target, two green LED bar meters;
+  2. EQ: mint-green power button, three small knobs labelled `high`, `mid`, `low`;
+  3. centre "particle" visualiser (rounded stadium shape, animated 30 fps sprite: coloured particles; a white
+     variant and an "off" image exist) with the large `amount` knob, `amount` caption and big `100%` readout
+     (mint), and a mint power button;
+  4. gain reduction: per band label (`high` / `mid` / `low`), GR readout, green target brackets, small horizontal
+     LED meters (`Components/meters/gainReductionHorizontal.lua`);
+  5. limiter: mint power button, GR readouts L/R and meters;
+  6. output meter like the input one.
+- **Bottom plate** (dark warm grey, baked shadows image): knobs `input`, `limiter`, `output`, labels `eq` and
+  `gain reduction` over their columns, a grille of horizontal slots with "THE GOD PARTICLE" spaced lettering in the
+  middle.
+- Embedded images (L4, names only): `Cradle_TheGodParticle_UI_{Large,Medium,Small}Knob_V1.png` + matching `…Pip`
+  pointer images, `BackplateBakedShadows_V2.jpg`, `VisualizerColor_V1_30FPS_JPGSPRITE.jpg`,
+  `VisualizerWhite_V1_30FPS_JPGSPRITE.jpg`, `VisualizerOff_V1.jpg`, `Cradle_LogoIcon_512x512.png`.
+- Fonts (L4): **Whyte** Regular / Light / Light Italic (commercial typeface by Dinamo — cannot be shipped) and
+  **Source Code Pro** Regular (SIL OFL — can be shipped). Phase 2 needs a free substitute for Whyte with matching
+  metrics.
+- The UI is already dark; the only alternate appearance in the resources is the visualiser (colour / white / off,
+  W5: animation on/off toggle). "Dark-mode counterpart" therefore means: keep this dark scheme, and use the
+  colour/white visualiser states as the reference does.
+- The older W2 screenshot (1.2.1 era, 200 %) shows the same layout without the gear and with a static visualiser;
+  the current layout (L5) is the target.
+
+## Naming and branding
+
+| Original | Recreation | Product folder / target |
+|---|---|---|
+| Cradle **The God Particle** | **Devil's Particle** | `DevilsParticle` |
+
+The look (layout, sizes, colours, knob style) is recreated with our own drawing code. Cradle's and Jaycen Joshua's
+names, the Cradle logo, the "THE GOD PARTICLE" lettering and all shipped images and fonts are replaced by our own
+("DEVIL'S PARTICLE" lettering, own logo). The repo states clearly that it is an independent project, not affiliated
+with Cradle.
+
+## Open questions for Phase 3 (measurement)
+1. EQ: band types (shelf / bell / tilt), corner frequencies and Q; does each knob scale a fixed curve (macro)?
+2. Character: crossover frequencies and slopes; per-band threshold / ratio / knee / attack / release; peak or RMS
+   detector; how `Amount` maps onto them (0 … 200 %: threshold, ratio, mix?); any saturation / harmonic stage
+   (THD vs level and frequency), stereo processing (M/S, width), transient shaping, make-up gain.
+3. Limiter: ceiling (output peaked at −0.70 dBFS in the L5 capture: ≈ −0.7 dBFS ceiling?), look-ahead,
+   two-speed release law ("adaptive"), true-peak or sample-peak, linked or per-channel (two GR readouts).
+4. Latency per sample rate and oversampling factor; does the oversampling setting change the sound (filters, aliasing)?
+5. Parameter smoothing times for each knob and the bypass switches.
+6. Meters: peak / RMS / short-term LUFS ballistics, GR meter ballistics, target positions.
+7. Where the 1.2.2 settings (oversampling, meter mode) are stored, so the harness can render at a known setting.
+8. Side-chain EXT: confirm only the character dynamics follow it.
