@@ -59,8 +59,16 @@ struct Tuning
     double limTrimDb = -0.1;              // after the 0 dBFS ceiling: the output's ceiling and small-signal gain
 
     // parameter smoothing
-    double gainSmoothMs = 10.0;           // input / output gain: one-pole on the linear gain
-    double rampMs = 9.0;                  // EQ, character amount, limiter gain: linear ramps
+    // Parameters move at a control rate (Engine.cpp, MEASUREMENTS.md 5): each host block is cut into chunks of up to
+    // ctlChunk samples. The input gain, EQ gains, amount and the EQ switch first ramp linearly (paramRampMs) and are
+    // read at each chunk's end. Then the input and output gains move toward their target by chunk / gainTau per chunk
+    // (linear between chunk ends); the EQ gains and the amount glide linearly over glideMs to each new value; the
+    // limiter's input gain ramps linearly over limRampMs.
+    double ctlChunk = 128, paramRampMs = 4.95, gainTauMs = 9.975, glideMs = 5.0, limRampMs = 10.0;
+    double eqForm = 3;                    // the EQ filters: state-variable (Biquad::form; their gain moves are matched best)
+    double eqPerSample = 1;               // 1: moving EQ gains redesign the filters every sample (else every 16)
+    double charZeroRest = 0;              // 1: at amount 0 the band detectors rest (start from zero when it rises)
+    double eqGlideDomain = 1;             // the EQ gains glide in dB (0), in amplitude 10^(dB/20) (1) or in A = 10^(dB/40) (2)
 
     double forceOversampling = 0;         // > 0: use this ratio instead of the settings page's (offline renders)
 
@@ -85,7 +93,8 @@ struct Tuning
                             { "eqLowHz", &eqLowHz }, { "eqLowQ", &eqLowQ }, { "eqMidHz", &eqMidHz }, { "eqMidQ", &eqMidQ },
                             { "eqHighHz", &eqHighHz }, { "eqHighQ", &eqHighQ }, { "fc1", &fc1 }, { "fc2", &fc2 },
                             { "limWindow", &limWindow }, { "limReleaseSteps", &limReleaseSteps }, { "limSlowAttackMs", &limSlowAttackMs },
-                            { "limSlowReleaseMs", &limSlowReleaseMs }, { "limTrimDb", &limTrimDb }, { "gainSmoothMs", &gainSmoothMs }, { "rampMs", &rampMs },
+                            { "limSlowReleaseMs", &limSlowReleaseMs }, { "limTrimDb", &limTrimDb }, { "ctlChunk", &ctlChunk }, { "paramRampMs", &paramRampMs }, { "gainTauMs", &gainTauMs },
+                            { "glideMs", &glideMs }, { "limRampMs", &limRampMs }, { "eqForm", &eqForm }, { "eqPerSample", &eqPerSample }, { "eqGlideDomain", &eqGlideDomain }, { "charZeroRest", &charZeroRest },
                             { "oversampling", &forceOversampling } };
         for (auto& s : scalars)
             if (key == s.n) { *s.p = v; return true; }

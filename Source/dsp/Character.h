@@ -18,11 +18,12 @@ class Character
 {
 public:
     // delaySamples: the section's latency at the processing rate (the FIR filters' delay)
-    void prepare (double processingRate, double delaySamples, const Tuning& t)
+    // exactRates: the FIR filters may be the reference's own ones for this rate (FirBank::prepare)
+    void prepare (double processingRate, double delaySamples, const Tuning& t, bool exactRates = false)
     {
         fs = processingRate;
         tune = &t;
-        firs.prepare (fs, delaySamples);
+        firs.prepare (fs, delaySamples, exactRates);
         scXo.design (t.fc1, t.fc2, fs);
         reset();
         lastAmount = -1.0;
@@ -39,6 +40,7 @@ public:
     {
         if (amount == lastAmount) return;
         lastAmount = amount;
+        atZero = amount <= 0.0 && tune->charZeroRest > 0.5;
         const double x = std::clamp (amount, 0.0, 1.0) * (kAmountNodes - 1);
         const int k = std::min (kAmountNodes - 2, (int) x);
         const double f = x - k;
@@ -59,6 +61,7 @@ public:
     // one stereo sample in place; sc = the external side-chain sample (nullptr: the input drives the detectors)
     inline void process (double& l, double& r, const double* scL = nullptr, const double* scR = nullptr)
     {
+        if (atZero) for (auto& d : dyn) d.reset();
         double bl[FirBank::kFilters], br[FirBank::kFilters], dl[3], dr[3];
         firs.process (0, l, bl);
         firs.process (1, r, br);
@@ -97,6 +100,7 @@ public:
 private:
     struct Band { double makeup = 1, drive = 0, width = 1; };
     double fs = 48000.0, lastAmount = -1.0;
+    bool atZero = false;
     const Tuning* tune = nullptr;
     FirBank firs;
     Crossover3 scXo;

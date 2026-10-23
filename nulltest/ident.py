@@ -32,15 +32,17 @@ IRS, GAINS = band_firs()
 FC1, FC2 = 157.1, 2675.8
 
 
-def nl_firs(n_taps=1024, fs=FS):
-    nf = 1 << 15
+def nl_firs(n_taps=1024, fs=FS, irs=None):
+    """irs: the band filters at fs (default: the 48 kHz ones)"""
+    irs = IRS if irs is None else irs
+    nf = 1 << 16
     f = np.fft.rfftfreq(nf, 1 / fs)
     lp = lambda fc: 1 / (1 + (f / fc) ** 4)
     hp = lambda fc: (f / fc) ** 4 / (1 + (f / fc) ** 4)
     target, side = [lp(FC1), lp(FC2), hp(FC2)], [f < 0, f > FC2, f < 0]
     out = []
     for b in range(3):
-        H = np.fft.rfft(IRS[b], nf)
+        H = np.fft.rfft(irs[b], nf)
         W = np.where(side[b], np.minimum(1.0, target[b] / np.maximum(np.abs(H), 1e-15)), 1.0)
         out.append(np.fft.irfft(H * W, nf)[:n_taps])
     return out

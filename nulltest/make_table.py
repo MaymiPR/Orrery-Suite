@@ -46,6 +46,10 @@ def build(min_db=-40.0, broad_bands=()):
             row['makeup'] = float(I.GAINS[bi][k])
             row['width'] = width[b][k]
             rows.append(row)
+        # amount 0: the 25 % node's detectors and static law with no wet share and no shaper (transparent, MEASUREMENTS.md
+        # 3.2). The reference keeps its detectors running at 0 %: a jump from 0 % settles like one from 100 %, and
+        # amounts between 0 and 25 % interpolate only the mix and the drive
+        rows[0] = dict(rows[1], mix=0.0, cubic=0.0, makeup=0.0, width=0.0)
         table[b], source[b] = rows, src
     return table, peak, source
 

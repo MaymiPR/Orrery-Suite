@@ -42,27 +42,52 @@ public:
     float takeLimiterGr() { return limiter.takeGr(); }
 
 private:
-    void updateEq (const double* db);
-    struct Ramp            // linear ramp toward a target over a fixed time
+    void updateEq (const double* glide);       // the EQ gains in the glide's domain (Tuning::eqGlideDomain)
+    double toGlide (double db) const;
+    // a linear ramp toward a target over a fixed time (samples, fractional), re-planned when the target changes
+    struct Ramp
     {
-        double value = 0, target = 0, step = 0; int left = 0, length = 1;
-        void setLength (int n) { length = std::max (1, n); }
+        double value = 0, target = 0, step = 0, left = 0, length = 1;
+        void setLength (double n) { length = std::max (1.0, n); }
         void jump (double v) { value = target = v; left = 0; }
         void set (double v) { if (v != target) { target = v; step = (target - value) / length; left = length; } }
-        inline double next() { if (left > 0) { value += step; if (--left == 0) value = target; } return value; }
+        inline double next() { return advance (1); }
+        double advance (int k)              // k samples at once
+        {
+            if (left <= 0) return value;
+            if (k >= left) { value = target; left = 0; }
+            else { value += step * k; left -= k; }
+            return value;
+        }
         bool moving() const { return left > 0; }
+    };
+    // a gain that moves once per chunk by chunk / tau toward its target, linearly between chunk ends
+    struct ChunkGain
+    {
+        double value = 1, end = 1, step = 0;
+        void jump (double g) { value = end = g; step = 0; }
+        void chunk (double target, int n, double tau)
+        {
+            value = end;
+            end += (target - end) * std::min (1.0, n / tau);
+            step = (end - value) / n;
+        }
+        inline double next() { value += step; return value; }
     };
 
     const Tuning* tune = nullptr;
     double fs = 48000.0, osRate = 48000.0;
-    int osFactor = 1, selectedFactor = 1, maxBlock = 512, reportedLatency = 0;
+    int osFactor = 1, selectedFactor = 1, maxBlock = 512, reportedLatency = 0, ctlLen = 128;
     Oversampler os;
     std::vector<double> work[2], scWork[2];
 
     Biquad eq[3];
+    // first stage (the parameters' own ramps, read at chunk ends), then the stage the DSP follows
+    Ramp inParam, eqParam[3], amountParam, eqOnParam;
     Ramp eqDb[3], amount, limGain;
-    double inGain = 1, outGain = 1, gainCoef = 0;
-    bool first = true;
+    ChunkGain inGain, outGain;
+    double gainTau = 480;
+    bool first = true, eqOn = true, lastCharBypass = false, lastLimBypass = false;
     FracDelay core, bypassDelay;
     Character character;
     Limiter limiter;

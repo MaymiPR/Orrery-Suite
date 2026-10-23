@@ -5,6 +5,7 @@
 #include <vector>
 #include "BandFilters.h"
 #include "Filters.h"
+#include "BandFiltersRates.h"
 #include "NlBandFilters.h"
 
 // The character section's crossover: three FIR band filters (identified from the reference at 48 kHz, see
@@ -18,9 +19,11 @@ class FirBank
 {
 public:
     static constexpr int kFilters = 6;       // low, mid, high, then what their nonlinear stages hear
-    void prepare (double rate, double delaySamples)
+    // exactRates: at 44.1 / 88.2 / 96 / 192 kHz use the reference's own filters for that rate (BandFiltersRates.h;
+    // only when the delay is the plain core delay, i.e. without oversampling)
+    void prepare (double rate, double delaySamples, bool exactRates = false)
     {
-        design (rate, delaySamples);
+        design (rate, delaySamples, exactRates);
         int n = 0;
         for (auto& h : ir) n = std::max (n, (int) h.size());
         block = n < 1000 ? 64 : 128;                 // direct head vs FFT tail: about the cheapest split for these lengths
@@ -157,8 +160,19 @@ private:
 
     // the filters at `rate`: the 48 kHz responses, delay moved to `delaySamples`. Above 23 kHz (higher rates) all
     // bands are zero: the reference's section keeps its ~22.5 kHz low-pass with oversampling (-45 dB at 23 kHz at 2x)
-    void design (double rate, double delaySamples)
+    void design (double rate, double delaySamples, bool exactRates)
     {
+        if (exactRates)
+            for (const auto& set : bandFilterSets)
+                if (std::abs (rate - set.rate) < 1.0)
+                {
+                    for (int b = 0; b < 3; ++b)
+                    {
+                        ir[b].assign (set.ir[b], set.ir[b] + set.taps);
+                        ir[b + 3].assign (set.nl[b], set.nl[b] + set.nlTaps);
+                    }
+                    return;
+                }
         const double d48 = 151.27917;
         auto source = [] (int b) { return b < 3 ? bandIr48k[b] : nlBandIr48k[b - 3]; };
         auto taps = [] (int b) { return b < 3 ? bandTaps48k : nlBandTaps48k; };

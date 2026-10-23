@@ -11,11 +11,34 @@ inline constexpr double kPi = 3.14159265358979323846;
 struct Biquad
 {
     double b0 = 1, b1 = 0, b2 = 0, a1 = 0, a2 = 0;
-    double s1[2] {}, s2[2] {};   // transposed direct form II state, per channel
+    double s1[2] {}, s2[2] {}, s3[2] {}, s4[2] {};   // state per channel
+    int form = 0;                // 0 transposed direct form II, 1 direct form I, 2 direct form II, 3 trapezoidal
+                                 // state-variable filter (all the same response; they differ while the coefficients move)
+    double sa1 = 0, sa2 = 0, sa3 = 0, m0 = 1, m1 = 0, m2 = 0;    // form 3
 
-    void reset() { s1[0] = s1[1] = s2[0] = s2[1] = 0.0; }
+    void reset() { s1[0] = s1[1] = s2[0] = s2[1] = s3[0] = s3[1] = s4[0] = s4[1] = 0.0; }
     inline double process (double x, int ch)
     {
+        if (form == 3)
+        {
+            const double v3 = x - s2[ch];
+            const double v1 = sa1 * s1[ch] + sa2 * v3, v2 = s2[ch] + sa2 * s1[ch] + sa3 * v3;
+            s1[ch] = 2 * v1 - s1[ch]; s2[ch] = 2 * v2 - s2[ch];
+            return m0 * x + m1 * v1 + m2 * v2;
+        }
+        if (form == 1)
+        {
+            const double y = b0 * x + b1 * s1[ch] + b2 * s2[ch] - a1 * s3[ch] - a2 * s4[ch];
+            s2[ch] = s1[ch]; s1[ch] = x; s4[ch] = s3[ch]; s3[ch] = y;
+            return y;
+        }
+        if (form == 2)
+        {
+            const double w = x - a1 * s1[ch] - a2 * s2[ch];
+            const double y = b0 * w + b1 * s1[ch] + b2 * s2[ch];
+            s2[ch] = s1[ch]; s1[ch] = w;
+            return y;
+        }
         const double y = b0 * x + s1[ch];
         s1[ch] = b1 * x - a1 * y + s2[ch];
         s2[ch] = b2 * x - a2 * y;
@@ -31,6 +54,15 @@ struct Biquad
     void design (Type t, double f0, double q, double gainDb, double fs)
     {
         const double A = std::pow (10.0, gainDb / 40.0), w = 2 * kPi * f0 / fs, c = std::cos (w), s = std::sin (w), al = s / (2 * q);
+        if (form == 3 && (t == Type::peak || t == Type::lowShelf || t == Type::highShelf))
+        {
+            double g = std::tan (kPi * f0 / fs), k = 1.0 / q;
+            if (t == Type::peak) { k = 1.0 / (q * A); m0 = 1; m1 = k * (A * A - 1); m2 = 0; }
+            else if (t == Type::lowShelf) { g /= std::sqrt (A); m0 = 1; m1 = k * (A - 1); m2 = A * A - 1; }
+            else { g *= std::sqrt (A); m0 = A * A; m1 = k * (1 - A) * A; m2 = 1 - A * A; }
+            sa1 = 1 / (1 + g * (g + k)); sa2 = g * sa1; sa3 = g * sa2;
+            return;
+        }
         switch (t)
         {
             case Type::peak: set (1 + al * A, -2 * c, 1 - al * A, 1 + al / A, -2 * c, 1 - al / A); break;

@@ -49,13 +49,17 @@ def load(band, node, table=None):
     return data
 
 
-def fit(band, node, start, dual=False, peak=False, decim=3, table=None):
+def fit(band, node, start, dual=False, peak=False, decim=3, table=None, fixed=None):
+    """fixed: parameters held at given values (the band's shared law); the rest are fitted"""
     data = load(band, node, table)
+    fixed = fixed or {}
     keys = ['k', 'mix', 'thresh', 'knee', 'ratio', 'attack', 'release'] + (['attack2', 'release2', 'slowOffset'] if dual else [])
     lo = [1e-3, 0.0, -60, 0.0, 1.0, 0.005, 0.5] + ([1, 1, -60] if dual else [])
     hi = [10, 2.0, 0, 80, 20, 3000, 5000] + ([20000, 20000, 20] if dual else [])
+    sel = [i for i, k_ in enumerate(keys) if k_ not in fixed]
+    keys, lo, hi = [keys[i] for i in sel], [lo[i] for i in sel], [hi[i] for i in sel]
     def resid(q):
-        p = dict(zip(keys, q)); kk = p.pop('k')
+        p = dict(zip(keys, q)); p.update(fixed); kk = p.pop('k')
         out = []
         for xb, sb, yb in data:
             g = C.band_gain(sb, p, peak=peak)
@@ -65,7 +69,7 @@ def fit(band, node, start, dual=False, peak=False, decim=3, table=None):
     r = least_squares(resid, p0, bounds=(lo, hi), loss='soft_l1', f_scale=1e-4, x_scale='jac', max_nfev=400)
     e = resid(r.x)
     ref_rms = np.sqrt(np.mean(np.concatenate([yb[::decim] for _, _, yb in data]) ** 2))
-    res = dict(zip(keys, [float(v) for v in r.x]))
+    res = dict(zip(keys, [float(v) for v in r.x])); res.update(fixed)
     res['residual_dB'] = float(20 * np.log10(np.sqrt(np.mean(e ** 2)) / ref_rms))
     res['median_abs_err'] = float(np.median(np.abs(e)))
     res['peak'] = int(peak)
