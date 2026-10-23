@@ -10,7 +10,7 @@ class Settings : public juce::ChangeBroadcaster
 {
 public:
     enum class Meter { rmsPeak, lufsPeak };
-    enum class Particles { godly, devily };
+    enum class Particles { godParticle, antiparticle };
 
     static Settings& get()
     {
@@ -21,12 +21,12 @@ public:
     int oversampling() const { return file->getIntValue ("oversampling", 1); }          // 1, 2, 4 or 8
     Meter meterMode() const { return file->getIntValue ("meterMode", 0) == 1 ? Meter::lufsPeak : Meter::rmsPeak; }
     bool animation() const { return file->getBoolValue ("animation", true); }
-    Particles particleStyle() const { return file->getIntValue ("particleStyle", 0) == 1 ? Particles::devily : Particles::godly; }
+    Particles particleStyle() const { return file->getIntValue ("particleStyle", 0) == 1 ? Particles::antiparticle : Particles::godParticle; }
 
     void setOversampling (int r) { set ("oversampling", r); }
     void setMeterMode (Meter m) { set ("meterMode", m == Meter::lufsPeak ? 1 : 0); }
     void setAnimation (bool on) { set ("animation", on); }
-    void setParticleStyle (Particles p) { set ("particleStyle", p == Particles::devily ? 1 : 0); }
+    void setParticleStyle (Particles p) { set ("particleStyle", p == Particles::antiparticle ? 1 : 0); }
 
 private:
     Settings()

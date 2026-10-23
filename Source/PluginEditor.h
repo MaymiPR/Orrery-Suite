@@ -30,6 +30,7 @@ private:
     {
         float peakHoldDb = -200.0f, rmsHoldDb = -200.0f;   // the readouts (held until clicked)
         float barDb = -200.0f, peakDb = -200.0f;           // LED bar (RMS) and peak LED
+        float framePeakDb = -200.0f;                        // this frame's peak (drives the input target)
         double peakAge = 0.0;
     };
     class Content : public juce::Component
@@ -91,6 +92,7 @@ private:
 
     Meter inMeter[2], outMeter[2];
     float bandGrDb[3] {}, limGrDb[2] {};
+    bool bandTargetLit[3] {};                                // GR targets, with a bar of hysteresis
     bool eqOn = true, characterOn = true, limiterOn = true;
     float characterValue = 0.5f;
     bool frozen = false;

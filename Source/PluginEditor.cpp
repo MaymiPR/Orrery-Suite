@@ -172,6 +172,7 @@ void AntiparticleEditor::updateMeter (Meter& m, ap::LevelTap& tap, float dt)
 {
     const float pk = toDb (tap.takePeak());
     const float rms = toDb (tap.rms.load());
+    m.framePeakDb = toDb (tap.follower.load());
     m.peakHoldDb = jmax (m.peakHoldDb, pk);
     m.rmsHoldDb = jmax (m.rmsHoldDb, rms);
     m.barDb = rms;
@@ -198,7 +199,7 @@ void AntiparticleEditor::timerCallback()
     lastBlocks = blocks;
     const bool audio = running && jmax (inMeter[0].barDb, inMeter[1].barDb, inMeter[0].peakDb) > -80.0f;
     const float mix = characterOn ? jlimit (0.0f, 1.0f, characterValue / 0.5f) : 0.0f;
-    visualizer.advance (audio, mix, ap::Settings::get().animation(), ap::Settings::get().particleStyle() == ap::Settings::Particles::devily);
+    visualizer.advance (audio, mix, ap::Settings::get().animation(), ap::Settings::get().particleStyle() == ap::Settings::Particles::antiparticle);
     content.repaint();
     amountText.repaint();
 }
@@ -206,10 +207,10 @@ void AntiparticleEditor::timerCallback()
 void AntiparticleEditor::setTestLevels (float inDb, float outDb, bool audio)
 {
     frozen = true;
-    for (auto& m : inMeter) { m.barDb = inDb - 3.0f; m.peakDb = inDb; m.peakHoldDb = inDb; m.rmsHoldDb = inDb - 3.0f; }
+    for (auto& m : inMeter) { m.barDb = inDb - 3.0f; m.peakDb = m.framePeakDb = inDb; m.peakHoldDb = inDb; m.rmsHoldDb = inDb - 3.0f; }
     for (auto& m : outMeter) { m.barDb = outDb - 3.0f; m.peakDb = outDb; m.peakHoldDb = outDb; m.rmsHoldDb = outDb - 3.0f; }
     if (audio) visualizer.advance (true, characterOn ? jlimit (0.0f, 1.0f, characterValue / 0.5f) : 0.0f, true,
-                                   ap::Settings::get().particleStyle() == ap::Settings::Particles::devily);
+                                   ap::Settings::get().particleStyle() == ap::Settings::Particles::antiparticle);
     content.repaint();
 }
 
@@ -305,7 +306,11 @@ void AntiparticleEditor::paintIoMeter (Graphics& g, float x0, const Meter (&m)[2
     }
 
     const float (&lx)[2] = ledX[x0 > 0.0f ? 1 : 0];
-    bool inTarget[2] { false, false };
+    // the input target lights while the input's peak sits in it: LEDs 32 .. 36, i.e. -10.5 .. -3 dBFS (measured with
+    // up / down ramps of sine and noise: it follows the momentary peak, not the RMS bar; all three parts light together)
+    const float framePeak = jmax (m[0].framePeakDb, m[1].framePeakDb);
+    const bool lit = framePeak >= theme::ledThresholdDb (32) && framePeak < theme::ledThresholdDb (37);
+    const bool inTarget[2] { lit, lit };
     for (int c = 0; c < 2; ++c)
     {
         int top = -1, peak = -1;
@@ -321,8 +326,6 @@ void AntiparticleEditor::paintIoMeter (Graphics& g, float x0, const Meter (&m)[2
             g.setColour (theme::mint);
             g.fillRect (lx[c], 248.0f - 4.0f * (float) peak, 8.0f, 1.5f);
         }
-        const float topY = top >= 0 ? 248.0f - 4.0f * (float) top : 1000.0f;
-        inTarget[c] = topY >= 103.0f && topY <= 123.5f;
     }
 
     if (target)
@@ -345,7 +348,7 @@ void AntiparticleEditor::paintIoMeter (Graphics& g, float x0, const Meter (&m)[2
         };
         bracket (15.0f, false, inTarget[0]);
         bracket (71.0f, true, inTarget[1]);
-        if (inTarget[0] || inTarget[1])
+        if (lit)
         {
             g.setColour (theme::targetFill);
             g.fillRect (35.0f, 104.0f, 24.0f, 19.0f);
@@ -384,7 +387,11 @@ void AntiparticleEditor::paintGainReduction (Graphics& g)
 
         const int bars = characterOn ? jlimit (0, 30, (int) std::floor (bandGrDb[b] / 0.2f)) : 0;   // scale: Phase 3
         const float tipX = 700.0f - 4.0f * (float) (bars - 1);
-        const bool hit = bars > 0 && tipX >= targetX[b] && tipX <= targetX[b] + 19.0f;
+        // lit while the deepest bar ends inside the bracket (measured on the reference; it lags by a bar or so, hence
+        // a bar of hysteresis once lit)
+        const float slack = bandTargetLit[b] ? 4.0f : 0.0f;
+        const bool hit = bars > 0 && tipX >= targetX[b] - slack && tipX <= targetX[b] + 19.0f + slack;
+        bandTargetLit[b] = hit;
         // target: an upside-down U above the meter and a U below it; one filled block while the meter ends inside
         if (hit)
         {
@@ -596,7 +603,7 @@ namespace
 class SettingsDialog : public ap::Dialog
 {
 public:
-    // the reference's three rows plus ours: particle style (godly / devily)
+    // the reference's three rows plus ours: particle style (god particle / antiparticle)
     SettingsDialog() : Dialog ("settings", { 234.0f, 50.5f, 420.0f, 300.0f }, false) {}
     void paint (Graphics& g) override
     {
@@ -617,7 +624,7 @@ public:
         for (int i = 0; i < 4; ++i) if (ratios[i] == st.oversampling()) sel = i;
         segments (g, { 454.0f, 101.5f, 167.5f, 23.0f }, { "1", "2", "4", "8" }, sel);
         segments (g, { 454.0f, 257.5f, 84.0f, 23.0f }, { "ON", "OFF" }, st.animation() ? 0 : 1);
-        segments (g, { 454.0f, 309.0f, 128.0f, 23.0f }, { "GODLY", "DEVILY" }, st.particleStyle() == ap::Settings::Particles::devily ? 1 : 0);
+        segments (g, { 454.0f, 309.0f, 190.0f, 23.0f }, { "GOD PARTICLE", "ANTIPARTICLE" }, st.particleStyle() == ap::Settings::Particles::antiparticle ? 1 : 0);
         radio (g, 178.0f, "RMS & Peak", st.meterMode() == ap::Settings::Meter::rmsPeak);
         radio (g, 204.0f, "Short-term LUFS & Peak", st.meterMode() == ap::Settings::Meter::lufsPeak);
     }
@@ -627,9 +634,9 @@ public:
         const auto p = e.position;
         if (Rectangle<float> (454.0f, 101.5f, 167.5f, 23.0f).contains (p)) { const int r[4] { 1, 2, 4, 8 }; st.setOversampling (r[jlimit (0, 3, (int) ((p.x - 454.0f) / (167.5f / 4.0f)))]); repaint(); return; }
         if (Rectangle<float> (454.0f, 257.5f, 84.0f, 23.0f).contains (p)) { st.setAnimation (p.x < 496.0f); repaint(); return; }
-        if (Rectangle<float> (454.0f, 309.0f, 128.0f, 23.0f).contains (p))
+        if (Rectangle<float> (454.0f, 309.0f, 190.0f, 23.0f).contains (p))
         {
-            st.setParticleStyle (p.x < 518.0f ? ap::Settings::Particles::godly : ap::Settings::Particles::devily);
+            st.setParticleStyle (p.x < 549.0f ? ap::Settings::Particles::godParticle : ap::Settings::Particles::antiparticle);
             repaint(); return;
         }
         if (Rectangle<float> (450.0f, 168.0f, 190.0f, 20.0f).contains (p)) { st.setMeterMode (ap::Settings::Meter::rmsPeak); repaint(); return; }

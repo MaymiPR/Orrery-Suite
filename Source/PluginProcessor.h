@@ -11,8 +11,10 @@ struct LevelTap
 {
     std::atomic<float> peak { 0.0f };     // highest sample since the editor last took it (linear)
     std::atomic<float> rms { 0.0f };      // latest RMS (linear, AES: a sine reads its peak)
-    void push (float blockPeak, float blockRms)
+    std::atomic<float> follower { 0.0f }; // latest block's peak follower (0.2 ms attack, 0.3 s release): input target
+    void push (float blockPeak, float blockRms, float blockFollower)
     {
+        follower.store (blockFollower);
         float p = peak.load();
         while (blockPeak > p && ! peak.compare_exchange_weak (p, blockPeak)) {}
         rms.store (blockRms);
@@ -65,8 +67,9 @@ private:
     std::atomic<float>* outputGain = nullptr;
     juce::SmoothedValue<float> inGainSmoothed, outGainSmoothed;
     float rmsState[4] {};           // mean-square followers (in L, in R, out L, out R)
-    float rmsCoef = 0.0f;
-    void measure (const juce::AudioBuffer<float>&, int ch0, ap::LevelTap&, ap::LevelTap&, float* state);
+    float followState[4] {};        // peak followers (same order)
+    float rmsCoef = 0.0f, followAttack = 0.0f, followRelease = 0.0f;
+    void measure (const juce::AudioBuffer<float>&, ap::LevelTap&, ap::LevelTap&, float* msState, float* followerState);
 
     JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR (AntiparticleProcessor)
 };

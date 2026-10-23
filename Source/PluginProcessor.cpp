@@ -71,24 +71,32 @@ void AntiparticleProcessor::prepareToPlay (double sampleRate, int)
     outGainSmoothed.setCurrentAndTargetValue (Decibels::decibelsToGain (outputGain->load()));
     rmsCoef = (float) std::exp (-1.0 / (0.3 * sampleRate));       // placeholder RMS window; measured in Phase 3
     std::fill (std::begin (rmsState), std::end (rmsState), 0.0f);
+    std::fill (std::begin (followState), std::end (followState), 0.0f);
+    // the input target's detector, fitted to the reference with sine / noise ramps
+    followAttack = 1.0f - (float) std::exp (-1.0 / (0.0002 * sampleRate));
+    followRelease = (float) std::exp (-1.0 / (0.3 * sampleRate));
     setLatencySamples (0);
 }
 
-void AntiparticleProcessor::measure (const AudioBuffer<float>& b, int, ap::LevelTap& l, ap::LevelTap& r, float* state)
+void AntiparticleProcessor::measure (const AudioBuffer<float>& b, ap::LevelTap& l, ap::LevelTap& r, float* state, float* follow)
 {
     const int n = b.getNumSamples();
     ap::LevelTap* taps[2] { &l, &r };
     for (int c = 0; c < 2; ++c)
     {
         const float* x = b.getReadPointer (jmin (c, b.getNumChannels() - 1));
-        float pk = 0.0f, ms = state[c];
+        float pk = 0.0f, ms = state[c], fol = follow[c], folMax = 0.0f;
         for (int i = 0; i < n; ++i)
         {
-            pk = jmax (pk, std::abs (x[i]));
+            const float a = std::abs (x[i]);
+            pk = jmax (pk, a);
             ms = x[i] * x[i] + rmsCoef * (ms - x[i] * x[i]);
+            fol = a > fol ? fol + (a - fol) * followAttack : fol * followRelease;
+            folMax = jmax (folMax, fol);
         }
         state[c] = ms;
-        taps[c]->push (pk, std::sqrt (2.0f * ms));
+        follow[c] = fol;
+        taps[c]->push (pk, std::sqrt (2.0f * ms), folMax);
     }
 }
 
@@ -100,8 +108,8 @@ void AntiparticleProcessor::processBlock (AudioBuffer<float>& buffer, MidiBuffer
 
     if (bypassParam->getValue() >= 0.5f)
     {
-        measure (main, 0, inL, inR, rmsState);
-        measure (main, 0, outL, outR, rmsState + 2);
+        measure (main, inL, inR, rmsState, followState);
+        measure (main, outL, outR, rmsState + 2, followState + 2);
         ++blocksProcessed;
         return;
     }
@@ -114,13 +122,13 @@ void AntiparticleProcessor::processBlock (AudioBuffer<float>& buffer, MidiBuffer
         const float g = inGainSmoothed.getNextValue();
         for (int c = 0; c < main.getNumChannels(); ++c) main.getWritePointer (c)[i] *= g;
     }
-    measure (main, 0, inL, inR, rmsState);
+    measure (main, inL, inR, rmsState, followState);
     for (int i = 0; i < n; ++i)
     {
         const float g = outGainSmoothed.getNextValue();
         for (int c = 0; c < main.getNumChannels(); ++c) main.getWritePointer (c)[i] *= g;
     }
-    measure (main, 0, outL, outR, rmsState + 2);
+    measure (main, outL, outR, rmsState + 2, followState + 2);
     ++blocksProcessed;
 }
 

@@ -152,23 +152,17 @@ void GearButton::paint (Graphics& g)
 void Logo::paint (Graphics& g)
 {
     if (isMouseOver()) { g.setColour (theme::text.withAlpha (0.06f)); g.fillRoundedRectangle (getLocalBounds().toFloat(), 2.0f); }
-    // pitchfork: three tines on a short shaft, same footprint and grey as the reference's mark
+    // an antiparticle: a particle on its orbit, with the over-bar physics writes over antiparticles (p-bar, e-bar);
+    // same footprint and grey as the reference's mark
     const auto b = getLocalBounds().toFloat();
-    const float cx = b.getCentreX();
-    Path p;
-    p.startNewSubPath (cx - 5.5f, b.getY() + 1.0f);
-    p.lineTo (cx - 5.5f, b.getY() + 6.0f);
-    p.quadraticTo (cx - 5.5f, b.getY() + 9.0f, cx, b.getY() + 9.0f);
-    p.quadraticTo (cx + 5.5f, b.getY() + 9.0f, cx + 5.5f, b.getY() + 6.0f);
-    p.lineTo (cx + 5.5f, b.getY() + 1.0f);
-    p.startNewSubPath (cx, b.getY() + 0.5f);
-    p.lineTo (cx, b.getBottom() - 0.5f);
+    const auto c = Point<float> (b.getCentreX(), b.getY() + 10.5f);
     g.setColour (theme::boxLine);
-    g.strokePath (p, PathStrokeType (2.2f, PathStrokeType::curved, PathStrokeType::butt));
-    Path tips;
-    for (float x : { cx - 5.5f, cx, cx + 5.5f })
-        tips.addTriangle (x - 2.0f, b.getY() + 2.5f, x + 2.0f, b.getY() + 2.5f, x, b.getY() - 0.5f);
-    g.fillPath (tips);
+    g.fillRoundedRectangle (c.x - 5.5f, b.getY() + 0.6f, 11.0f, 1.8f, 0.9f);                 // the bar
+    Path orbit;
+    orbit.addEllipse (-6.5f, -2.6f, 13.0f, 5.2f);
+    g.strokePath (orbit, PathStrokeType (1.2f), AffineTransform::rotation (-0.55f).translated (c));
+    g.fillEllipse (Rectangle<float> (5.0f, 5.0f).withCentre (c));                            // the particle
+    g.fillEllipse (Rectangle<float> (2.2f, 2.2f).withCentre (c + Point<float> (5.2f, -3.2f)));  // its partner on the orbit
 }
 
 InfoDialog::InfoDialog (String t, std::vector<std::pair<String, String>> r)
