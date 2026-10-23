@@ -19,7 +19,7 @@ Input gain feeds the signal chain below, which ends in output gain.
 | Stage | What it is |
 |---|---|
 | EQ | Three RBJ filters: low shelf 180 Hz, bell 637 Hz, high shelf 10 kHz, ±6 dB each. |
-| Character, "amount" 0–200 % | A 3-band split by a linear-phase FIR crossover (157 Hz / 2.68 kHz). Each band runs a stereo-linked parallel compressor and then a cubic shaper (odd harmonics). |
+| Character, "amount" 0–200 % | A 3-band split by a linear-phase FIR crossover (157 Hz / 2.68 kHz). Each band runs a stereo-linked parallel compressor (it listens to the mid signal) and then a sine shaper (odd harmonics); the side is widened per band. |
 | Limiter | Look-ahead with a −0.1 dBFS sample-peak ceiling and a two-speed release. |
 
 Oversampling (1 / 2 / 4 / 8x) and the I/O meter mode are global settings. As in the original, 8x sounds like 4x. The

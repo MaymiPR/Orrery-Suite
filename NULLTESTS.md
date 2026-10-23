@@ -15,35 +15,36 @@ Reproduce: `python nulltest/nulltest.py` (our processor through tools/ApRender) 
 | path: all stages bypassed | pink noise, -18 dBFS RMS | -85.41 | -85.41 |
 | eq: low +6 mid -4 high +3 | pink noise, -18 dBFS RMS | -87.26 | -87.26 |
 | eq: sweep, low -6 high +6 | log sine sweep 20 Hz - 20 kHz, -12 dBFS | -79.39 | -79.39 |
-| lim: pink -6, gain 5 | pink noise, -6 dBFS RMS | -25.67 | -25.67 |
-| lim: drums -6, gain 12 | synthetic drum loop (kick, snare, hats), peaks -6 dBFS | -28.29 | -28.29 |
-| lim: music -2, gain 5 | the same mix, peaks -2 dBFS | -44.96 | -44.96 |
-| char: pink -18, 100 % | pink noise, -18 dBFS RMS | -43.74 | -43.74 |
-| char: pink -6, 100 % | pink noise, -6 dBFS RMS | -34.68 | -34.68 |
-| char: music -10, 50 % | synthetic mix (bass, chords, noise bed, drums), stereo, peaks -10 dBFS | -45.98 | -45.98 |
-| char: music -10, 100 % | synthetic mix (bass, chords, noise bed, drums), stereo, peaks -10 dBFS | -40.1 | -40.1 |
-| char: music -10, 200 % | synthetic mix (bass, chords, noise bed, drums), stereo, peaks -10 dBFS | -35.67 | -35.67 |
-| char: drums -6, 100 % | synthetic drum loop (kick, snare, hats), peaks -6 dBFS | -43.76 | -43.76 |
-| full: music -10, defaults | synthetic mix (bass, chords, noise bed, drums), stereo, peaks -10 dBFS | -40.1 | -40.1 |
-| full: music -2, defaults | the same mix, peaks -2 dBFS | -36.1 | -36.1 |
-| full: drums -6, defaults | synthetic drum loop (kick, snare, hats), peaks -6 dBFS | -41.4 | -41.4 |
-| full: music -10, 200 %, gain 10, eq +3/-2/+4, in -3 out +2 | synthetic mix (bass, chords, noise bed, drums), stereo, peaks -10 dBFS | -36.03 | -36.03 |
+| lim: pink -6, gain 5 | pink noise, -6 dBFS RMS | -47.47 | -47.47 |
+| lim: drums -6, gain 12 | synthetic drum loop (kick, snare, hats), peaks -6 dBFS | -62.51 | -62.51 |
+| lim: music -2, gain 5 | the same mix, peaks -2 dBFS | -60.84 | -60.84 |
+| char: pink -18, 100 % | pink noise, -18 dBFS RMS | -52.6 | -52.6 |
+| char: pink -6, 100 % | pink noise, -6 dBFS RMS | -42.64 | -42.64 |
+| char: music -10, 50 % | synthetic mix (bass, chords, noise bed, drums), stereo, peaks -10 dBFS | -55.74 | -55.74 |
+| char: music -10, 100 % | synthetic mix (bass, chords, noise bed, drums), stereo, peaks -10 dBFS | -62.96 | -62.96 |
+| char: music -10, 200 % | synthetic mix (bass, chords, noise bed, drums), stereo, peaks -10 dBFS | -62.55 | -62.55 |
+| char: drums -6, 100 % | synthetic drum loop (kick, snare, hats), peaks -6 dBFS | -60.68 | -60.68 |
+| full: music -10, defaults | synthetic mix (bass, chords, noise bed, drums), stereo, peaks -10 dBFS | -62.96 | -62.96 |
+| full: music -2, defaults | the same mix, peaks -2 dBFS | -52.62 | -52.62 |
+| full: drums -6, defaults | synthetic drum loop (kick, snare, hats), peaks -6 dBFS | -60.88 | -60.88 |
+| full: music -10, 200 %, gain 10, eq +3/-2/+4, in -3 out +2 | synthetic mix (bass, chords, noise bed, drums), stereo, peaks -10 dBFS | -61.77 | -61.77 |
 
 Signal list: **pink -18**: pink noise, -18 dBFS RMS; **pink -6**: pink noise, -6 dBFS RMS; **sweep -12**: log sine sweep 20 Hz - 20 kHz, -12 dBFS; **drums -6**: synthetic drum loop (kick, snare, hats), peaks -6 dBFS; **music -10**: synthetic mix (bass, chords, noise bed, drums), stereo, peaks -10 dBFS; **music -2**: the same mix, peaks -2 dBFS.
 
 ## What the numbers say
 
-None of these is a perfect null; the full chain lands between about -36 and -41 dB on program material.
+None of these is a perfect null. On program material the full chain lands between about -52 and -63 dB:
+well below audibility, though not bit-identical.
 
 - **The path, EQ and crossover are exact for practical purposes** (-79 to -87 dB): the fixed delay, the RBJ
   filters and the character section's FIR crossover (taken from the reference's own impulse responses) are
   linear and fully identified. At amount 0 % the character section nulls at -137 dB.
-- **The character section is the main residual** (-34 to -46 dB). Its structure (parallel compressor and
-  cubic shaper per band) and constants are fitted, not known. It is best at moderate amounts and levels and
-  worst at 200 % and on loud dense material. Most of what is left is in the low band (bass under 160 Hz).
-- **The limiter is close on program material** (-45 dB on the mix at -2 dBFS) but not under heavy, continuous
-  limiting (-26 to -28 dB on loud pink noise and drums with +12 dB of input gain). Its slow release is
-  identified exactly (MEASUREMENTS.md 4); how its fast stage ramps between closely spaced peaks is not.
+- **The character section** reaches -55 to -63 dB on music and drums at 50 to 200 %. Its structure is
+  identified (MEASUREMENTS.md 3.9 - 3.11): a sine shaper, mid-only detectors, a side gain per band, and a mid
+  band whose nonlinear stage hears a steep upper edge. Its constants are fits per amount node. It is weakest
+  on loud dense noise (-43 dB for pink noise at -6 dBFS RMS), mostly in the high band.
+- **The limiter** follows the probe-identified algorithm (MEASUREMENTS.md 4.1): -61 to -63 dB on music and
+  drums, -47 dB under continuous heavy limiting of pink noise.
 - **The built VST3 and the offline renderer give the same numbers**, so these hold for the plug-in itself.
 
 ## Oversampling
@@ -53,12 +54,12 @@ ours forced to the same ratio (`python nulltest/null_oversampling.py`).
 
 | Ratio, signal | Residual, ours (dB) |
 |---|---|
-| 2x, defaults, music -10 | -40.19 |
-| 2x, defaults, drums -6 | -43.29 |
-| 2x, defaults, pink -18 | -42.13 |
-| 4x, defaults, music -10 | -40.24 |
-| 4x, defaults, drums -6 | -41.98 |
-| 4x, defaults, pink -18 | -42.34 |
-| 8x, defaults, music -10 | -40.24 |
-| 8x, defaults, drums -6 | -41.99 |
-| 8x, defaults, pink -18 | -42.33 |
+| 2x, defaults, music -10 | -61.64 |
+| 2x, defaults, drums -6 | -61.13 |
+| 2x, defaults, pink -18 | -52.33 |
+| 4x, defaults, music -10 | -58.9 |
+| 4x, defaults, drums -6 | -52.9 |
+| 4x, defaults, pink -18 | -50.49 |
+| 8x, defaults, music -10 | -59.37 |
+| 8x, defaults, drums -6 | -52.96 |
+| 8x, defaults, pink -18 | -50.65 |
