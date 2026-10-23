@@ -1,0 +1,125 @@
+# Builds The Antiparticle on Windows (VST3 + CLAP), macOS (universal AU + VST3 + CLAP) and Linux (VST3 + CLAP), runs
+# the unit tests and validates the plug-ins with pluginval at the strictest level (and auval on macOS). The built
+# plug-ins come out as downloadable artifacts. Installers and GitHub releases are Phase 5.
+# Runs when started by hand (Actions tab > Run workflow) or when a version tag is pushed; ordinary pushes do not run
+# it, to save Actions minutes on this private repository: build and test locally first.
+name: Build and validate
+
+on:
+  push:
+    tags: ['v*']
+  workflow_dispatch:
+
+jobs:
+  windows:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v5
+
+      - name: Configure
+        run: cmake -B build -A x64 -DAP_TOOLS=OFF
+
+      - name: Build (plug-ins and tests)
+        run: cmake --build build --config Release --parallel --target TheAntiparticle_VST3 TheAntiparticle_CLAP AntiparticleTests
+
+      - name: Unit tests
+        run: ctest --test-dir build -C Release --output-on-failure
+
+      - name: Validate the VST3 (pluginval, strictness 10)
+        shell: pwsh
+        run: |
+          Invoke-WebRequest https://github.com/Tracktion/pluginval/releases/latest/download/pluginval_Windows.zip -OutFile pluginval.zip
+          Expand-Archive pluginval.zip -DestinationPath pluginval
+          $plug = Resolve-Path "build/TheAntiparticle_artefacts/Release/VST3/The Antiparticle.vst3"
+          # pluginval is a GUI-subsystem program: wait for it and read its real exit code
+          $r = Start-Process -FilePath "pluginval/pluginval.exe" -NoNewWindow -Wait -PassThru `
+                 -ArgumentList @("--strictness-level", "10", "--skip-gui-tests", "--timeout-ms", "900000", "--validate", "`"$plug`"")
+          Write-Host "pluginval exit code: $($r.ExitCode)"
+          if ($r.ExitCode -ne 0) { exit 1 }
+
+      - uses: actions/upload-artifact@v6
+        with:
+          name: TheAntiparticle-Windows
+          path: |
+            build/TheAntiparticle_artefacts/Release/VST3
+            build/TheAntiparticle_artefacts/Release/CLAP
+
+  macos:
+    runs-on: macos-latest
+    steps:
+      - uses: actions/checkout@v5
+
+      - name: "Configure (universal: Apple Silicon + Intel)"
+        run: cmake -B build -G Xcode -DAP_TOOLS=OFF -DCMAKE_OSX_ARCHITECTURES="arm64;x86_64" -DCMAKE_OSX_DEPLOYMENT_TARGET=10.13
+
+      - name: Build (plug-ins and tests)
+        run: cmake --build build --config Release --target TheAntiparticle_AU TheAntiparticle_VST3 TheAntiparticle_CLAP AntiparticleTests -- -quiet
+
+      - name: Unit tests
+        run: ctest --test-dir build -C Release --output-on-failure
+
+      - name: Check universal binaries and sign (ad hoc)
+        run: |
+          set -e
+          A="build/TheAntiparticle_artefacts/Release"
+          for b in "$A/AU/The Antiparticle.component" "$A/VST3/The Antiparticle.vst3" "$A/CLAP/The Antiparticle.clap"; do
+            lipo -info "$b/Contents/MacOS/The Antiparticle"
+            codesign --force --deep --sign - "$b"
+          done
+
+      - name: Validate the AU (auval) and the VST3 / AU (pluginval, strictness 10)
+        run: |
+          set -e
+          A="build/TheAntiparticle_artefacts/Release"
+          mkdir -p ~/Library/Audio/Plug-Ins/Components
+          cp -R "$A/AU/The Antiparticle.component" ~/Library/Audio/Plug-Ins/Components/
+          killall -9 AudioComponentRegistrar || true
+          auval -v aufx Atpl Antp
+          curl -sL -o pluginval.zip https://github.com/Tracktion/pluginval/releases/latest/download/pluginval_macOS.zip
+          unzip -q pluginval.zip
+          P=pluginval.app/Contents/MacOS/pluginval
+          $P --strictness-level 10 --skip-gui-tests --timeout-ms 900000 --validate ~/Library/Audio/Plug-Ins/Components/"The Antiparticle.component"
+          $P --strictness-level 10 --skip-gui-tests --timeout-ms 900000 --validate "$A/VST3/The Antiparticle.vst3"
+
+      - uses: actions/upload-artifact@v6
+        with:
+          name: TheAntiparticle-macOS
+          path: |
+            build/TheAntiparticle_artefacts/Release/AU
+            build/TheAntiparticle_artefacts/Release/VST3
+            build/TheAntiparticle_artefacts/Release/CLAP
+
+  linux:
+    runs-on: ubuntu-22.04   # the oldest glibc we support (2.35), so the build runs on newer systems too
+    steps:
+      - uses: actions/checkout@v5
+
+      - name: Dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends ninja-build libasound2-dev libjack-jackd2-dev libfreetype6-dev libfontconfig1-dev \
+            libx11-dev libxcomposite-dev libxcursor-dev libxext-dev libxinerama-dev libxrandr-dev libxrender-dev \
+            libglu1-mesa-dev mesa-common-dev xvfb
+
+      - name: Configure
+        run: cmake -B build -G Ninja -DCMAKE_BUILD_TYPE=Release -DAP_TOOLS=OFF
+
+      - name: Build (plug-ins and tests)
+        run: cmake --build build --target TheAntiparticle_VST3 TheAntiparticle_CLAP AntiparticleTests
+
+      - name: Unit tests
+        run: xvfb-run -a ctest --test-dir build --output-on-failure
+
+      - name: Validate the VST3 (pluginval, strictness 10)
+        run: |
+          set -e
+          curl -sL -o pluginval.zip https://github.com/Tracktion/pluginval/releases/latest/download/pluginval_Linux.zip
+          unzip -q pluginval.zip
+          xvfb-run -a ./pluginval --strictness-level 10 --skip-gui-tests --timeout-ms 900000 --validate "build/TheAntiparticle_artefacts/Release/VST3/The Antiparticle.vst3"
+
+      - uses: actions/upload-artifact@v6
+        with:
+          name: TheAntiparticle-Linux
+          path: |
+            build/TheAntiparticle_artefacts/Release/VST3
+            build/TheAntiparticle_artefacts/Release/CLAP

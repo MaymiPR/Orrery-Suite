@@ -3,6 +3,8 @@
 #include <atomic>
 #include "Params.h"
 #include "Presets.h"
+#include "Settings.h"
+#include "dsp/Engine.h"
 
 namespace ap
 {
@@ -23,10 +25,12 @@ struct LevelTap
 };
 }
 
-class AntiparticleProcessor : public juce::AudioProcessor
+class AntiparticleProcessor : public juce::AudioProcessor,
+                              private juce::ChangeListener
 {
 public:
     AntiparticleProcessor();
+    ~AntiparticleProcessor() override;
 
     void prepareToPlay (double, int) override;
     void releaseResources() override {}
@@ -62,10 +66,14 @@ public:
     std::atomic<int> blocksProcessed { 0 };
 
 private:
+    void changeListenerCallback (juce::ChangeBroadcaster*) override;   // the settings page's oversampling ratio
+
     juce::AudioProcessorParameter* bypassParam = nullptr;
-    std::atomic<float>* inputGain = nullptr;
-    std::atomic<float>* outputGain = nullptr;
-    juce::SmoothedValue<float> inGainSmoothed, outGainSmoothed;
+    std::atomic<float>* raw[11] {};       // every parameter's current value, in ap::id order
+    ap::dsp::Engine engine;
+    juce::AudioBuffer<float> meterBuf;    // the input meters' copy (after the input gain)
+    double preparedRate = 0.0;
+    int preparedBlock = 0;
     float rmsState[4] {};           // mean-square followers (in L, in R, out L, out R)
     float followState[4] {};        // peak followers (same order)
     float rmsCoef = 0.0f, followAttack = 0.0f, followRelease = 0.0f;

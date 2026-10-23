@@ -193,8 +193,8 @@ void AntiparticleEditor::timerCallback()
     updateMeter (inMeter[1], proc.inR, dt);
     updateMeter (outMeter[0], proc.outL, dt);
     updateMeter (outMeter[1], proc.outR, dt);
-    for (int b = 0; b < 3; ++b) bandGrDb[b] = proc.bandGr[b].load();
-    for (int c = 0; c < 2; ++c) limGrDb[c] = proc.limGr[c].load();
+    for (int b = 0; b < 3; ++b) { bandGrDb[b] = proc.bandGr[b].exchange (0.0f); bandGrHold[b] = jmax (bandGrHold[b], bandGrDb[b]); }
+    for (int c = 0; c < 2; ++c) { limGrDb[c] = proc.limGr[c].exchange (0.0f); limGrHold[c] = jmax (limGrHold[c], limGrDb[c]); }
     const int blocks = proc.blocksProcessed.load();
     const bool running = blocks != lastBlocks;
     lastBlocks = blocks;
@@ -234,6 +234,13 @@ void AntiparticleEditor::Content::mouseDown (const MouseEvent& e)
     {
         if (p.x < columnX[0]) for (auto& m : ed.inMeter) m.peakHoldDb = m.rmsHoldDb = -200.0f;
         if (p.x > columnX[4]) for (auto& m : ed.outMeter) m.peakHoldDb = m.rmsHoldDb = -200.0f;
+        if (p.x > columnX[3] && p.x < columnX[4]) for (auto& v : ed.limGrHold) v = 0.0f;
+        repaint();
+    }
+    // the band readouts (beside the GR meters)
+    if (p.x > columnX[2] + 80.0f && p.x < columnX[3] && p.y > 110.0f && p.y < 262.0f)
+    {
+        for (auto& v : ed.bandGrHold) v = 0.0f;
         repaint();
     }
     if (ed.dropList != nullptr) ed.closePopups();
@@ -395,9 +402,11 @@ void AntiparticleEditor::paintGainReduction (Graphics& g)
     {
         g.setColour (labelCol);
         theme::textAt (g, names[b], 571.0f, baselines[b]);
-        theme::textAt (g, grText (bandGrDb[b]), 701.5f, baselines[b], Justification::right);
+        theme::textAt (g, grText (bandGrHold[b]), 701.5f, baselines[b], Justification::right);
 
-        const int bars = characterOn ? jlimit (0, 30, (int) std::floor (bandGrDb[b] / 0.2f)) : 0;   // scale: Phase 3
+        // 33 bars over 6 dB (MEASUREMENTS.md 6: 4.7 dB = 25 bars, 2.8 dB = 15); one bar stays lit while any is left
+        const float gr = bandGrDb[b];
+        const int bars = characterOn && gr > 0.005f ? jlimit (1, 33, (int) std::floor (gr * 33.0f / 6.0f)) : 0;
         const float tipX = 700.0f - 4.0f * (float) (bars - 1);
         // lit while the deepest bar ends inside the bracket (measured on the reference; it lags by a bar or so, hence
         // a bar of hysteresis once lit)
@@ -438,11 +447,13 @@ void AntiparticleEditor::paintLimiter (Graphics& g)
     for (int c = 0; c < 2; ++c)
     {
         g.setColour (limiterOn ? theme::mint : theme::dimLabel);
-        g.drawText (grText (limGrDb[c]), Rectangle<float> (centres[c] - 20.0f, 67.5f, 40.0f, 16.0f), Justification::centredTop, false);
+        g.drawText (grText (limGrHold[c]), Rectangle<float> (centres[c] - 20.0f, 67.5f, 40.0f, 16.0f), Justification::centredTop, false);
         if (limiterOn)
         {
+            // the dashes grow downward with the reduction (one at rest; spacing and step estimated from the film)
             g.setColour (theme::mint);
-            g.fillRect (centres[c] - 4.0f, 90.0f, 8.0f, 1.5f);
+            const int dashes = 1 + jlimit (0, 30, (int) std::floor (limGrDb[c] / 1.5f));
+            for (int k = 0; k < dashes; ++k) g.fillRect (centres[c] - 4.0f, 90.0f + 4.0f * (float) k, 8.0f, 1.5f);
         }
     }
 }

@@ -32,7 +32,7 @@ reproduced with the scripts named in each section.
 | Order | input gain → EQ → character → limiter → output gain (the EQ and character run inside the oversampled block) |
 | Reported latency, 1x | 179 / 189 / 357 samples at 44.1 / 48 / 96 kHz |
 | Reported latency at 48 kHz, 1x / 2x / 4x / 8x | 189 / 212 / 217 / 219 samples |
-| Core path, every stage bypassed | 152-sample delay plus a first-order all-pass with its pole at z = −0.564. A step rings at Nyquist and overshoots by 24 % (1.226) before settling. Magnitude is flat. |
+| Core path, every stage bypassed | a fixed **3.1505 ms** delay: an integer delay plus a first-order Thiran all-pass for the fraction (151 samples + a = 0.5636 at 48 kHz, i.e. 151.279 samples; the same time at 44.1, 88.2, 96 and 192 kHz, `measure_core.py`). A step rings at Nyquist and overshoots by 24 % (1.226) before settling. Magnitude is flat. With the character section on, its FIR crossover carries this delay instead (3.1) |
 | Limiter on | adds 38 samples (its look-ahead): 190 samples raw |
 | Character / EQ on | no extra delay |
 | Quirk | With the limiter bypassed, the output is 37–38 samples earlier than the reported latency (the report does not change with the limiter bypass). |
@@ -64,6 +64,18 @@ pushes down show which band it falls in (`bands_masker.png`).
 
 Fitted to all seven maskers at once, the median error is 0.02 dB. LR2 fits ten times worse.
 
+**Phase 4 correction: the crossover is FIR, not IIR** (`fit_bands.py`).
+- The section's impulse response is finite: 661 taps at 48 kHz, with the main peak at 151. That peak is the core delay,
+  so the 3.15 ms delay is this crossover's latency, kept even when the section is bypassed.
+- The small-signal impulse responses at the nine amount settings span **exactly three** fixed filters (the fourth
+  singular value is 2e-8 of the first).
+- The split into three bands is not unique from these data alone. It was chosen closest to linear-phase
+  Linkwitz-Riley 4th-order magnitudes at 157 / 2676 Hz, which matches the masker test.
+- These three IRs rebuild all nine responses to within 3e-8.
+- Their passbands have near-zero phase relative to the delay. At 0 % their sum is the reference's 0 % response, which
+  is not exactly the bypassed path: up to −0.08 dB of ripple at 280 Hz and +2° of phase near 120 Hz.
+- The plug-in uses these IRs at 48 kHz. Other rates use a frequency-sampled redesign with the same time delay.
+
 ### 3.2 Small-signal gain vs amount
 
 **Method.** Impulse at −60 dBFS, below every threshold.
@@ -76,6 +88,9 @@ measured complex response within ±0.11 dB from 30 Hz to 16 kHz. It is flat at 0
 | low dB | 0.00 | 0.74 | 1.47 | 2.16 | 2.83 | 3.17 | 3.49 | 3.81 | 4.11 |
 | mid dB | 0.00 | 1.07 | 1.99 | 2.79 | 3.49 | 4.20 | 4.85 | 5.45 | 6.02 |
 | high dB | 0.00 | 0.38 | 0.67 | 0.87 | 0.99 | 1.53 | 2.03 | 2.51 | 2.96 |
+
+With the identified FIR bands (3.1) the gains come out slightly different, because they belong to that particular
+split: mid 3.60 dB and high 0.91 dB at 100 % (`Source/dsp/BandFilters.h`).
 
 The 0–100 % and 100–200 % halves follow different curves. Above 100 % each band rises by roughly a fixed step per 25 %.
 
@@ -149,6 +164,31 @@ the detectors is a plain RMS detector.
 - **Not resolved:** audio fed to the side-chain bus through RefRender had no effect, even though the bus was enabled
   in stereo.
 - **Next:** check in a DAW (FL Studio side-chain routing).
+
+### 3.8 Per-band structure (Phase 4)
+
+Each band is a **parallel compressor followed by a cubic shaper**:
+
+  u = x · ((1 − m) + m · g(t)),  y = M · (u − c · u³)
+
+- x: the band signal. m: the wet share (0.72 for mid at 100 %). g: the wet path's gain from the compressor.
+- c: the shaper (0.95 for mid at 100 %, 1.7 at 200 %). M: the band's small-signal gain.
+
+The evidence:
+- For a steady 750 Hz tone, the H3/H1 ratio and the fundamental give the same c at every level (0.96 … 0.82 from
+  −30 to +4 dBFS).
+- With that c, the wet-path reduction this implies equals the GR meter's reading:
+  - 6.85 dB vs 7.1 shown at −6 dBFS
+  - 9.4 dB vs 9.9 shown at 0 dBFS
+
+  So **the meters show the wet path's reduction**. That is why they read more than the change you hear.
+- Converted to wet-path reduction, the mid band's attack and release look like a mean-square detector with a very
+  soft knee: a log-like attack and an S-shaped release.
+- The cubic is not clipped: past about +3 dBFS the output folds over (it falls as the input rises), as the reference
+  does at 60 Hz.
+
+`fit_character.py` fits m, c, threshold, ratio, knee, attack and release per band and amount node to tone staircases
+and bursts. Detectors: mean-square for the low and mid bands, peak for the high band (−47 vs −40 dB residual).
 
 ## 4. Limiter (`measure_limiter.py`)
 
@@ -234,6 +274,16 @@ The setting was switched through the reference's own settings page and restored 
 
 Oversampling adds only the up/down-sampling filters (a top-octave roll-off) and less aliasing. The dynamics and the
 small-signal response below 15 kHz do not change.
+
+**Phase 4.**
+- The path's extra delay at 48 kHz, read from the group delay at 1 kHz, is 22.488 / 27.711 / 29.655 samples at
+  2x / 4x / 8x.
+- That is short, so the reference's filters are short too. Ours are linear-phase FIRs of 45 / 21 / 15 taps per stage.
+- The first stage was fitted so that a simulation of the whole path matches the measured response. The path is:
+  upsample, then the fixed delay with its fraction at the high rate, then downsample.
+- Simulating the whole path matters. Because of the fractional delay between up- and downsampling, the folded image
+  does not add in phase. A filter designed as if it did is off by 2 dB at 20 kHz at 2x.
+- Result: within 0.002 dB and 0.2° of the reference up to 23.9 kHz at all three ratios (`fit_oversampling.py`).
 
 ## 8. What Phase 4 still has to pin down
 

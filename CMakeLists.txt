@@ -30,6 +30,7 @@ juce_add_binary_data(AntiparticleData SOURCES resources/fonts/InstrumentSans-Reg
 set_target_properties(AntiparticleData PROPERTIES POSITION_INDEPENDENT_CODE ON)
 
 set(AP_SOURCES
+    Source/dsp/Engine.cpp
     Source/PluginProcessor.cpp
     Source/PluginEditor.cpp
     Source/Presets.cpp
@@ -79,6 +80,34 @@ target_include_directories(AntiparticleSnapshot PRIVATE Source)
 target_compile_definitions(AntiparticleSnapshot PRIVATE ${AP_APP_DEFS})
 target_link_libraries(AntiparticleSnapshot PRIVATE AntiparticleData juce::juce_audio_utils juce::juce_dsp
     juce::juce_recommended_config_flags)
+
+# Unit tests (DSP + processor):  cmake --build build --target AntiparticleTests, then ctest --test-dir build -C Release
+enable_testing()
+juce_add_console_app(AntiparticleTests PRODUCT_NAME "AntiparticleTests")
+target_sources(AntiparticleTests PRIVATE tests/AntiparticleTests.cpp ${AP_SOURCES})
+target_include_directories(AntiparticleTests PRIVATE Source)
+target_compile_definitions(AntiparticleTests PRIVATE ${AP_APP_DEFS})
+target_link_libraries(AntiparticleTests PRIVATE AntiparticleData juce::juce_audio_utils juce::juce_dsp
+    juce::juce_recommended_config_flags)
+add_test(NAME AntiparticleTests COMMAND AntiparticleTests)
+
+# Offline renders through our own processor with every DSP constant open to change (fitting, null tests)
+juce_add_console_app(ApRender PRODUCT_NAME "ApRender")
+target_sources(ApRender PRIVATE tools/ApRender.cpp ${AP_SOURCES})
+target_include_directories(ApRender PRIVATE Source)
+target_compile_definitions(ApRender PRIVATE ${AP_APP_DEFS})
+target_link_libraries(ApRender PRIVATE AntiparticleData juce::juce_audio_utils juce::juce_dsp
+    juce::juce_recommended_config_flags)
+
+# a second copy for trying DSP changes while a fit is running with ApRender (tgp.py: AP_RENDER=dev)
+if(AP_TOOLS)
+    juce_add_console_app(ApRenderDev PRODUCT_NAME "ApRenderDev")
+    target_sources(ApRenderDev PRIVATE tools/ApRender.cpp ${AP_SOURCES})
+    target_include_directories(ApRenderDev PRIVATE Source)
+    target_compile_definitions(ApRenderDev PRIVATE ${AP_APP_DEFS})
+    target_link_libraries(ApRenderDev PRIVATE AntiparticleData juce::juce_audio_utils juce::juce_dsp
+        juce::juce_recommended_config_flags)
+endif()
 
 # Measurement tools (hosts for the reference plug-in); not shipped.
 option(AP_TOOLS "Build the measurement tools" ON)

@@ -15,3 +15,4 @@ reference/
 measurements/
 nulltest/renders/
 nulltest/reference_renders/
+nulltest/results*.json

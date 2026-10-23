@@ -46,8 +46,23 @@ AntiparticleProcessor::AntiparticleProcessor()
       apvts (*this, nullptr, "TheAntiparticle", ap::createLayout())
 {
     bypassParam = apvts.getParameter (ap::id::bypass);
-    inputGain = apvts.getRawParameterValue (ap::id::inputGain);
-    outputGain = apvts.getRawParameterValue (ap::id::outputGain);
+    const char* ids[11] { ap::id::inputGain, ap::id::outputGain, ap::id::eqLow, ap::id::eqMid, ap::id::eqHigh, ap::id::eqBypass,
+                          ap::id::character, ap::id::characterBypass, ap::id::limiterGain, ap::id::limiterBypass, ap::id::bypass };
+    for (int i = 0; i < 11; ++i) raw[i] = apvts.getRawParameterValue (ids[i]);
+    ap::Settings::get().addChangeListener (this);
+}
+
+AntiparticleProcessor::~AntiparticleProcessor() { ap::Settings::get().removeChangeListener (this); }
+
+void AntiparticleProcessor::changeListenerCallback (juce::ChangeBroadcaster*)
+{
+    // a new oversampling ratio: prepare again (and tell the host the new latency)
+    if (preparedRate > 0.0 && ap::dsp::tuning().forceOversampling <= 0 && ap::Settings::get().oversampling() != engine.oversamplingFactor())
+    {
+        suspendProcessing (true);
+        prepareToPlay (preparedRate, preparedBlock);
+        suspendProcessing (false);
+    }
 }
 
 bool AntiparticleProcessor::isBusesLayoutSupported (const BusesLayout& l) const
@@ -63,19 +78,20 @@ bool AntiparticleProcessor::isBusesLayoutSupported (const BusesLayout& l) const
     return true;
 }
 
-void AntiparticleProcessor::prepareToPlay (double sampleRate, int)
+void AntiparticleProcessor::prepareToPlay (double sampleRate, int block)
 {
-    inGainSmoothed.reset (sampleRate, 0.02);
-    outGainSmoothed.reset (sampleRate, 0.02);
-    inGainSmoothed.setCurrentAndTargetValue (Decibels::decibelsToGain (inputGain->load()));
-    outGainSmoothed.setCurrentAndTargetValue (Decibels::decibelsToGain (outputGain->load()));
-    rmsCoef = (float) std::exp (-1.0 / (0.3 * sampleRate));       // placeholder RMS window; measured in Phase 3
+    preparedRate = sampleRate;
+    preparedBlock = block;
+    meterBuf.setSize (2, jmax (1, block));
+    const auto& t = ap::dsp::tuning();
+    engine.prepare (sampleRate, block, t.forceOversampling > 0 ? (int) t.forceOversampling : ap::Settings::get().oversampling(), t);
+    rmsCoef = (float) std::exp (-1.0 / (0.3 * sampleRate));       // placeholder RMS window (MEASUREMENTS.md 6: open)
     std::fill (std::begin (rmsState), std::end (rmsState), 0.0f);
     std::fill (std::begin (followState), std::end (followState), 0.0f);
     // the input target's detector, fitted to the reference with sine / noise ramps
     followAttack = 1.0f - (float) std::exp (-1.0 / (0.0002 * sampleRate));
     followRelease = (float) std::exp (-1.0 / (0.3 * sampleRate));
-    setLatencySamples (0);
+    setLatencySamples (engine.latency());
 }
 
 void AntiparticleProcessor::measure (const AudioBuffer<float>& b, ap::LevelTap& l, ap::LevelTap& r, float* state, float* follow)
@@ -105,30 +121,43 @@ void AntiparticleProcessor::processBlock (AudioBuffer<float>& buffer, MidiBuffer
     ScopedNoDenormals noDenormals;
     auto main = getBusBuffer (buffer, true, 0);
     const int n = main.getNumSamples();
+    if (main.getNumChannels() < 2) return;
 
-    if (bypassParam->getValue() >= 0.5f)
+    ap::dsp::Params p;
+    p.inputGainDb = raw[0]->load(); p.outputGainDb = raw[1]->load();
+    p.eqLowDb = raw[2]->load(); p.eqMidDb = raw[3]->load(); p.eqHighDb = raw[4]->load();
+    p.eqBypass = raw[5]->load() >= 0.5f;
+    p.amount = raw[6]->load();
+    p.characterBypass = raw[7]->load() >= 0.5f;
+    p.limiterGainDb = raw[8]->load();
+    p.limiterBypass = raw[9]->load() >= 0.5f;
+    p.bypass = bypassParam->getValue() >= 0.5f;
+    p.sidechainExternal = sidechainExternal.load();
+
+    const float* sc[2] { nullptr, nullptr };
+    if (getBusCount (true) > 1 && getBus (true, 1)->isEnabled())
     {
-        measure (main, inL, inR, rmsState, followState);
-        measure (main, outL, outR, rmsState + 2, followState + 2);
-        ++blocksProcessed;
-        return;
+        auto side = getBusBuffer (buffer, true, 1);
+        if (side.getNumChannels() >= 2) { sc[0] = side.getReadPointer (0); sc[1] = side.getReadPointer (1); }
     }
 
-    // Phase 2: gain staging only. EQ, character and limiter are Phase 4 (MEASUREMENTS.md).
-    inGainSmoothed.setTargetValue (Decibels::decibelsToGain (inputGain->load()));
-    outGainSmoothed.setTargetValue (Decibels::decibelsToGain (outputGain->load()));
-    for (int i = 0; i < n; ++i)
+    // input meters read the signal after the input gain
     {
-        const float g = inGainSmoothed.getNextValue();
-        for (int c = 0; c < main.getNumChannels(); ++c) main.getWritePointer (c)[i] *= g;
+        const float g = Decibels::decibelsToGain (p.inputGainDb);
+        meterBuf.setSize (2, n, false, false, true);
+        for (int c = 0; c < 2; ++c) FloatVectorOperations::copyWithMultiply (meterBuf.getWritePointer (c), main.getReadPointer (c), p.bypass ? 1.0f : g, n);
+        measure (meterBuf, inL, inR, rmsState, followState);
     }
-    measure (main, inL, inR, rmsState, followState);
-    for (int i = 0; i < n; ++i)
-    {
-        const float g = outGainSmoothed.getNextValue();
-        for (int c = 0; c < main.getNumChannels(); ++c) main.getWritePointer (c)[i] *= g;
-    }
+    engine.process (main.getWritePointer (0), main.getWritePointer (1), sc[0], sc[1], n, p);
     measure (main, outL, outR, rmsState + 2, followState + 2);
+
+    float gr[3];
+    engine.takeBandGr (gr);
+    // meters: the deepest values since the editor last took them (bands in the editor's order: high, mid, low)
+    auto raise = [] (std::atomic<float>& a, float v) { float o = a.load(); while (v > o && ! a.compare_exchange_weak (o, v)) {} };
+    for (int b = 0; b < 3; ++b) raise (bandGr[2 - b], p.characterBypass || p.bypass ? 0.0f : gr[b]);
+    const float lg = engine.takeLimiterGr();
+    for (auto& l : limGr) raise (l, p.limiterBypass || p.bypass ? 0.0f : lg);
     ++blocksProcessed;
 }
 

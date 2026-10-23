@@ -8,12 +8,17 @@ build with tools/RefRender (an offline JUCE VST3 host). Renders stay local (null
 
 Parameters by the names hosts show: params={'Input Gain': -6} uses the displayed value, norm={...} the normalised
 value; auto=[('Input Gain', sample, norm), ...] changes a parameter while rendering (on block boundaries).
+plugin='model' renders through our processor with tools/ApRender: tune={'mid.mix.4': 0.7} overrides DSP constants
+(Source/dsp/Tuning.h), tuning=file loads a tuning file for every job, ext=True selects the side-chain EXT.
 """
 import hashlib, os, subprocess, tempfile, uuid
 import numpy as np
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 EXE = os.path.join(ROOT, 'build', 'RefRender_artefacts', 'Release', 'RefRender.exe')
+APEXE = os.path.join(ROOT, 'build', 'ApRender_artefacts', 'Release', 'ApRender.exe')   # our processor, tunable ('model')
+if os.environ.get('AP_RENDER') == 'dev':      # the second copy, for DSP changes while a fit runs on the first
+    APEXE = os.path.join(ROOT, 'build', 'ApRenderDev_artefacts', 'Release', 'ApRenderDev.exe')
 PLUGINS = {
     'ref': (r'C:\Program Files\Common Files\VST3\Cradle The God Particle.vst3', 'The God Particle'),
     'ours': (os.path.join(ROOT, 'build', 'TheAntiparticle_artefacts', 'Release', 'VST3', 'The Antiparticle.vst3'), 'The Antiparticle'),
@@ -44,11 +49,11 @@ def _key(j, plugin, fs, block):
     return h.hexdigest()
 
 
-def render_many(jobs, plugin='ref', fs=FS, block=512, cache=False):
+def render_many(jobs, plugin='ref', fs=FS, block=512, cache=False, tuning=None):
     """jobs: dicts with x, and optional params / norm / auto / raw / sc / state / reset. Returns a list of (2, n).
     cache=True keeps each output in renders/cache (keyed by the input and settings) so analyses can be re-run without
     rendering again; jobs with reset=False are never cached (they depend on the previous job)."""
-    if cache:
+    if cache and plugin != 'model':          # our processor changes with every build / tuning: never cached
         os.makedirs(CACHE, exist_ok=True)
         keys = [None if any(j.get('reset') is False for j in jobs) else _key(j, plugin, fs, block) for j in jobs]
         have = {i: np.load(os.path.join(CACHE, k + '.npy')) for i, k in enumerate(keys) if k and os.path.exists(os.path.join(CACHE, k + '.npy'))}
@@ -72,14 +77,20 @@ def render_many(jobs, plugin='ref', fs=FS, block=512, cache=False):
         if j.get('raw'): parts.append('raw=1')
         if j.get('reset') is False: parts.append('reset=0')
         if j.get('state'): parts.append(f'"state={j["state"]}"')
+        for k, v in (j.get('tune') or {}).items(): parts.append(f'"tune:{k}={float(v)!r}"')
+        if j.get('ext'): parts.append('ext=1')
         if j.get('sc') is not None:
             fsc = os.path.join(WORK, f'{tag}_{i}_sc.f32'); _stereo(j['sc']).T.astype(np.float32).tofile(fsc); parts.append(f'"sc={fsc}"')
         lines.append(' '.join(parts)); outs.append((fin, fout, x.shape[1]))
     jobfile = os.path.join(WORK, f'{tag}_jobs.txt')
     open(jobfile, 'w').write('\n'.join(lines) + '\n')
-    path, name = PLUGINS[plugin]
-    r = subprocess.run([EXE, path, name, jobfile, f'fs={fs}', f'block={block}'], capture_output=True, text=True)
-    if 'no parameter' in r.stdout: raise RuntimeError(r.stdout)
+    if plugin == 'model':
+        cmd = [APEXE, jobfile, f'fs={fs}', f'block={block}'] + ([f'tuning={tuning}'] if tuning else [])
+    else:
+        path, name = PLUGINS[plugin]
+        cmd = [EXE, path, name, jobfile, f'fs={fs}', f'block={block}']
+    r = subprocess.run(cmd, capture_output=True, text=True)
+    if 'no parameter' in r.stdout or 'unknown tuning' in r.stdout: raise RuntimeError(r.stdout)
     res = []
     for fin, fout, n in outs:
         if not os.path.exists(fout): raise RuntimeError('render failed:\n' + r.stdout + r.stderr)

@@ -92,7 +92,8 @@ private:
     std::unique_ptr<juce::Component> dialog;
 
     Meter inMeter[2], outMeter[2];
-    float bandGrDb[3] {}, limGrDb[2] {};
+    float bandGrDb[3] {}, limGrDb[2] {};                     // now (the bars)
+    float bandGrHold[3] {}, limGrHold[2] {};                 // deepest since the last click (the readouts)
     bool bandTargetLit[3] {};                                // GR targets, with a bar of hysteresis
     bool eqOn = true, characterOn = true, limiterOn = true;
     float characterValue = 0.5f;
