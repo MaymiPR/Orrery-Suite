@@ -319,14 +319,18 @@ env is the largest of three things:
   - When a plan ends, the next one heads for the nearest peak within 21 samples ahead (at 48 kHz) and reaches it
     exactly on arrival. A farther, higher peak does not steepen the line.
   - With no peak ahead, the plan falls toward 1 over 22 samples. It stops at the slow envelope if it meets it.
-  - A running plan changes only when a level within its span rises above its line. It then re-plans to the steepest
-    such point.
+  - A running plan toward a peak changes only when a level within its span rises above its line. It then re-plans
+    to the steepest such point.
+  - A release watches the whole 21-sample window, with its line continued at 1 past its end. So a second peak 24 to
+    40 samples after the first ends the release as soon as it comes within 21 samples. The release then turns into a
+    straight line up (or down) to that peak, instead of dropping toward 1 and jumping back. This one rule took the
+    drums limiter null from −45.8 to −62.5 dB.
   - An idle limiter (no plan, state at or under the slow envelope) rests on the slow envelope.
 - **A slow envelope.** It charges toward the level with τ = 24.47 ms. When the level is lower, it relaxes toward the
   current level (1 when quiet) with τ = 377.8 ms.
 
-Limiter-only nulls are −46.5 (pink noise, gain 5), −45.8 (drums, gain 12) and −58.2 dB (music, gain 5). What
-remains is concentrated where two peaks are about 24 samples apart.
+Limiter-only nulls are −47.5 (pink noise, gain 5), −62.5 (drums, gain 12) and −60.8 dB (music, gain 5). A pair of
+peaks exactly 24 samples apart still differs for the first 3 samples after the first peak.
 
 ## 5. Parameter smoothing (`measure_smoothing.py`)
 
@@ -422,8 +426,8 @@ How closely the result matches is in [NULLTESTS.md](NULLTESTS.md).
 **Still open:**
 - **Character section.** The band laws are fits per amount node, not known formulas. The fits reach −50 to −56 dB
   on the probes. Loud broadband signals (pink noise at −6 dBFS RMS) are matched least well.
-- **Limiter.** Peaks about 24 samples apart are not quite matched. That is where most of the limiter-only residual
-  is.
+- **Limiter.** Dense, continuous limiting (pink noise driven 5 dB into it) nulls to −47.5 dB; isolated peaks and
+  drum hits match to −62 dB.
 - **Side-chain EXT.** Audio fed to the reference's side-chain bus had no effect in our test host. Ours is implemented
   as described (the side-chain drives the band detectors) but could not be compared.
 - **Meters.** The I/O RMS and LUFS readouts and the limiter's dash meter (step size estimated) are not measured yet.

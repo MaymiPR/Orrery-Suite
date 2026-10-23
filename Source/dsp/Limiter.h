@@ -121,12 +121,15 @@ private:
     {
         if (planLeft > 0)
         {
-            // a level within the plan's span above its line: re-plan to the steepest such point
+            // a level above the plan's line: re-plan to the steepest such point. A plan toward a peak watches its own
+            // span only; a release watches the whole window, its line continued at 1 past its end
             double steep = -1.0e9; int at = 0;
-            for (int k = 1; k <= std::min (planLeft, window); ++k)
+            const int horizon = planRelease ? window : std::min (planLeft, window);
+            for (int k = 1; k <= horizon; ++k)
             {
                 const double v = peakAt (out, k);
-                if (v > state + planSlope * k + 1.0e-12 && (v - state) / k > steep) { steep = (v - state) / k; at = k; }
+                const double line = k <= planLeft ? state + planSlope * k : planTarget;
+                if (v > line + 1.0e-12 && (v - state) / k > steep) { steep = (v - state) / k; at = k; }
             }
             if (at > 0) { planSlope = steep; planLeft = at; planTarget = state + steep * at; planRelease = false; }
             return;
