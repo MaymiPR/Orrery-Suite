@@ -68,13 +68,15 @@ static void testFirBank()
     double maxErr = 0;
     for (int i = 0; i < (int) x.size(); ++i)
     {
-        double out[3], dummy[3];
+        double out[FirBank::kFilters], dummy[FirBank::kFilters];
         fb.process (0, x[(size_t) i], out);
         fb.process (1, 0.0, dummy);
-        for (int b = 0; b < 3; ++b)
+        for (int b = 0; b < FirBank::kFilters; ++b)     // the bands, then what their nonlinear stages hear
         {
+            const double* h = b < 3 ? bandIr48k[b] : nlBandIr48k[b - 3];
+            const int n = b < 3 ? bandTaps48k : nlBandTaps48k;
             double ref = 0;
-            for (int k = 0; k < bandTaps48k && k <= i; ++k) ref += bandIr48k[b][k] * x[(size_t) (i - k)];
+            for (int k = 0; k < n && k <= i; ++k) ref += h[k] * x[(size_t) (i - k)];
             maxErr = std::max (maxErr, std::abs (ref - out[b]));
         }
     }
@@ -85,7 +87,7 @@ static void testFirBank()
     for (double f : { 50.0, 157.0, 700.0, 2676.0, 10000.0, 18000.0 })
     {
         f2.reset();
-        const double g = gainAt ([&] (double v) { double o[3], q[3]; f2.process (0, v, o); f2.process (1, 0.0, q); return o[0] + o[1] + o[2]; }, f, 96000.0, 96000);
+        const double g = gainAt ([&] (double v) { double o[FirBank::kFilters], q[FirBank::kFilters]; f2.process (0, v, o); f2.process (1, 0.0, q); return o[0] + o[1] + o[2]; }, f, 96000.0, 96000);
         CHECK_NEAR (db (g), 0.0, 0.25);
     }
 }

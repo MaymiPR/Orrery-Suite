@@ -5,31 +5,36 @@
 #include <vector>
 #include "BandFilters.h"
 #include "Filters.h"
+#include "NlBandFilters.h"
 
 // The character section's crossover: three FIR band filters (identified from the reference at 48 kHz, see
-// nulltest/fit_bands.py), redesigned for other rates by frequency sampling with the same time delay. Zero-latency
+// nulltest/fit_bands.py) and the three signals the bands' nonlinear stages hear (the same bands with steeper edges,
+// NlBandFilters.h), redesigned for other rates by frequency sampling with the same time delay. Zero-latency
 // convolution: the first `block` taps directly, the rest by uniformly partitioned FFT convolution, one input
-// spectrum shared by the three bands. Stereo.
+// spectrum shared by the six filters. Stereo.
 namespace ap::dsp
 {
 class FirBank
 {
 public:
+    static constexpr int kFilters = 6;       // low, mid, high, then what their nonlinear stages hear
     void prepare (double rate, double delaySamples)
     {
         design (rate, delaySamples);
-        const int n = (int) ir[0].size();
+        int n = 0;
+        for (auto& h : ir) n = std::max (n, (int) h.size());
         block = n < 1000 ? 64 : 128;                 // direct head vs FFT tail: about the cheapest split for these lengths
         fftSize = 2 * block;
         parts = std::max (1, (n + block - 1) / block);
         // tail partitions (p >= 1) in the frequency domain
-        for (int b = 0; b < 3; ++b)
+        for (int b = 0; b < kFilters; ++b)
         {
+            const int nb = (int) ir[b].size();
             spec[b].assign ((size_t) parts * fftSize, {});
             for (int p = 1; p < parts; ++p)
             {
                 std::vector<std::complex<double>> buf ((size_t) fftSize);
-                for (int i = 0; i < block && p * block + i < n; ++i) buf[(size_t) i] = ir[b][(size_t) (p * block + i)];
+                for (int i = 0; i < block && p * block + i < nb; ++i) buf[(size_t) i] = ir[b][(size_t) (p * block + i)];
                 fft (buf, false);
                 std::copy (buf.begin(), buf.end(), spec[b].begin() + (size_t) p * fftSize);
             }
@@ -58,13 +63,13 @@ public:
         }
     }
 
-    // one sample of one channel in; the three band samples out (low, mid, high)
+    // one sample of one channel in; the six filter outputs out (low, mid, high, then their nonlinear stages' inputs)
     inline void process (int channel, double x, double* out)
     {
         auto& c = ch[channel];
         c.hist[(size_t) c.histPos] = x;
         c.curBlock[(size_t) c.pos] = x;
-        for (int b = 0; b < 3; ++b)
+        for (int b = 0; b < kFilters; ++b)
         {
             const double* h = ir[b].data();
             const int nh = std::min (block, (int) ir[b].size());
@@ -90,7 +95,7 @@ public:
 private:
     struct Channel
     {
-        std::vector<double> hist, prevBlock, curBlock, tail[3];
+        std::vector<double> hist, prevBlock, curBlock, tail[kFilters];
         std::vector<std::complex<double>> fdl;      // spectra of the last `parts` input windows (ring)
         int pos = 0, histPos = 0, fdlHead = 0;
     };
@@ -106,7 +111,7 @@ private:
         std::copy (w.begin(), w.end(), c.fdl.begin() + (size_t) c.fdlHead * fftSize);
         std::swap (c.prevBlock, c.curBlock);
         // next block's tail: sum over p >= 1 of X[j + 1 - p] H[p], X[j] being the window just added (p = 1)
-        for (int b = 0; b < 3; ++b)
+        for (int b = 0; b < kFilters; ++b)
         {
             acc.assign ((size_t) fftSize, {});
             for (int p = 1; p < parts; ++p)
@@ -150,21 +155,24 @@ private:
         if (inverse) for (auto& x : a) x /= (double) n;
     }
 
-    // the band filters at `rate`: the 48 kHz responses, delay moved to `delaySamples`. Above 23 kHz (higher rates) all
+    // the filters at `rate`: the 48 kHz responses, delay moved to `delaySamples`. Above 23 kHz (higher rates) all
     // bands are zero: the reference's section keeps its ~22.5 kHz low-pass with oversampling (-45 dB at 23 kHz at 2x)
     void design (double rate, double delaySamples)
     {
         const double d48 = 151.27917;
+        auto source = [] (int b) { return b < 3 ? bandIr48k[b] : nlBandIr48k[b - 3]; };
+        auto taps = [] (int b) { return b < 3 ? bandTaps48k : nlBandTaps48k; };
         if (std::abs (rate - 48000.0) < 1.0 && std::abs (delaySamples - d48) < 1.0e-6)
         {
-            for (int b = 0; b < 3; ++b) ir[b].assign (bandIr48k[b], bandIr48k[b] + bandTaps48k);
+            for (int b = 0; b < kFilters; ++b) ir[b].assign (source (b), source (b) + taps (b));
             return;
         }
-        const int n = (int) std::ceil (bandTaps48k * rate / 48000.0);
-        int m = 1; while (m < 4 * n) m <<= 1;
         const double shift = delaySamples / rate - d48 / 48000.0;      // seconds
-        for (int b = 0; b < 3; ++b)
+        for (int b = 0; b < kFilters; ++b)
         {
+            const double* h48 = source (b);
+            const int n48 = taps (b), n = (int) std::ceil (n48 * rate / 48000.0);
+            int m = 1; while (m < 4 * n) m <<= 1;
             std::vector<std::complex<double>> spec ((size_t) m);
             for (int k = 0; k <= m / 2; ++k)
             {
@@ -176,7 +184,7 @@ private:
                     const double w = -2 * kPi * f / 48000.0;
                     const std::complex<double> step (std::cos (w), std::sin (w));
                     std::complex<double> e (1);
-                    for (int i = 0; i < bandTaps48k; ++i) { v += bandIr48k[b][i] * e; e *= step; }
+                    for (int i = 0; i < n48; ++i) { v += h48[i] * e; e *= step; }
                 }
                 else
                     v = {};
@@ -194,8 +202,8 @@ private:
         }
     }
 
-    std::vector<double> ir[3];
-    std::vector<std::complex<double>> spec[3], scratch, acc;
+    std::vector<double> ir[kFilters];
+    std::vector<std::complex<double>> spec[kFilters], scratch, acc;
     Channel ch[2];
     int block = 64, fftSize = 128, parts = 1;
 };

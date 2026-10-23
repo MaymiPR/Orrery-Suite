@@ -4,12 +4,16 @@
 #include <vector>
 #include "Tuning.h"
 
-// The master limiter (MEASUREMENTS.md 4): sample-peak ceiling at 0 dBFS followed by a -0.1 dB trim, stereo-linked,
-// with a look-ahead delay. The detector level (in units of the ceiling, >= 1) is the largest of
-//   - a triangle around every sample's level: the gain ramps linearly in 1 / gain over the ramp before a peak and
-//     falls back the same way after it,
-//   - a slow envelope that charges toward it (tau ~ 25 ms) and relaxes to 1 with tau ~ 0.378 s, so long overloads
-//     release slowly and short peaks quickly.
+// The master limiter (MEASUREMENTS.md 4), identified with probe signals (nulltest/lim_probe.py): a ceiling at 0 dBFS
+// followed by a -0.1 dB trim, stereo-linked, with a look-ahead delay. The gain is 1 / env, where env (in units of the
+// ceiling, >= 1) is the largest of:
+//   - the level of the sample leaving now: its inter-sample (16x interpolated) peak over [n, n + 1);
+//   - a straight-line plan through the upcoming peaks. Only local maxima of the level are targets. When a plan ends,
+//     the next one heads for the nearest peak within `window` samples ahead, reaching it on arrival. With none, it
+//     falls toward 1 over `releaseSteps` samples. A running plan is changed only when a level within its span rises
+//     above it. Plans may run under the slow envelope; only an idle limiter rests on it;
+//   - a slow envelope charged by the level (tau limSlowAttackMs) that releases toward the current level, or 1 when
+//     quiet (tau limSlowReleaseMs), so long overloads release slowly and short peaks quickly.
 namespace ap::dsp
 {
 class Limiter
@@ -19,18 +23,26 @@ public:
     {
         fs = rate;
         lookahead = limiterLookahead (fs);
-        rampA = std::max (1.0, t.limRampMs * 1.0e-3 * fs);
-        rampR = std::max (1.0, t.limReleaseRampMs * 1.0e-3 * fs);
-        holdA = std::max (0.0, t.limHoldAhead); holdR = std::max (0.0, t.limHoldBehind);
-        slopeMode = t.limSlopeMode > 0.5;
-        slopeA = t.limSlopeAhead * 48000.0 / fs; slopeR = t.limSlopeBehind * 48000.0 / fs;
-        ahead = slopeMode ? lookahead : std::min (lookahead, (int) std::ceil (rampA + holdA));
-        behind = slopeMode ? lookahead : (int) std::ceil (rampR + holdR);
+        window = std::clamp ((int) std::lround (t.limWindow * fs / 48000.0), 1, lookahead - kTaps / 2 - 2);
+        releaseSteps = std::max (1, (int) std::lround (t.limReleaseSteps * fs / 48000.0));
         slowAtt = 1.0 - std::exp (-1.0 / (t.limSlowAttackMs * 1.0e-3 * fs));
         slowRel = std::exp (-1.0 / (t.limSlowReleaseMs * 1.0e-3 * fs));
         trim = std::pow (10.0, t.limTrimDb / 20.0);
-        slowFromLevel = t.limSlowFromLevel > 0.5;
-        size = lookahead + behind + 2;
+        // interpolation for the inter-sample level: Kaiser-windowed sinc, kTaps taps per phase
+        for (int ph = 0; ph < kSub; ++ph)
+        {
+            const double frac = ph / (double) kSub;
+            double sum = 0;
+            for (int i = 0; i < kTaps; ++i)
+            {
+                const double x = (i - (kTaps / 2 - 1)) - frac;
+                const double sinc = std::abs (x) < 1e-12 ? 1.0 : std::sin (kPiL * x) / (kPiL * x);
+                const double r = x / (kTaps / 2.0), w = std::abs (r) >= 1 ? 0.0 : besselI0 (6.0 * std::sqrt (1 - r * r)) / besselI0 (6.0);
+                interp[ph][i] = sinc * w; sum += interp[ph][i];
+            }
+            for (auto& c : interp[ph]) c /= sum;
+        }
+        size = lookahead + 4;
         level.assign ((size_t) size, 1.0);
         for (auto& d : delay) d.assign ((size_t) size, 0.0);
         reset();
@@ -39,33 +51,44 @@ public:
     {
         std::fill (level.begin(), level.end(), 1.0);
         for (auto& d : delay) std::fill (d.begin(), d.end(), 0.0);
-        pos = 0; slow = 1.0; grMax = 0.0;
+        for (auto& h : hist) std::fill (std::begin (h), std::end (h), 0.0);
+        pos = hpos = 0; slow = 1.0; grMax = 0.0;
+        state = 1.0; planSlope = 0.0; planLeft = 0; planTarget = 1.0; planRelease = false;
     }
     int latency() const { return lookahead; }
 
     // one stereo sample in place (the input already carries the limiter's input gain)
     inline void process (double& l, double& r)
     {
-        level[(size_t) pos] = std::max (1.0, std::max (std::abs (l), std::abs (r)));
-        delay[0][(size_t) pos] = l; delay[1][(size_t) pos] = r;
-        // the sample leaving now is `lookahead` behind; every level within the ramps around it pulls the detector up
-        const int out = wrap (pos - lookahead);
-        double env = 1.0;
-        for (int k = -behind; k <= ahead; ++k)
-        {
-            const double v = level[(size_t) wrap (out + k)];
-            if (v <= 1.0) continue;
-            if (slopeMode)
-                env = std::max (env, v - (k >= 0 ? std::max (0.0, k - holdA) * slopeA : std::max (0.0, -k - holdR) * slopeR));
-            else
+        // the inter-sample level of the sample kTaps / 2 back (the interpolator's delay, taken from the look-ahead)
+        hist[0][hpos] = l; hist[1][hpos] = r;
+        hpos = (hpos + 1) % kTaps;
+        double m = 0;
+        for (int c = 0; c < 2; ++c)
+            for (int ph = 0; ph < kSub; ++ph)
             {
-                const double f = k >= 0 ? (rampA + holdA - k) / rampA : (rampR + holdR + k) / rampR;
-                if (f > 0.0) env = std::max (env, 1.0 + (v - 1.0) * std::min (1.0, f));
+                double acc = 0;
+                for (int i = 0; i < kTaps; ++i) acc += interp[ph][i] * hist[c][(hpos + i) % kTaps];
+                m = std::max (m, std::abs (acc));
             }
+        level[(size_t) wrap (pos - kTaps / 2)] = std::max (1.0, m);
+        level[(size_t) pos] = 1.0;
+        delay[0][(size_t) pos] = l; delay[1][(size_t) pos] = r;
+
+        const int out = wrap (pos - lookahead);
+        const double now = level[(size_t) out];
+        const double env = std::max (state, std::max (slow, now));
+        if (planLeft <= 0 && planSlope == 0.0) state = std::max (state, slow);        // idle: rest on the slow level
+        updatePlan (out);
+        if (planLeft > 0)
+        {
+            state += planSlope;
+            if (--planLeft == 0) state = planTarget;
+            if (planRelease && state <= slow) { state = slow; planLeft = 0; planSlope = 0.0; }
         }
-        const double drive = slowFromLevel ? level[(size_t) out] : env;
-        slow = drive > slow ? slow + (drive - slow) * slowAtt : 1.0 + (slow - 1.0) * slowRel;
-        env = std::max (env, slow);
+        if (now > slow) slow += (now - slow) * slowAtt;
+        else slow = now + (slow - now) * slowRel;                 // toward the current level (1 when quiet)
+
         const double g = trim / env;
         grMax = std::max (grMax, env);
         l = delay[0][(size_t) out] * g;
@@ -82,12 +105,48 @@ public:
     }
 
 private:
+    static constexpr int kTaps = 16, kSub = 16;
+    static constexpr double kPiL = 3.14159265358979323846;
+    static double besselI0 (double x) { double s = 1, t = 1; for (int k = 1; k < 30; ++k) { t *= (x / (2 * k)) * (x / (2 * k)); s += t; } return s; }
     inline int wrap (int i) const { return i < 0 ? i + size : (i >= size ? i - size : i); }
+
+    // a peak k samples ahead of the outgoing sample, or 1 when the level there is not a local maximum
+    inline double peakAt (int out, int k) const
+    {
+        const double v = level[(size_t) wrap (out + k)];
+        return v >= level[(size_t) wrap (out + k - 1)] && v >= level[(size_t) wrap (out + k + 1)] ? v : 1.0;
+    }
+
+    void updatePlan (int out)
+    {
+        if (planLeft > 0)
+        {
+            // a level within the plan's span above its line: re-plan to the steepest such point
+            double steep = -1.0e9; int at = 0;
+            for (int k = 1; k <= std::min (planLeft, window); ++k)
+            {
+                const double v = peakAt (out, k);
+                if (v > state + planSlope * k + 1.0e-12 && (v - state) / k > steep) { steep = (v - state) / k; at = k; }
+            }
+            if (at > 0) { planSlope = steep; planLeft = at; planTarget = state + steep * at; planRelease = false; }
+            return;
+        }
+        // a new plan: the nearest peak ahead, or a release toward 1
+        for (int k = 1; k <= window; ++k)
+        {
+            const double v = peakAt (out, k);
+            if (v > 1.0) { planSlope = (v - state) / k; planLeft = k; planTarget = v; planRelease = false; return; }
+        }
+        planRelease = true;
+        if (state <= std::max (1.0, slow) + 1.0e-9) { planLeft = 0; planSlope = 0.0; planTarget = state; }   // idle
+        else { planSlope = (1.0 - state) / releaseSteps; planLeft = releaseSteps; planTarget = 1.0; }
+    }
+
     double fs = 48000.0, slowAtt = 0, slowRel = 0, trim = 1, slow = 1, grMax = 0;
-    double rampA = 21, rampR = 21, holdA = 0, holdR = 0;
-    bool slowFromLevel = true, slopeMode = true;
-    double slopeA = 0.17, slopeR = 0.2;
-    int lookahead = 38, ahead = 21, behind = 21, size = 64, pos = 0;
+    double state = 1.0, planSlope = 0.0, planTarget = 1.0;
+    bool planRelease = false;
+    int lookahead = 38, window = 21, releaseSteps = 22, size = 64, pos = 0, hpos = 0, planLeft = 0;
+    double interp[kSub][kTaps] {}, hist[2][kTaps] {};
     std::vector<double> level, delay[2];
 };
 }

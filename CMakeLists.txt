@@ -99,6 +99,13 @@ target_compile_definitions(ApRender PRIVATE ${AP_APP_DEFS})
 target_link_libraries(ApRender PRIVATE AntiparticleData juce::juce_audio_utils juce::juce_dsp
     juce::juce_recommended_config_flags)
 
+# the band gain computer as a plain C library for the fitting scripts (nulltest/charsim.py)
+if(AP_TOOLS)
+    add_library(charsim SHARED tools/charsim.cpp)
+    target_include_directories(charsim PRIVATE Source)
+    set_target_properties(charsim PROPERTIES RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/charsim)
+endif()
+
 # a second copy for trying DSP changes while a fit is running with ApRender (tgp.py: AP_RENDER=dev)
 if(AP_TOOLS)
     juce_add_console_app(ApRenderDev PRODUCT_NAME "ApRenderDev")

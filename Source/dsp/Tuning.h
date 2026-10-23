@@ -19,7 +19,7 @@ enum BandParam
 {
     bpMakeup,     // dB, gain after the shaper (= the small-signal gain)
     bpMix,        // 0 .. 1, share of the compressed (wet) path in the parallel mix
-    bpCubic,      // c of the shaper u - c u^3 (0 = linear)
+    bpCubic,      // the shaper sin (k u) / k as its cubic coefficient c = k^2 / 6 (0 = linear)
     bpThresh,     // dBFS (sine peak), compressor threshold
     bpRatio,      // compressor ratio
     bpKnee,       // dB, soft-knee width
@@ -31,10 +31,11 @@ enum BandParam
     bpAttack2,    // ms, second (slow) detector's attack (0 = no second detector)
     bpRelease2,   // ms, ... its release
     bpSlowOffset, // dB added to the slow detector's level before the larger of the two is taken
+    bpWidth,      // dB, gain of the band output's side signal relative to its mid (after the shaper)
     kBandParams
 };
 inline constexpr const char* bandParamNames[kBandParams] { "makeup", "mix", "cubic", "thresh", "ratio", "knee", "attack", "release", "side",
-                                                          "gainAttack", "gainRelease", "attack2", "release2", "slowOffset" };
+                                                          "gainAttack", "gainRelease", "attack2", "release2", "slowOffset", "width" };
 inline constexpr const char* bandNames[3] { "low", "mid", "high" };
 
 struct Tuning
@@ -45,20 +46,16 @@ struct Tuning
     // EQ: RBJ cookbook biquads at the processing (oversampled) rate
     double eqLowHz = 180.0, eqLowQ = 0.7, eqMidHz = 637.0, eqMidQ = 0.5, eqHighHz = 10000.0, eqHighQ = 0.7;
 
-    // character: Linkwitz-Riley 4th-order crossover, then per band a parallel compressor and a cubic shaper
+    // character: an IIR Linkwitz-Riley crossover for an external side-chain (the audio is split by FIR filters,
+    // BandFilters.h), per band a parallel compressor, a sine shaper and a side gain
     double fc1 = 157.1, fc2 = 2675.8;
     double band[3][kAmountNodes][kBandParams] {};
     int detectorPeak[3] { 0, 0, 1 };      // 0: mean-square detector, 1: peak detector
     int feedback[3] { 0, 0, 0 };          // 1: the detector listens to the compressed (wet) signal
 
-    // limiter: look-ahead (samples at 48 kHz; other rates from limiterLookahead()), linear ramp, fast and slow release
-    double limRampMs = 0.2996;            // the gain's ramp before a peak (nulltest/fit_limiter.py)
-    double limReleaseRampMs = 0.1884;     // ... and after it
-    double limHoldAhead = 0.0019, limHoldBehind = 0.0026;   // samples (fractional) at full reduction before / after a peak
-    double limSlopeMode = 0;              // 1: the level rises / falls toward a peak at a fixed rate (below), 0: fixed-time ramps
-    double limSlopeAhead = 0.17, limSlopeBehind = 0.2;   // level units (1 = ceiling) per sample at 48 kHz
-    double limSlowFromLevel = 1;          // 1: the slow envelope charges from the sample's own level, 0: from the ramps
-    double limSlowAttackMs = 14.81, limSlowReleaseMs = 354.67;
+    // limiter (Limiter.h): window ahead and release (samples at 48 kHz), slow envelope, output trim
+    double limWindow = 21, limReleaseSteps = 22;
+    double limSlowAttackMs = 24.47, limSlowReleaseMs = 377.8;
     double limTrimDb = -0.1;              // after the 0 dBFS ceiling: the output's ceiling and small-signal gain
 
     // parameter smoothing
@@ -71,7 +68,7 @@ struct Tuning
 
     void setDefaults()
     {
-        // fitted per band and amount node to the reference (nulltest/fit_character.py -> CharacterTable.h)
+        // fitted per band and amount node to the reference (nulltest/make_table.py -> CharacterTable.h)
         for (int b = 0; b < 3; ++b)
         {
             detectorPeak[b] = characterDetectorPeak[b];
@@ -87,11 +84,8 @@ struct Tuning
         const S scalars[] { { "coreDelayMs", &coreDelayMs }, { "coreDelaySamples", &coreDelaySamples },
                             { "eqLowHz", &eqLowHz }, { "eqLowQ", &eqLowQ }, { "eqMidHz", &eqMidHz }, { "eqMidQ", &eqMidQ },
                             { "eqHighHz", &eqHighHz }, { "eqHighQ", &eqHighQ }, { "fc1", &fc1 }, { "fc2", &fc2 },
-                            { "limRampMs", &limRampMs }, { "limReleaseRampMs", &limReleaseRampMs },
-                            { "limHoldAhead", &limHoldAhead }, { "limHoldBehind", &limHoldBehind }, { "limSlowFromLevel", &limSlowFromLevel },
-                            { "limSlopeMode", &limSlopeMode }, { "limSlopeAhead", &limSlopeAhead }, { "limSlopeBehind", &limSlopeBehind },
-                            { "limSlowAttackMs", &limSlowAttackMs }, { "limSlowReleaseMs", &limSlowReleaseMs },
-                            { "limTrimDb", &limTrimDb }, { "gainSmoothMs", &gainSmoothMs }, { "rampMs", &rampMs },
+                            { "limWindow", &limWindow }, { "limReleaseSteps", &limReleaseSteps }, { "limSlowAttackMs", &limSlowAttackMs },
+                            { "limSlowReleaseMs", &limSlowReleaseMs }, { "limTrimDb", &limTrimDb }, { "gainSmoothMs", &gainSmoothMs }, { "rampMs", &rampMs },
                             { "oversampling", &forceOversampling } };
         for (auto& s : scalars)
             if (key == s.n) { *s.p = v; return true; }

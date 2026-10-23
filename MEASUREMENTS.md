@@ -167,6 +167,8 @@ the detectors is a plain RMS detector.
 
 ### 3.8 Per-band structure (Phase 4)
 
+(The first model; 3.9 replaces the cubic with a sine and 3.10 adds the stereo width.)
+
 Each band is a **parallel compressor followed by a cubic shaper**:
 
   u = x · ((1 − m) + m · g(t)),  y = M · (u − c · u³)
@@ -190,6 +192,99 @@ The evidence:
 `fit_character.py` fits m, c, threshold, ratio, knee, attack and release per band and amount node to tone staircases
 and bursts. Detectors: mean-square for the low and mid bands, peak for the high band (−47 vs −40 dB residual).
 
+### 3.9 The shaper is a sine, and the band laws (Phase 4, `nulltest/ident.py`, `fit_bandlaw.py`)
+
+The crossover is known exactly, so for any input the three band signals the reference processes can be computed. A
+band's own output is then the reference's output minus the other two bands.
+
+**Shaper.** The output is regressed on powers of the band signal, one cycle at a time. That gives u − c·u³ + 0.3·c²·u⁵
+…, the series of a sine. So the shaper is
+
+  y = M · sin(k·u) / k,   u = x · n(t),   n = (1 − mix) + mix · g(t)
+
+- It is memoryless: the harmonics' phases are within 0.1° of the sine's at 300 and 700 Hz.
+- It runs at the processing rate without oversampling. A 7 kHz tone aliases the same way in both plug-ins (its
+  5th harmonic shows up at 13 kHz, −81 dB).
+- A tone in the mid band with left and right in anti-phase is not compressed at all, so it shows the shaper alone.
+  On it, k = 2.46 at 100 %, the same at every level. Past k·u = π/2 the output folds over, as a sine does.
+
+**Band laws.** `fit_bandlaw.py` fits each band and amount node on its own:
+- the probes are a tone staircase (−40 … +4 dBFS, 3 s steps) and bursts (20 ms, 0.2 s and 2 s at −24 / −12 / 0 dBFS
+  over a −50 dBFS bed), at 70 Hz, 700 Hz and 8 kHz
+- the free parameters are k, mix, threshold, knee, ratio, attack and release
+- the band gain comes from the plug-in's own gain computer (`charsim.dll`, built from BandDynamics.h)
+- the other two bands are subtracted through their own fitted laws. This matters: at 70 Hz the mid band still passes
+  the tone at −21 dB and compresses it. Treated as linear, the low band fitted to only −31 dB; with the mid band's
+  law subtracted it fits to −52 dB.
+- the fits have local minima, so `fit_multistart.py` starts each fit from several detector times and from both
+  detector types
+
+What the fits show:
+
+| Band | Detector | Attack / release | Static law | Changes with the amount |
+|---|---|---|---|---|
+| Low | mean-square | ≈ 1 ms / ≈ 2 s | threshold ≈ −10 dB, knee ≈ 28 dB, ratio ≈ 1.3 | k 2.2 … 2.6, mix |
+| Mid | mean-square | ≈ 300 ms / 89 ms | threshold ≈ −19.5 dB, knee ≈ 45 dB, ratio ≈ 2.3 | k 0.8 … 3.4, mix 0.27 … 1.0 |
+| High | mean-square | ≈ 1 ms / ≈ 91 ms | threshold ≈ −10 dB, hard knee, ratio ≈ 3 | k, mix |
+
+For the mid band only k and the mix change with the amount; the other constants stay put from node to node. Per
+band and node the fits reach −50 to −56 dB.
+
+They also hold away from the probe frequency. The mid band's law, fitted at 700 Hz, predicts a 300 Hz staircase to
+−55 … −74 dB per step (`predict.py`). So the detectors hear the same FIR band signals as the audio.
+
+### 3.10 Stereo: mid-only detectors and a widened side (Phase 4, `fit_width.py`)
+
+- **Detectors hear the mid only.** A tone in anti-phase (pure side) is not compressed at any level. A left-only
+  tone is compressed exactly as a mono tone of half the amplitude (fitted detector scale 0.998).
+- **Shaping is per channel.** With a left-only input the right output carries no harmonics.
+- **The side is boosted after the shaper.** Low-level noise in the left channel only gives both the mid and the side
+  gain of every band: a least-squares fit over the exact band signals leaves −96 dB. The side gain relative to the
+  mid, in dB, at amount 0, 25, …, 200 %:
+
+| Band | 0 | 25 | 50 | 75 | 100 | 125 | 150 | 175 | 200 % |
+|---|---|---|---|---|---|---|---|---|---|
+| Low | 0 | 0.000 | −0.001 | −0.001 | −0.001 | −0.001 | −0.004 | −0.008 | −0.012 |
+| Mid | 0 | 0.004 | 0.008 | 0.011 | 0.014 | 0.015 | 0.339 | 0.801 | 1.240 |
+| High | 0 | 0.895 | 1.711 | 2.462 | 3.157 | 3.549 | 3.740 | 3.836 | 3.929 |
+
+  So at 100 % a left-only signal above 5 kHz leaks into the right channel at −15 dB. The boost comes after the
+  shaper: a left-only tone at 200 % fits to −45 dB that way and to −32 dB with the boost before it.
+
+Modelling the stereo width and the band laws took the character-only null on the music test signal from −40 to
+−63 dB at 100 %, and from −36 to −62 dB at 200 %.
+
+### 3.11 What the nonlinear stages hear (Phase 4, `nulltest/nlhear.py`)
+
+The FIR bands have shallow stopbands. The mid band passes 8 kHz at −29.5 dB and stays at −28 dB up to 20 kHz. This
+is the complementary remainder of a split whose high band sits 0.3 dB low. Part of it bypasses the bands'
+nonlinear stages.
+
+**The probe.** A quiet tone in the band (−30 dBFS) runs under a loud interferer (−2 dBFS) stepped across frequency.
+The interferer changes the probe's gain through the band's detector and through cross-modulation in its shaper. For
+each step, the interferer level at the nonlinear stage's input that reproduces the reference's probe gain is solved
+for. The other bands run through their own laws, since they pass a little of the probe and the interferer may
+compress them.
+
+Mid band (probe at 700 Hz), in dB re the interferer:
+
+| Interferer | 30 | 70 | 130 | 200 Hz | 1.6 | 2.7 | 3.5 | 5 | 6.5 | 8 | 10–16 kHz |
+|---|---|---|---|---|---|---|---|---|---|---|---|
+| Nonlinear stage hears | −26.6 | −23.0 | −11.0 | −3.2 | −1.4 | −7.4 | −13.8 | −25.4 | −34.4 | −40.5 | ≈ −43 (the limit of the method) |
+| FIR band passes | −25.5 | −22.0 | −10.5 | −3.1 | −1.3 | −7.0 | −12.6 | −21.8 | −29.9 | −29.5 | −28 |
+
+So on its low side the mid stage hears its FIR band, but above the 2.68 kHz crossover it hears a steep
+Linkwitz-Riley slope. A model whose mid stage heard the whole FIR band compressed the probe 0.6 dB too much under a
+loud 8 kHz tone; the reference changes it by only 0.06 dB. The low band's stage hears its FIR band as far as this
+probe can tell (to about 300 Hz).
+
+**Model.** Each band's nonlinear stage works on s_b: the FIR band with Linkwitz-Riley edges beyond its band
+(NlBandFilters.h, `ident.nl_firs`; the low band uses its FIR band as it is). The rest of the band passes linearly:
+
+  y_b = M_b · (x_b − s_b + sin(k · n(s_b) · s_b) / k)
+
+The small-signal response is unchanged and still exact.
+
 ## 4. Limiter (`measure_limiter.py`)
 
 | Property | Measured |
@@ -209,6 +304,29 @@ and bursts. Detectors: mean-square for the low and mid bands, peak for the high 
 - fast = a box-smoothed windowed peak over the look-ahead
 - slow charges with τ ≈ 25 ms and relaxes to 1 with τ = 0.378 s
 - levels are taken relative to the ceiling (0.98855)
+
+### 4.1 The algorithm, identified with probes (Phase 4, `nulltest/lim_probe.py`)
+
+Isolated clicks, click pairs and trains at chosen spacings and heights, with the gain trace read back sample by
+sample. The model below reproduces the probes to 0.0007 in gain and the trains to an RMS error of 0.00035.
+
+Every level is in units of the 0 dBFS ceiling, and never less than 1. The gain is `trim / env`, with trim = −0.1 dB.
+env is the largest of three things:
+- **The level of the outgoing sample.** This is its inter-sample peak over [n, n + 1). It comes from a 16-phase
+  interpolator: a Kaiser-windowed sinc with 16 taps. So the ceiling holds on the samples, not on the true peak.
+- **A straight-line plan through the coming peaks.**
+  - Only local maxima of the level are targets.
+  - When a plan ends, the next one heads for the nearest peak within 21 samples ahead (at 48 kHz) and reaches it
+    exactly on arrival. A farther, higher peak does not steepen the line.
+  - With no peak ahead, the plan falls toward 1 over 22 samples. It stops at the slow envelope if it meets it.
+  - A running plan changes only when a level within its span rises above its line. It then re-plans to the steepest
+    such point.
+  - An idle limiter (no plan, state at or under the slow envelope) rests on the slow envelope.
+- **A slow envelope.** It charges toward the level with τ = 24.47 ms. When the level is lower, it relaxes toward the
+  current level (1 when quiet) with τ = 377.8 ms.
+
+Limiter-only nulls are −46.5 (pink noise, gain 5), −45.8 (drums, gain 12) and −58.2 dB (music, gain 5). What
+remains is concentrated where two peaks are about 24 samples apart.
 
 ## 5. Parameter smoothing (`measure_smoothing.py`)
 
@@ -295,18 +413,17 @@ How closely the result matches is in [NULLTESTS.md](NULLTESTS.md).
 
 **Settled in Phase 4:**
 - the crossover: FIR, identified exactly (3.1)
-- the shaper: cubic, after the parallel mix (3.8)
+- the shaper: a sine, sin(k·u) / k, after the parallel mix (3.9)
+- the stereo behaviour: mid-only detectors, per-channel shaping, a side gain per band after the shaper (3.10)
+- the limiter's algorithm (4.1)
 - the 8x setting: it behaves exactly like 4x, two samples later. Its output equals the 4x output to −82 dB below 16 kHz.
 - the oversampled path: matched within 0.002 dB (7)
 
 **Still open:**
-- **Character section.** The per-band constants are fits, not known values.
-  - The low band's very slow tail is modelled by a second, slow detector.
-  - The detectors' side weighting is a fixed 0.1, not fitted. The stereo tests in 3.6 are not yet matched.
-  - Side signals get 0.06 dB more small-signal gain in the reference; not modelled.
-- **Limiter.** Its fast stage between closely spaced peaks is not identified. Ours ramps linearly in 1 / gain over a
-  fitted 0.30 ms before a peak and 0.19 ms after it. Its slow envelope charges from the sample level (τ 14.8 ms) and
-  releases with τ 0.355 s (fitted on program material; 0.378 s on DC steps).
+- **Character section.** The band laws are fits per amount node, not known formulas. The fits reach −50 to −56 dB
+  on the probes. Loud broadband signals (pink noise at −6 dBFS RMS) are matched least well.
+- **Limiter.** Peaks about 24 samples apart are not quite matched. That is where most of the limiter-only residual
+  is.
 - **Side-chain EXT.** Audio fed to the reference's side-chain bus had no effect in our test host. Ours is implemented
   as described (the side-chain drives the band detectors) but could not be compared.
 - **Meters.** The I/O RMS and LUFS readouts and the limiter's dash meter (step size estimated) are not measured yet.
