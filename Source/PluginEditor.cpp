@@ -173,6 +173,7 @@ void AntiparticleEditor::updateMeter (Meter& m, ap::LevelTap& tap, float dt)
     const float pk = toDb (tap.takePeak());
     const float rms = toDb (tap.rms.load());
     m.framePeakDb = toDb (tap.follower.load());
+    m.rawPeakDb = pk;
     m.peakHoldDb = jmax (m.peakHoldDb, pk);
     m.rmsHoldDb = jmax (m.rmsHoldDb, rms);
     m.barDb = rms;
@@ -197,7 +198,9 @@ void AntiparticleEditor::timerCallback()
     const int blocks = proc.blocksProcessed.load();
     const bool running = blocks != lastBlocks;
     lastBlocks = blocks;
-    const bool audio = running && jmax (inMeter[0].barDb, inMeter[1].barDb, inMeter[0].peakDb) > -80.0f;
+    // audio present = this frame's input samples are not silent (not the meters: they fall slowly, which kept the
+    // particles going for seconds after the sound stopped); the visualiser then holds and fades like the reference
+    const bool audio = running && jmax (inMeter[0].rawPeakDb, inMeter[1].rawPeakDb) > -100.0f;
     const float mix = characterOn ? jlimit (0.0f, 1.0f, characterValue / 0.5f) : 0.0f;
     visualizer.advance (audio, mix, ap::Settings::get().animation(), ap::Settings::get().particleStyle() == ap::Settings::Particles::antiparticle);
     content.repaint();
@@ -316,33 +319,42 @@ void AntiparticleEditor::paintIoMeter (Graphics& g, float x0, const Meter (&m)[2
         int top = -1, peak = -1;
         for (int k = 0; k < theme::numLeds; ++k)
         {
-            if (m[c].barDb >= theme::ledThresholdDb (k)) top = k;
-            if (m[c].peakDb >= theme::ledThresholdDb (k)) peak = k;
+            if (m[c].barDb > theme::ledThresholdDb (k)) top = k;            // strict: a -6.0 dB peak does not light the -6 LED
+            if (m[c].peakDb > theme::ledThresholdDb (k)) peak = k;
         }
         g.setColour (theme::ledGreen);
-        for (int k = 0; k <= top; ++k) g.fillRect (lx[c], 248.0f - 4.0f * (float) k, 8.0f, 1.5f);
+        for (int k = 0; k <= top; ++k) g.fillRect (lx[c], 248.0f - 4.0f * (float) k, 8.0f, 1.0f);   // LEDs 1 px tall (measured)
         if (peak >= 0)
         {
             g.setColour (theme::mint);
-            g.fillRect (lx[c], 248.0f - 4.0f * (float) peak, 8.0f, 1.5f);
+            g.fillRect (lx[c], 248.0f - 4.0f * (float) peak, 8.0f, 1.0f);
         }
     }
 
     if (target)
     {
         // green target: two brackets and a line pair; filled while the level sits inside it
+        // measured at 200 %: 1 px strokes, outer edges y 103.25 .. 122.75, corner radius 2.5; lit, each bracket is a solid
+        // block rounded on its outer corners (y 103.25 .. 123.25) and the line pair becomes a solid block
         auto bracket = [&g] (float x, bool right, bool filled)
         {
-            const Rectangle<float> r (x, 103.0f, 8.0f, 20.5f);
-            if (filled) { g.setColour (theme::targetFill); g.fillRect (r.reduced (0.0f, 1.0f)); return; }
+            if (filled)
+            {
+                Path f;
+                f.addRoundedRectangle (x, 103.25f, 8.0f, 20.0f, 2.5f, 2.5f, ! right, right, ! right, right);
+                g.setColour (theme::targetFill);
+                g.fillPath (f);
+                return;
+            }
+            const float top = 103.75f, bottom = 122.75f, r = 2.5f;           // stroke centre lines (measured)
+            const float ox = right ? x : x + 8.0f, ix = right ? x + 7.5f : x + 0.5f, d = right ? -r : r;
             Path p;
-            const float ox = right ? r.getX() : r.getRight(), ix = right ? r.getRight() : r.getX();
-            p.startNewSubPath (ox, r.getY() + 0.5f);
-            p.lineTo (ix + (right ? -2.0f : 2.0f), r.getY() + 0.5f);
-            p.quadraticTo (ix, r.getY() + 0.5f, ix, r.getY() + 2.5f);
-            p.lineTo (ix, r.getBottom() - 2.5f);
-            p.quadraticTo (ix, r.getBottom() - 0.5f, ix + (right ? -2.0f : 2.0f), r.getBottom() - 0.5f);
-            p.lineTo (ox, r.getBottom() - 0.5f);
+            p.startNewSubPath (ox, top);
+            p.lineTo (ix + d, top);
+            p.quadraticTo (ix, top, ix, top + r);
+            p.lineTo (ix, bottom - r);
+            p.quadraticTo (ix, bottom, ix + d, bottom);
+            p.lineTo (ox, bottom);
             g.setColour (theme::target);
             g.strokePath (p, PathStrokeType (1.0f));
         };
@@ -351,13 +363,13 @@ void AntiparticleEditor::paintIoMeter (Graphics& g, float x0, const Meter (&m)[2
         if (lit)
         {
             g.setColour (theme::targetFill);
-            g.fillRect (35.0f, 104.0f, 24.0f, 19.0f);
+            g.fillRect (35.0f, 103.25f, 24.0f, 20.0f);
         }
         else
         {
             g.setColour (theme::targetLine);
-            g.fillRect (35.0f, 103.0f, 24.0f, 1.5f);
-            g.fillRect (35.0f, 122.0f, 24.0f, 1.5f);
+            g.fillRect (35.0f, 103.25f, 24.0f, 1.0f);
+            g.fillRect (35.0f, 122.25f, 24.0f, 1.0f);
         }
     }
 }
@@ -402,15 +414,16 @@ void AntiparticleEditor::paintGainReduction (Graphics& g)
         {
             g.setColour (characterOn ? theme::target : theme::dimLabel);
             Path p;
-            const float x = targetX[b] + 0.5f, w = 18.0f, yTop = meterY[b] - 10.0f + 0.5f, yBot = meterY[b] + 18.5f - 0.5f;
-            p.startNewSubPath (x, meterY[b] - 1.5f);
-            p.lineTo (x, yTop + 2.0f); p.quadraticTo (x, yTop, x + 2.0f, yTop);
-            p.lineTo (x + w - 2.0f, yTop); p.quadraticTo (x + w, yTop, x + w, yTop + 2.0f);
-            p.lineTo (x + w, meterY[b] - 1.5f);
-            p.startNewSubPath (x, meterY[b] + 10.0f);
-            p.lineTo (x, yBot - 2.0f); p.quadraticTo (x, yBot, x + 2.0f, yBot);
-            p.lineTo (x + w - 2.0f, yBot); p.quadraticTo (x + w, yBot, x + w, yBot - 2.0f);
-            p.lineTo (x + w, meterY[b] + 10.0f);
+            // measured at 200 %: stroke centres x +0.25 / +18.25, y meterY - 9.25 / + 17.75, corner radius 3.5
+            const float x = targetX[b] + 0.25f, w = 18.0f, yTop = meterY[b] - 9.25f, yBot = meterY[b] + 17.75f, r = 3.5f;
+            p.startNewSubPath (x, meterY[b] - 2.0f);
+            p.lineTo (x, yTop + r); p.quadraticTo (x, yTop, x + r, yTop);
+            p.lineTo (x + w - r, yTop); p.quadraticTo (x + w, yTop, x + w, yTop + r);
+            p.lineTo (x + w, meterY[b] - 2.0f);
+            p.startNewSubPath (x, meterY[b] + 10.25f);
+            p.lineTo (x, yBot - r); p.quadraticTo (x, yBot, x + r, yBot);
+            p.lineTo (x + w - r, yBot); p.quadraticTo (x + w, yBot, x + w, yBot - r);
+            p.lineTo (x + w, meterY[b] + 10.25f);
             g.strokePath (p, PathStrokeType (1.0f));
         }
         g.setColour (theme::mint);

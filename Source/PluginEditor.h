@@ -30,7 +30,8 @@ private:
     {
         float peakHoldDb = -200.0f, rmsHoldDb = -200.0f;   // the readouts (held until clicked)
         float barDb = -200.0f, peakDb = -200.0f;           // LED bar (RMS) and peak LED
-        float framePeakDb = -200.0f;                        // this frame's peak (drives the input target)
+        float framePeakDb = -200.0f;                        // peak follower (drives the input target)
+        float rawPeakDb = -200.0f;                          // this frame's sample peak (is audio playing?)
         double peakAge = 0.0;
     };
     class Content : public juce::Component

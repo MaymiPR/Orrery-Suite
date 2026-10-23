@@ -129,7 +129,8 @@ void Visualizer::advance (bool audio, float mix, bool animate, bool antiparticle
     const float dt = 1.0f / 30.0f;
     colourMix = mix;
     if (audio) silentFor = 0.0; else silentFor += dt;
-    const float target = (! animate) ? 0.0f : (audio ? 1.0f : (silentFor < 0.55 ? 1.0f : 0.0f));
+    // measured: on at once; after the audio stops it holds ~0.5 s (0.42 here: detection adds a frame), then fades ~0.35 s
+    const float target = (! animate) ? 0.0f : (audio ? 1.0f : (silentFor < 0.42 ? 1.0f : 0.0f));
     if (target > level) level = 1.0f;                                  // appears at once
     else level = jmax (target, level - dt / 0.35f);                    // fades out over 0.35 s
     clock += dt;                                                       // free-running, like the reference's loop
