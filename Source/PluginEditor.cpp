@@ -1,8 +1,10 @@
 #include "PluginEditor.h"
 #include "Settings.h"
+#include "ui/KnobShadow.h"
 
 using namespace juce;
 namespace theme = dp::theme;
+static const juce::String repository = "https://github.com/MaymiPR/DevilsParticle";
 
 namespace
 {
@@ -69,13 +71,13 @@ DevilsParticleEditor::DevilsParticleEditor (DevilsParticleProcessor& p) : AudioP
         k.setTransform (AffineTransform::scale (2.0f * r / (float) s).translated (cx - r, cy - r));
     };
     ignoreUnused (knobAt);
-    place (eqHigh, 133.73f, 90.69f, 19.74f);
-    place (eqMid, 133.73f, 155.69f, 19.74f);
-    place (eqLow, 133.73f, 220.69f, 19.74f);
-    place (amount, 293.52f, 148.51f, 50.6f);
-    place (inputKnob, 46.13f, 312.86f, 24.17f);
-    place (limiterKnob, 755.0f, 312.86f, 24.17f);
-    place (outputKnob, 841.75f, 312.86f, 24.17f);
+    place (eqHigh, 133.375f, 90.75f, 20.375f);
+    place (eqMid, 133.375f, 155.75f, 20.375f);
+    place (eqLow, 133.375f, 220.75f, 20.375f);
+    place (amount, 292.875f, 148.25f, 50.875f);
+    place (inputKnob, 45.755f, 313.11f, 25.06f);
+    place (limiterKnob, 754.745f, 313.11f, 25.06f);
+    place (outputKnob, 841.74f, 313.11f, 25.06f);
     eqPower.setBounds (97, 40, 72, 25);
     amountPower.setBounds (364, 167, 72, 25);
     limiterPower.setBounds (719, 40, 72, 25);
@@ -118,6 +120,7 @@ DevilsParticleEditor::DevilsParticleEditor (DevilsParticleProcessor& p) : AudioP
     nextButton.onClick = [this] { proc.presets.step (1); presetBox.text = proc.presets.currentName(); presetBox.repaint(); };
     saveButton.onClick = [this] { showSavePreset(); };
     gear.onClick = [this] { showSettings(); };
+    logo.onClick = [this] { showAboutMenu(); };
     presetBox.text = proc.presets.currentName();
 
     dp::Settings::get().addChangeListener (this);
@@ -255,6 +258,20 @@ void DevilsParticleEditor::paintPanel (Graphics& g)
         g.reduceClipRegion (Rectangle<int> (0, 40, 9, 230));
         g.setColour (Colour (0xff8a8a8a));
         g.drawRoundedRectangle (panel.reduced (4.0f), 11.0f, 1.0f);
+    }
+    // faint backgrounds one grey level up (measured with the reference's dark levels lifted): the I/O columns, the
+    // limiter's two GR tracks and the three band GR tracks
+    {
+        Graphics::ScopedSaveState s (g);
+        Path inside;
+        inside.addRoundedRectangle (panel.reduced (1.1f), 13.9f);
+        g.reduceClipRegion (inside);
+        g.setColour (Colour (0xff020202));
+        g.fillRect (0.0f, 33.0f, columnX[0], 230.0f);
+        g.fillRect (columnX[4] + 1.0f, 33.0f, designW - columnX[4], 230.0f);
+        g.fillRect (732.0f, 90.0f, 12.0f, 170.0f);
+        g.fillRect (768.0f, 90.0f, 12.0f, 170.0f);
+        for (float y : { 84.5f, 149.5f, 214.5f }) g.fillRect (572.0f, y, 130.0f, 11.5f);
     }
     g.setColour (theme::divider);
     for (float x : columnX) g.fillRect (x, 36.0f, 1.0f, 224.5f);
@@ -411,45 +428,73 @@ void DevilsParticleEditor::paintLimiter (Graphics& g)
 
 void DevilsParticleEditor::paintPlate (Graphics& g)
 {
-    const Rectangle<float> plate (0.0f, 265.5f, designW, designH - 265.5f);
-    g.setColour (Colour (0xff464540));
-    g.fillRect (plate);
+    // the plate: a separate rounded panel (measured: x 0.5 .. 887.5, y 266.5 .. 358.75, corner radius 11) on a dark
+    // ground, leather grain at the physical pixel (std ~3.9 grey levels, embossed: lag-1 correlation ~ -0.3)
+    g.setColour (Colours::black);
+    g.fillRect (0.0f, 265.0f, designW, designH - 265.0f);
+    const Rectangle<float> plate (0.5f, 266.5f, designW - 1.0f, 92.25f);
+    Path platePath;
+    platePath.addRoundedRectangle (plate, 11.0f);
     {
-        // fine leather grain (deterministic noise, about +-3 levels like the reference's plate)
-        static const Image grain = []
+        const float dpx = theme::pixelScale (g, content);
+        if (std::abs (dpx - plateScale) > 0.001f || plateImage.isNull())
         {
-            Image img (Image::ARGB, 256, 256, true, SoftwareImageType());
-            Image::BitmapData bd (img, Image::BitmapData::writeOnly);
+            const int w = (int) std::ceil (plate.getWidth() * dpx), h = (int) std::ceil (plate.getHeight() * dpx);
+            plateImage = Image (Image::RGB, w, h, false, SoftwareImageType());
+            Image::BitmapData bd (plateImage, Image::BitmapData::writeOnly);
             Random rng (7);
-            for (int y = 0; y < 256; ++y)
-                for (int x = 0; x < 256; ++x)
+            std::vector<float> noise ((size_t) (w * h));
+            for (auto& n : noise) n = rng.nextFloat() + rng.nextFloat() + rng.nextFloat() - 1.5f;   // ~ gaussian
+            for (int y = 0; y < h; ++y)
+                for (int x = 0; x < w; ++x)
                 {
-                    const float n = rng.nextFloat() + rng.nextFloat() - 1.0f;
-                    bd.setPixelColour (x, y, n > 0 ? Colours::white.withAlpha (n * 0.05f) : Colours::black.withAlpha (-n * 0.06f));
+                    const float n0 = noise[(size_t) (y * w + x)];
+                    const float nl = x > 0 ? noise[(size_t) (y * w + x - 1)] : 0.0f, nu = y > 0 ? noise[(size_t) ((y - 1) * w + x)] : 0.0f;
+                    const float v = 7.8f * (n0 - 0.5f * (nl + nu));
+                    bd.setPixelColour (x, y, Colour ((uint8) jlimit (0.0f, 255.0f, 70.0f + v), (uint8) jlimit (0.0f, 255.0f, 69.0f + v),
+                                                     (uint8) jlimit (0.0f, 255.0f, 64.0f + v)));
                 }
-            return img;
-        }();
-        Graphics::ScopedSaveState s (g);
-        g.reduceClipRegion (plate.toNearestInt());
-        g.setTiledImageFill (grain, 0, 0, 0.5f);
-        g.fillRect (plate);
+            plateScale = dpx;
+        }
+        Graphics::ScopedSaveState ss (g);
+        g.reduceClipRegion (platePath);
+        g.drawImage (plateImage, plate);
+        // the panel above throws a short shadow on the plate's top edge
+        g.setGradientFill (ColourGradient (Colour (0xff1e1d1b), 0.0f, 266.5f, Colour (0x00464540), 0.0f, 276.0f, false));
+        g.fillRect (plate.withHeight (10.0f));
     }
-    g.setGradientFill (ColourGradient (Colour (0xff1e1d1b), 0.0f, 265.5f, Colour (0x00464540), 0.0f, 276.0f, false));
-    g.fillRect (plate.withHeight (11.0f));
 
     // shadows of the plate knobs: the light comes from the upper right, so they fall to the left and down
     // (a long soft shadow plus a tight contact shadow, fitted to the reference's plate brightness around the knobs)
-    for (float cx : { 46.13f, 755.0f, 841.75f })
     {
-        auto radial = [&g] (Point<float> c, float r, std::initializer_list<std::pair<float, float>> stops)   // (r fraction, alpha)
+        // the measured shadow field (KnobShadow.h), rendered once per physical scale and drawn under each knob
+        const float dpx = theme::pixelScale (g, content);
+        constexpr float R = 25.06f, reach = 89.0f, half = R + reach;
+        if (std::abs (dpx - knobShadowScale) > 0.001f || knobShadow.isNull())
         {
-            ColourGradient cg (Colours::black.withAlpha (stops.begin()->second), c, Colours::transparentBlack, c.translated (r, 0.0f), true);
-            for (auto& [f, al] : stops) cg.addColour (f, Colours::black.withAlpha (al));
-            g.setGradientFill (cg);
-            g.fillEllipse (Rectangle<float> (2.0f * r, 2.0f * r).withCentre (c));
-        };
-        radial ({ cx - 16.0f, 318.0f }, 82.0f, { { 0.0f, 0.18f }, { 0.55f, 0.15f }, { 0.85f, 0.06f }, { 1.0f, 0.0f } });
-        radial ({ cx - 5.0f, 315.0f }, 40.0f, { { 0.0f, 0.75f }, { 0.6f, 0.7f }, { 0.8f, 0.3f }, { 1.0f, 0.0f } });
+            const int px = (int) std::ceil (2.0f * half * dpx);
+            knobShadow = Image (Image::ARGB, px, px, true, SoftwareImageType());
+            Image::BitmapData bd (knobShadow, Image::BitmapData::writeOnly);
+            for (int y = 0; y < px; ++y)
+                for (int x = 0; x < px; ++x)
+                {
+                    const float dx = ((float) x + 0.5f) / dpx - half, dy = ((float) y + 0.5f) / dpx - half;
+                    const float d = std::sqrt (dx * dx + dy * dy) - R;
+                    if (d < -1.0f || d >= reach) continue;
+                    float a = radiansToDegrees (std::atan2 (dx, -dy));
+                    if (a < 0.0f) a += 360.0f;
+                    const float fa = a / 10.0f, fd = jlimit (0.0f, reach - 1.0f, d);
+                    const int a0 = (int) fa % 36, a1 = (a0 + 1) % 36, d0 = jmin ((int) reach - 2, (int) fd);
+                    const float ta = fa - std::floor (fa), td = fd - (float) d0;
+                    using dp::knobshadow::factor;
+                    const float f = (factor[d0][a0] * (1 - ta) + factor[d0][a1] * ta) * (1 - td)
+                                  + (factor[d0 + 1][a0] * (1 - ta) + factor[d0 + 1][a1] * ta) * td;
+                    bd.setPixelColour (x, y, Colours::black.withAlpha (jlimit (0.0f, 1.0f, 1.0f - f)));
+                }
+            knobShadowScale = dpx;
+        }
+        for (float cx : { 45.755f, 754.745f, 841.74f })
+            g.drawImage (knobShadow, Rectangle<float> (2.0f * half, 2.0f * half).withCentre ({ cx, 313.11f }));
     }
 
     // labels
@@ -707,4 +752,45 @@ void DevilsParticleEditor::showSavePreset()
     auto* raw = d.get();
     dialog = std::move (d);
     raw->focusName();
+}
+
+void DevilsParticleEditor::showDialog (std::unique_ptr<dp::Dialog> d)
+{
+    closePopups();
+    if (dialog != nullptr) { content.removeChildComponent (dialog.get()); dialog.reset(); }
+    d->setBounds (0, 0, (int) std::ceil (designW), (int) std::ceil (designH));
+    d->onClose = [safe = Component::SafePointer<DevilsParticleEditor> (this)]
+    {
+        MessageManager::callAsync ([safe] { if (safe != nullptr) { safe->content.removeChildComponent (safe->dialog.get()); safe->dialog.reset(); } });
+    };
+    content.addAndMakeVisible (*d);
+    dialog = std::move (d);
+}
+
+// the logo's menu, like Chan Sampler's: version, About, repository, issues, licence
+void DevilsParticleEditor::showAboutMenu()
+{
+    const String version = JucePlugin_VersionString;
+    PopupMenu menu;
+    menu.setLookAndFeel (&menuLook);
+    menu.addSectionHeader ("Devil's Particle v" + version);
+    menu.addItem ("About Devil's Particle", [safe = Component::SafePointer<DevilsParticleEditor> (this), version]
+    {
+        if (safe == nullptr) return;
+        const auto wrapper = safe->proc.wrapperType;
+        const String format = AudioProcessor::getWrapperTypeDescription (wrapper);
+        safe->showDialog (std::make_unique<dp::InfoDialog> ("about Devil's Particle", std::vector<std::pair<String, String>> {
+            { "Version", version + (wrapper == AudioProcessor::wrapperType_Undefined ? String() : " (" + format + ")") },
+            { {}, {} },
+            { "What it is", "An open-source mix-bus processor modelled on and measured against Cradle's The God Particle" },
+            { "License", "Free software under the GNU Affero General Public License v3" },
+            { "Built with", "JUCE, the VST3 SDK and CLAP; Instrument Sans (SIL OFL). Their licenses come with it" },
+            { "Source", repository.fromFirstOccurrenceOf ("https://", false, false) },
+            { {}, {} },
+            { "Note", "An independent project: not made, endorsed or supported by Cradle or Jaycen Joshua. The God Particle is a trademark of its owner." } }));
+    });
+    menu.addItem ("Devil's Particle on GitHub", [] { URL (repository).launchInDefaultBrowser(); });
+    menu.addItem ("Report an Issue", [] { URL (repository + "/issues/new/choose").launchInDefaultBrowser(); });
+    menu.addItem ("License (AGPL-3.0)", [] { URL (repository + "/blob/main/LICENSE").launchInDefaultBrowser(); });
+    menu.showMenuAsync (PopupMenu::Options().withTargetComponent (&logo));
 }

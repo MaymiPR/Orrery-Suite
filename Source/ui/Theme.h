@@ -29,6 +29,13 @@ juce::Font font (float emPx);
 void textAt (juce::Graphics&, const juce::String&, float x, float baseline,
            juce::Justification j = juce::Justification::left);
 
+// device pixels per design pixel when painting component c: the context's own factor (display scale), or the
+// component's transforms up the hierarchy (UI Scale), whichever is larger (snapshots report only the latter)
+inline float pixelScale (juce::Graphics& g, const juce::Component& c)
+{
+    return juce::jmax (g.getInternalContext().getPhysicalPixelScaleFactor(), juce::Component::getApproximateScaleFactorForComponent (&c));
+}
+
 // LED meters: LED k (0 at the bottom, 39 at the top) lights at -58.5 + 1.5 k dB (measured with a level ramp).
 inline constexpr int numLeds = 40;
 inline float ledThresholdDb (int k) { return -58.5f + 1.5f * (float) k; }

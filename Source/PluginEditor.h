@@ -50,6 +50,9 @@ private:
     void closePopups();
     void showSettings();
     void showSavePreset();
+    void showAboutMenu();
+    void showDialog (std::unique_ptr<dp::Dialog>);
+    dp::MenuLook menuLook;
     void updateMeter (Meter&, dp::LevelTap&, float dt);
 
     void paintTopBar (juce::Graphics&);
@@ -92,6 +95,9 @@ private:
     bool eqOn = true, characterOn = true, limiterOn = true;
     float characterValue = 0.5f;
     bool frozen = false;
+    juce::Image knobShadow, plateImage;   // plate knobs' shadow and the grained plate, per physical scale
+    float plateScale = 0.0f;
+    float knobShadowScale = 0.0f;
     int lastBlocks = 0;
 
     JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR (DevilsParticleEditor)

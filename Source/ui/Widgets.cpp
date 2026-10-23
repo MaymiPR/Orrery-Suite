@@ -151,6 +151,7 @@ void GearButton::paint (Graphics& g)
 
 void Logo::paint (Graphics& g)
 {
+    if (isMouseOver()) { g.setColour (theme::text.withAlpha (0.06f)); g.fillRoundedRectangle (getLocalBounds().toFloat(), 2.0f); }
     // pitchfork: three tines on a short shaft, same footprint and grey as the reference's mark
     const auto b = getLocalBounds().toFloat();
     const float cx = b.getCentreX();
@@ -168,6 +169,70 @@ void Logo::paint (Graphics& g)
     for (float x : { cx - 5.5f, cx, cx + 5.5f })
         tips.addTriangle (x - 2.0f, b.getY() + 2.5f, x + 2.0f, b.getY() + 2.5f, x, b.getY() - 0.5f);
     g.fillPath (tips);
+}
+
+MenuLook::MenuLook()
+{
+    setColour (PopupMenu::backgroundColourId, Colour (0xff0c0c0c));
+    setColour (PopupMenu::textColourId, theme::text);
+    setColour (PopupMenu::highlightedBackgroundColourId, Colour (0xff1d1d1d));
+    setColour (PopupMenu::highlightedTextColourId, theme::text);
+    setColour (PopupMenu::headerTextColourId, Colour (0xff8c8c8c));
+}
+
+Font MenuLook::getPopupMenuFont() { return theme::font (12.0f); }
+
+void MenuLook::drawPopupMenuBackground (Graphics& g, int w, int h)
+{
+    g.fillAll (findColour (PopupMenu::backgroundColourId));
+    g.setColour (theme::text);
+    g.drawRect (0, 0, w, h, 1);
+}
+
+void MenuLook::drawPopupMenuSectionHeader (Graphics& g, const Rectangle<int>& area, const String& text)
+{
+    g.setColour (findColour (PopupMenu::headerTextColourId));
+    g.setFont (theme::font (11.0f));
+    g.drawText (text, area.reduced (8, 0), Justification::centredLeft, true);
+}
+
+void MenuLook::drawPopupMenuItem (Graphics& g, const Rectangle<int>& area, bool isSeparator, bool isActive, bool isHighlighted,
+                                  bool, bool, const String& text, const String&, const Drawable*, const Colour*)
+{
+    if (isSeparator) { g.setColour (theme::divider); g.fillRect (area.reduced (6, 0).withHeight (1).withCentre (area.getCentre())); return; }
+    if (isHighlighted && isActive) { g.setColour (findColour (PopupMenu::highlightedBackgroundColourId)); g.fillRect (area.reduced (1, 0)); }
+    g.setColour (isActive ? theme::text : theme::text.withAlpha (0.4f));
+    g.setFont (getPopupMenuFont());
+    g.drawText (text, area.reduced (8, 0), Justification::centredLeft, true);
+}
+
+void MenuLook::getIdealPopupMenuItemSize (const String& text, bool isSeparator, int, int& w, int& h)
+{
+    if (isSeparator) { w = 50; h = 7; return; }
+    w = GlyphArrangement::getStringWidthInt (getPopupMenuFont(), text) + 24;
+    h = 22;
+}
+
+InfoDialog::InfoDialog (String t, std::vector<std::pair<String, String>> r)
+    : Dialog (std::move (t), { 214.0f, 56.0f, 460.0f, 248.0f }, true), rows (std::move (r)) {}
+
+void InfoDialog::paint (Graphics& g)
+{
+    Dialog::paint (g);
+    float y = box.getY() + 54.0f;
+    for (auto& [label, value] : rows)
+    {
+        if (label.isEmpty() && value.isEmpty()) { y += 8.0f; continue; }
+        g.setFont (theme::font (11.5f));
+        g.setColour (Colour (0xff8c8c8c));
+        theme::textAt (g, label, box.getX() + 20.0f, y);
+        g.setColour (theme::text);
+        GlyphArrangement ga;
+        ga.addJustifiedText (theme::font (11.5f), value, box.getX() + 112.0f, y, box.getWidth() - 132.0f, Justification::left);
+        ga.draw (g);
+        const int lines = jmax (1, (int) std::round ((ga.getBoundingBox (0, -1, true).getBottom() - y + 9.0f) / 15.0f));
+        y += 15.0f * (float) (lines - 1) + 19.0f;
+    }
 }
 
 void DropList::setItems (std::vector<Item> i, float rowHeight, bool captionsStyle)

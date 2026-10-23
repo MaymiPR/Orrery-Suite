@@ -1,4 +1,5 @@
 #include "MetalKnob.h"
+#include "Theme.h"
 
 using namespace juce;
 
@@ -64,30 +65,30 @@ void MetalKnob::renderBody (int px)
                     if (r >= 1.0f) continue;
                     const float a = std::atan2 (fx, -fy);    // 0 = up, clockwise
                     float g = model.coef[0];
-                    for (int k = 1; k <= 8; ++k)
+                    for (int k = 1; k <= 16; ++k)
                         g += model.coef[2 * k - 1] * std::cos ((float) k * a) + model.coef[2 * k] * std::sin ((float) k * a);
                     float v;
                     if (r < 0.88f)
                         v = g * interp (model.radial, 12, 0.05f, 0.90f, r);
                     else
                     {
-                        // rim bands at r = 0.89 ... 0.99, linear between bands (and from the body at 0.88)
+                        // rim bands at r = 0.885 ... 0.995 (0.005 apart), linear between bands (and from the body at 0.88)
                         auto band = [&] (int i)
                         {
                             const float* c = model.rimCoef[i];
                             float s = c[0];
-                            for (int k = 1; k <= 6; ++k) s += c[2 * k - 1] * std::cos ((float) k * a) + c[2 * k] * std::sin ((float) k * a);
+                            for (int k = 1; k <= 8; ++k) s += c[2 * k - 1] * std::cos ((float) k * a) + c[2 * k] * std::sin ((float) k * a);
                             return s;
                         };
-                        const float t = (r - 0.89f) / 0.02f;
+                        const float t = (r - 0.885f) / 0.005f;
                         if (t <= 0.0f)
                         {
                             const float body0 = g * interp (model.radial, 12, 0.05f, 0.90f, 0.88f);
-                            v = body0 + (band (0) - body0) * jlimit (0.0f, 1.0f, (r - 0.88f) / 0.01f);
+                            v = body0 + (band (0) - body0) * jlimit (0.0f, 1.0f, (r - 0.88f) / 0.005f);
                         }
                         else
                         {
-                            const int i = jmin (4, (int) t);
+                            const int i = jmin (21, (int) t);
                             v = band (i) + (band (i + 1) - band (i)) * jmin (1.0f, t - (float) i);
                         }
                     }
@@ -105,7 +106,7 @@ void MetalKnob::renderBody (int px)
 void MetalKnob::paint (Graphics& g)
 {
     const auto b = getLocalBounds().toFloat();
-    const float scale = g.getInternalContext().getPhysicalPixelScaleFactor();
+    const float scale = theme::pixelScale (g, *this);
     const int px = jmax (4, roundToInt (b.getWidth() * scale));
     if (px != bodyPx) renderBody (px);
 

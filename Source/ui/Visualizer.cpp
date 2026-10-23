@@ -1,52 +1,77 @@
 #include "Visualizer.h"
+#include "Theme.h"
+#include "GlassModel.h"
+#include "GlassLitModel.h"
 
 using namespace juce;
 
 namespace dp
 {
-static Path stadium (float x, float y, float w, float h)
+static Path stadiumAround (float cx, float cy, float halfLength, float r)
 {
     Path p;
-    p.addRoundedRectangle (x, y, w, h, h * 0.5f);
+    p.addRoundedRectangle (cx - halfLength - r, cy - r, 2.0f * (halfLength + r), 2.0f * r, r);
     return p;
 }
 
-static Path stadiumAround (float cx, float cy, float halfLength, float r)
+// distance from the racetrack's centre segment, the outward unit vector and the track coordinate t in [0, 4)
+// (0..1 top straight left -> right, 1..2 right end, 2..3 bottom straight right -> left, 3..4 left end)
+struct TrackPos { float r, nx, ny, t; };
+static TrackPos trackPos (float x, float y)
 {
-    return stadium (cx - halfLength - r, cy - r, 2.0f * (halfLength + r), 2.0f * r);
+    constexpr float cx = Visualizer::cx, cy = Visualizer::cy, hl = Visualizer::halfLength;
+    if (std::abs (x - cx) <= hl)
+    {
+        const bool top = y < cy;
+        const float f = (x - (cx - hl)) / (2.0f * hl);
+        return { std::abs (y - cy), 0.0f, top ? -1.0f : 1.0f, top ? f : 2.0f + (1.0f - f) };
+    }
+    const bool right = x > cx;
+    const float dx = x - (right ? cx + hl : cx - hl), dy = y - cy;
+    const float r = std::sqrt (dx * dx + dy * dy);
+    float a = std::atan2 (dx, -dy);                     // 0 = up, clockwise
+    if (a < 0.0f) a += MathConstants<float>::twoPi;
+    const float t = right ? 1.0f + jlimit (0.0f, 1.0f, a / MathConstants<float>::pi)
+                          : 3.0f + jlimit (0.0f, 1.0f, (a - MathConstants<float>::pi) / MathConstants<float>::pi);
+    return { r, r > 0.0f ? dx / r : 0.0f, r > 0.0f ? dy / r : 0.0f, t };
 }
 
 Visualizer::Visualizer()
 {
     setInterceptsMouseClicks (false, false);
-    Random rng (20240704);
-    particles.resize (480);
-    for (auto& p : particles)
-    {
-        p.u = rng.nextFloat();
-        p.d = std::pow (rng.nextFloat(), 0.7f);                 // denser towards the outside of the ring
-        p.speed = (0.004f + 0.012f * rng.nextFloat()) * (rng.nextFloat() < 0.8f ? 1.0f : -1.0f);
-        p.size = 0.5f + 2.0f * std::pow (rng.nextFloat(), 2.4f);
-        p.phase = rng.nextFloat() * MathConstants<float>::twoPi;
-        p.twinkle = 0.5f + 2.5f * rng.nextFloat();
-        p.hue = rng.nextInt (7);
-        p.streak = rng.nextFloat() < 0.3f;           // drawn as an ellipse along the flow
-    }
-}
 
-Point<float> Visualizer::racetrack (float u, float r) const
-{
-    // u in [0, 1): around the racetrack clockwise from the top-left end of the top straight
-    const float straight = 2.0f * halfLength, arc = MathConstants<float>::pi * r, total = 2.0f * straight + 2.0f * arc;
-    float s = (u - std::floor (u)) * total;
-    if (s < straight) return { cx - halfLength + s, cy - r };
-    s -= straight;
-    if (s < arc) { const float a = s / r; return { cx + halfLength + r * std::sin (a), cy - r * std::cos (a) }; }
-    s -= arc;
-    if (s < straight) return { cx + halfLength - s, cy + r };
-    s -= straight;
-    const float a = s / r;
-    return { cx - halfLength - r * std::sin (a), cy + r * std::cos (a) };
+    // the 1 s loop of sparks (deterministic, so it looks the same in every instance)
+    Random rng (20240704);
+    auto gauss = [&rng] { return (float) (std::sqrt (-2.0 * std::log (jmax (1.0e-9, rng.nextDouble()))) * std::cos (MathConstants<double>::twoPi * rng.nextDouble())); };
+    // hue shares measured on the reference: white, yellow, cyan-blue, blue, orange, violet, magenta, red
+    const float shares[8] { 0.34f, 0.20f, 0.16f, 0.10f, 0.09f, 0.07f, 0.025f, 0.015f };
+    sparks.resize (5600);
+    for (auto& s : sparks)
+    {
+        s.birth = rng.nextFloat();
+        s.life = jmin (0.6f, 0.035f + (float) (-std::log (jmax (1.0e-6, rng.nextDouble()))) * 0.085f);
+        // uniform over the ring's area
+        TrackPos tp {};
+        do
+        {
+            s.x = cx - halfLength - outerRadius + rng.nextFloat() * 2.0f * (halfLength + outerRadius);
+            s.y = cy - outerRadius + rng.nextFloat() * 2.0f * outerRadius;
+            tp = trackPos (s.x, s.y);
+        } while (tp.r < pillRadius + 3.0f || tp.r > outerRadius - 2.0f);
+        // counter-clockwise drift + scatter; the outer sparks are pulled inwards
+        // measured: faster further out (~-70 / -89 / -108 px/s at r 53-70 / 70-90 / 90-112), radial scatter, inward
+        // pull from mid-radius
+        const float vt = 75.0f + 1.0f * (tp.r - 53.0f) + 30.0f * gauss();
+        const float vr = 55.0f * gauss() - (tp.r > 70.0f ? 5.0f * (tp.r - 70.0f) : 0.0f);
+        s.vx = vt * tp.ny + vr * tp.nx;
+        s.vy = -vt * tp.nx + vr * tp.ny;
+        s.size = jlimit (0.3f, 5.0f, 0.68f * std::exp (0.9f * gauss()));
+        s.bright = 0.8f + 0.2f * rng.nextFloat();
+        float pick = rng.nextFloat(), acc = 0.0f;
+        s.hue = 7;
+        for (int h = 0; h < 8; ++h) { acc += shares[h]; if (pick < acc) { s.hue = h; break; } }
+        s.streak = std::hypot (s.vx, s.vy) > 190.0f && rng.nextFloat() < 0.5f;
+    }
 }
 
 void Visualizer::advance (bool audio, float mix, bool animate)
@@ -57,134 +82,146 @@ void Visualizer::advance (bool audio, float mix, bool animate)
     const float target = (! animate) ? 0.0f : (audio ? 1.0f : (silentFor < 0.55 ? 1.0f : 0.0f));
     if (target > level) level = 1.0f;                                  // appears at once
     else level = jmax (target, level - dt / 0.35f);                    // fades out over 0.35 s
-    if (level > 0.0f)
-    {
-        time += dt;
-        for (auto& p : particles) p.u += p.speed * dt;
-    }
-    repaint();
+    clock += dt;                                                       // free-running, like the reference's loop
+    if (level > 0.0f || target > 0.0f) repaint();
+}
+
+// glass from a measured field (stations around the track x 1 px radial steps), bilinear, 2 x 2 supersampled
+template <typename Table>
+static Image renderGlass (Rectangle<float> b, float scale, const Table& rgb, const int (&seg)[4], int ns, int r0, int r1)
+{
+    const int w = jmax (1, roundToInt (b.getWidth() * scale)), h = jmax (1, roundToInt (b.getHeight() * scale));
+    Image img (Image::ARGB, w, h, true, SoftwareImageType());
+    Image::BitmapData bd (img, Image::BitmapData::writeOnly);
+    const int nr = r1 - r0 + 1;
+    for (int py = 0; py < h; ++py)
+        for (int px = 0; px < w; ++px)
+        {
+            float acc[3] {};
+            for (int sy = 0; sy < 2; ++sy)
+                for (int sx = 0; sx < 2; ++sx)
+                {
+                    const float x = b.getX() + ((float) px + 0.25f + 0.5f * (float) sx) / scale;
+                    const float y = b.getY() + ((float) py + 0.25f + 0.5f * (float) sy) / scale;
+                    const auto tp = trackPos (x, y);
+                    if (tp.r > (float) r1 + 0.5f) { for (auto& v : acc) v += 2.0f; continue; }   // panel outside (grey 2)
+                    // stations per segment differ (fine on the curved ends): position in station units
+                    const int sg = jlimit (0, 3, (int) tp.t);
+                    int offset = 0;
+                    for (int k = 0; k < sg; ++k) offset += seg[k];
+                    const float fi = (float) offset + (tp.t - (float) sg) * (float) seg[sg] - 0.5f;
+                    const int i0 = (int) std::floor (fi);
+                    const float ft = fi - (float) i0;
+                    const int ia = (i0 % ns + ns) % ns, ib = (ia + 1) % ns;
+                    const float fr = jlimit (0.0f, (float) (nr - 1), tp.r - (float) r0);
+                    const int j0 = jmin (nr - 2, (int) fr);
+                    const float fj = fr - (float) j0;
+                    for (int c = 0; c < 3; ++c)
+                    {
+                        const float v00 = rgb[ia][j0][c], v01 = rgb[ia][j0 + 1][c], v10 = rgb[ib][j0][c], v11 = rgb[ib][j0 + 1][c];
+                        acc[c] += (v00 * (1 - fj) + v01 * fj) * (1 - ft) + (v10 * (1 - fj) + v11 * fj) * ft;
+                    }
+                }
+            bd.setPixelColour (px, py, Colour ((uint8) (acc[0] * 0.25f), (uint8) (acc[1] * 0.25f), (uint8) (acc[2] * 0.25f)));
+        }
+    return img;
 }
 
 void Visualizer::renderFrame (float scale)
 {
     const auto b = getBounds().toFloat();                          // editor design coordinates
-    frame = Image (Image::ARGB, jmax (1, roundToInt (b.getWidth() * scale)), jmax (1, roundToInt (b.getHeight() * scale)), true,
-                   SoftwareImageType());
+    frame = renderGlass (b, scale, glassmodel::rgb, glassmodel::segStations, glassmodel::stations, glassmodel::r0, glassmodel::r1);
+    lit = renderGlass (b, scale, glasslitmodel::rgb, glasslitmodel::segStations, glasslitmodel::stations, glasslitmodel::r0, glasslitmodel::r1);
+    litGrey = lit.createCopy();
     {
-    Graphics g (frame);
-    g.addTransform (AffineTransform::translation (-b.getX(), -b.getY()).scaled (scale));
-
-    // Glass racetrack, measured in polar coordinates around the two ends (RESEARCH.md): an almost black body, faint
-    // edge lines, two white crescents on the lower left and a cold band on the lower right.
-    auto outer = stadiumAround (cx, cy, halfLength, outerRadius);
-    g.setColour (Colour (0xff030303));
-    g.fillPath (outer);
-    g.setColour (Colour (0xff131313));
-    g.strokePath (stadiumAround (cx, cy, halfLength, outerRadius - 0.5f), PathStrokeType (1.0f));
-    g.setColour (Colour (0xff0e0e0e));
-    g.strokePath (stadiumAround (cx, cy, halfLength, 71.0f), PathStrokeType (1.0f));
-
-    // the amount pill
-    auto pill = stadiumAround (cx, cy, halfLength, pillRadius);
-    g.setColour (Colours::black);
-    g.fillPath (pill);
-    g.setColour (Colour (0xffa6a3a4));
-    g.strokePath (pill, PathStrokeType (1.0f));
-    }   // the drawing context is flushed before the pixel pass
-
-    // reflections, added per pixel: crescents around the racetrack's ends with a gaussian radial profile and a
-    // smooth angular envelope (centre radius, radial sigma, start / peak / end angle in degrees from up, peak grey)
-    struct Crescent { bool leftEnd; float r, sigma, a0, aPeak, a1, peak; Colour tint; };
-    const Crescent cs[] { { true, 98.0f, 4.6f, 190.0f, 245.0f, 290.0f, 158.0f, Colours::white },
-                          { true, 84.5f, 3.4f, 218.0f, 255.0f, 279.0f, 160.0f, Colours::white },
-                          { true, 74.0f, 0.6f, 232.0f, 250.0f, 266.0f, 70.0f, Colours::white },
-                          { true, 77.0f, 0.6f, 290.0f, 300.0f, 312.0f, 62.0f, Colours::white },
-                          { false, 93.5f, 2.6f, 128.0f, 150.0f, 172.0f, 62.0f, Colour (0xffbfe3ea) },
-                          { false, 71.0f, 0.5f, 36.0f, 62.0f, 100.0f, 40.0f, Colours::white } };
-    Image::BitmapData bd (frame, Image::BitmapData::readWrite);
-    for (int py = 0; py < frame.getHeight(); ++py)
-        for (int px = 0; px < frame.getWidth(); ++px)
-        {
-            const float x = b.getX() + ((float) px + 0.5f) / scale, y = b.getY() + ((float) py + 0.5f) / scale;
-            float add[3] {};
-            for (auto& c : cs)
+        Image::BitmapData bd (litGrey, Image::BitmapData::readWrite);
+        for (int y = 0; y < bd.height; ++y)
+            for (int x = 0; x < bd.width; ++x)
             {
-                const float ex = c.leftEnd ? cx - halfLength : cx + halfLength;
-                const float dx = x - ex, dy = y - cy;
-                if (c.leftEnd ? dx > 0.0f : dx < 0.0f) continue;
-                const float r = std::sqrt (dx * dx + dy * dy);
-                float a = radiansToDegrees (std::atan2 (dx, -dy));
-                if (a < 0.0f) a += 360.0f;
-                if (a < c.a0 || a > c.a1) continue;
-                const float t = a < c.aPeak ? (a - c.a0) / (c.aPeak - c.a0) : (c.a1 - a) / (c.a1 - c.aPeak);
-                const float env = std::sin (MathConstants<float>::halfPi * jlimit (0.0f, 1.0f, t * 2.4f));
-                const float rad = std::exp (-0.5f * (r - c.r) * (r - c.r) / (c.sigma * c.sigma + 0.25f / (scale * scale)));
-                const float v = c.peak * env * rad;
-                add[0] += v * c.tint.getFloatRed(); add[1] += v * c.tint.getFloatGreen(); add[2] += v * c.tint.getFloatBlue();
+                const auto c = bd.getPixelColour (x, y);
+                const auto v = (uint8) jmin (255, (c.getRed() + c.getGreen() + c.getBlue()) / 3);
+                bd.setPixelColour (x, y, Colour (v, v, v));
             }
-            if (add[0] + add[1] + add[2] <= 0.5f) continue;
-            const auto old = bd.getPixelColour (px, py);
-            bd.setPixelColour (px, py, Colour ((uint8) jmin (255.0f, old.getRed() + add[0]), (uint8) jmin (255.0f, old.getGreen() + add[1]),
-                                               (uint8) jmin (255.0f, old.getBlue() + add[2]), (uint8) 255));
-        }
+    }
+    for (auto* img : { &frame, &lit, &litGrey })
+    {
+        // the amount pill on top: black inside, a thin grey edge with a faint glow (measured: peak ~ grey 130,
+        // about 0.7 px wide)
+        Graphics g (*img);
+        g.addTransform (AffineTransform::translation (-b.getX(), -b.getY()).scaled (scale));
+        auto pill = stadiumAround (pillCx, pillCy, pillHalfLength, pillR);
+        g.setColour (Colours::black);
+        g.fillPath (pill);
+        g.setColour (Colour (0x1f8a8889));
+        g.strokePath (pill, PathStrokeType (2.2f));
+        g.setColour (Colour (0xff8c8a8b));
+        g.strokePath (pill, PathStrokeType (0.75f));
+    }
     framePx = scale;
 }
 
 void Visualizer::paint (Graphics& g)
 {
-    const float scale = g.getInternalContext().getPhysicalPixelScaleFactor();
+    const float scale = theme::pixelScale (g, *this);
     if (std::abs (scale - framePx) > 0.001f || frame.isNull()) renderFrame (scale);
     const auto b = getBounds().toFloat();
     g.drawImage (frame, getLocalBounds().toFloat());
     if (level <= 0.0f) return;
+    {
+        // the glass lit by the sparks (measured as the median of the reference's active frames); desaturated with
+        // the sparks' colour mix
+        Graphics::ScopedSaveState s0 (g);
+        g.setOpacity (level * colourMix);
+        g.drawImage (lit, getLocalBounds().toFloat());
+        g.setOpacity (level * (1.0f - colourMix));
+        g.drawImage (litGrey, getLocalBounds().toFloat());
+    }
 
-    static const Colour palette[7] { Colour (0xffffc933), Colour (0xffffffff), Colour (0xff4d8dff), Colour (0xff9b5cff),
-                                     Colour (0xffff4646), Colour (0xff46e0ff), Colour (0xffff9a2e) };
+    // saturated versions of the measured hue groups (white, yellow, cyan-blue, blue, orange, violet, magenta, red)
+    static const Colour palette[8] { Colour (0xfff5eee1), Colour (0xffffd23c), Colour (0xff5ac8ff), Colour (0xff5064ff),
+                                     Colour (0xffff8c1e), Colour (0xffa06eff), Colour (0xffff3c78), Colour (0xffff3c28) };
     g.addTransform (AffineTransform::translation (-b.getX(), -b.getY()));
 
-    // while particles show, the pill rim catches their light
-    g.setColour (Colours::white.withAlpha (0.35f * level));
-    g.strokePath (stadiumAround (cx, cy, halfLength, pillRadius), PathStrokeType (1.6f));
-    g.setColour (Colours::white.withAlpha (0.08f * level));
+    // while the sparks show, the pill rim and the outer edge catch their light
+    g.setColour (Colours::white.withAlpha (0.3f * level));
+    g.strokePath (stadiumAround (cx, cy, halfLength, pillRadius), PathStrokeType (1.4f));
+    g.setColour (Colours::white.withAlpha (0.07f * level));
     g.strokePath (stadiumAround (cx, cy, halfLength, outerRadius - 0.5f), PathStrokeType (1.2f));
 
     Graphics::ScopedSaveState s (g);
-    auto ring = stadiumAround (cx, cy, halfLength, outerRadius - 2.0f);
+    auto ring = stadiumAround (cx, cy, halfLength, outerRadius - 1.0f);
     ring.setUsingNonZeroWinding (false);
-    ring.addPath (stadiumAround (cx, cy, halfLength, pillRadius + 1.5f));
+    ring.addPath (stadiumAround (cx, cy, halfLength, pillRadius + 1.0f));
     g.reduceClipRegion (ring);
-    // faint coloured haze in the ring
+    // 30 frames per second, looping every second
+    const float t = (float) (std::floor (std::fmod (clock, 1.0) * 30.0) / 30.0);
+    for (auto& sp : sparks)
     {
-        const auto hazeA = Colour (0xff6a4cff).interpolatedWith (Colours::white, 1.0f - colourMix);
-        const auto hazeB = Colour (0xffffb04a).interpolatedWith (Colours::white, 1.0f - colourMix);
-        for (int i = 0; i < 8; ++i)                 // stacked strokes: a smooth band, densest in the middle
+        float age = t - sp.birth;
+        if (age < 0.0f) age += 1.0f;
+        if (age > sp.life) continue;
+        const float env = std::sqrt (std::sin (MathConstants<float>::pi * age / sp.life));
+        const Point<float> pos (sp.x + sp.vx * age, sp.y + sp.vy * age);
+        const auto tp = trackPos (pos.x, pos.y);
+        if (tp.r < pillRadius + 1.0f || tp.r > outerRadius - 1.0f) continue;
+        const auto hue = Colours::white.interpolatedWith (palette[sp.hue], colourMix);
+        const float a = level * env * sp.bright, sz = sp.size;
+        if (sp.streak)
         {
-            g.setColour (hazeA.withAlpha (0.012f * level));
-            g.strokePath (stadiumAround (cx, cy, halfLength, 82.0f), PathStrokeType (8.0f + 6.0f * (float) i));
-            g.setColour (hazeB.withAlpha (0.007f * level));
-            g.strokePath (stadiumAround (cx, cy, halfLength, 97.0f), PathStrokeType (4.0f + 3.0f * (float) i));
+            // motion blur over a frame
+            const Point<float> tail (pos.x - sp.vx / 75.0f, pos.y - sp.vy / 75.0f);
+            g.setColour (hue.withAlpha (0.55f * a));
+            g.drawLine ({ tail, pos }, sz * 0.9f);
         }
-    }
-    for (auto& p : particles)
-    {
-        const float r = pillRadius + 5.0f + p.d * (outerRadius - pillRadius - 9.0f);
-        const auto pos = racetrack (p.u, r);
-        const float tw = 0.6f + 0.4f * std::sin (p.phase + time * p.twinkle);
-        const auto hue = Colours::white.interpolatedWith (palette[p.hue], colourMix);
-        const float sz = p.size;
-        // direction of travel, for the elongated ones
-        const auto ahead = racetrack (p.u + 0.002f, r);
-        const float ang = std::atan2 (ahead.y - pos.y, ahead.x - pos.x);
-        const float stretch = p.streak ? 1.9f : 1.0f;
-        const auto t = AffineTransform::scale (stretch, 1.0f).rotated (ang).translated (pos);
-        // soft halo
-        g.setGradientFill (ColourGradient (hue.withAlpha (0.6f * level * tw), pos, hue.withAlpha (0.0f), pos.translated (sz * 2.6f, 0.0f), true));
-        g.fillEllipse (Rectangle<float> (sz * 5.2f, sz * 5.2f).withCentre (pos));
-        // body and hot core
-        g.setColour (hue.withAlpha (0.95f * level * tw));
-        g.fillPath ([&] { Path e; e.addEllipse (-sz * 0.75f, -sz * 0.75f, sz * 1.5f, sz * 1.5f); return e; }(), t);
-        g.setColour (Colours::white.withAlpha (0.9f * level * tw));
-        g.fillPath ([&] { Path e; e.addEllipse (-sz * 0.35f, -sz * 0.35f, sz * 0.7f, sz * 0.7f); return e; }(), t);
+        g.setGradientFill (ColourGradient (hue.withAlpha (0.5f * a), pos, hue.withAlpha (0.0f), pos.translated (sz * 2.4f, 0.0f), true));
+        g.fillEllipse (Rectangle<float> (sz * 4.8f, sz * 4.8f).withCentre (pos));
+        g.setColour (hue.withAlpha (a));
+        g.fillEllipse (Rectangle<float> (sz * 1.7f, sz * 1.7f).withCentre (pos));
+        if (sz > 1.0f)                                                 // only the bigger sparks burn white in the middle
+        {
+            g.setColour (Colours::white.withAlpha (0.8f * a));
+            g.fillEllipse (Rectangle<float> (sz * 0.7f, sz * 0.7f).withCentre (pos));
+        }
     }
 }
 }
