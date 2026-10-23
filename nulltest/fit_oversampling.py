@@ -1,8 +1,9 @@
 """Designs our oversampling filters (Source/dsp/OsFilters.h).
 
 The reference's bypassed path gets 22.49 / 27.71 / 29.66 samples longer at 2x / 4x / 8x, so its filters are short. Ours
-are linear-phase FIR stages of 45 / 21 / 15 taps (22 / 27 / 28.75 samples; the rest is the fixed delay, which sits
-inside the oversampled part, fraction included, as Source/dsp/Engine.cpp does).
+are linear-phase FIR stages of 45 and 21 taps (22 / 27 samples at 2x / 4x; the rest is the fixed delay, which sits
+inside the oversampled part, fraction included, as Source/dsp/Engine.cpp does). The reference's 8x sounds exactly
+like its 4x, only ~2 samples later, so ours processes 8x at 4x (the third stage is kept for completeness, unused).
 
 The first stage (one design for 2x, one shared by 4x and 8x, as the reference's responses suggest) is fitted so that
 the whole simulated path matches the reference's measured magnitude (the phase then agrees to a few degrees below 20 kHz). That path is up-sampling stages, then the
@@ -19,7 +20,7 @@ FS = tgp.FS
 PRE = 2 * FS
 N = 4096
 CORE = 151.27917                                  # the fixed delay at 48 kHz (Tuning.h coreDelay)
-EXTRA = {2: 22.488, 4: 27.711, 8: 29.655}         # Engine.cpp oversamplingExtra
+EXTRA = {2: 22.488, 4: 27.711, 8: 29.711}         # Engine.cpp oversamplingExtra (8x = 4x + 2 samples)
 
 
 def halfband_ls(ntaps, rate, target_f, target_mag, weight):
@@ -36,13 +37,13 @@ def halfband_ls(ntaps, rate, target_f, target_mag, weight):
 
 def simulate(h1, s2, s3, k):
     """impulse response (base rate, N samples) of: up-sampling stages, the fixed delay (Thiran fraction), down-sampling"""
-    stages = [h1, s2, s3][:{2: 1, 4: 2, 8: 3}[k]]
+    stages = [h1, s2, s3][:{2: 1, 4: 2, 8: 2}[k]]      # 8x processes at 4x (Engine.cpp), only the delay is longer
     x = np.zeros(N); x[0] = 1.0
     for h in stages:
         z = np.zeros(2 * len(x)); z[0::2] = x
         x = 2 * np.convolve(z, h)[:len(z)]
     lat = sum((len(h) - 1) / (2 << i) for i, h in enumerate(stages))
-    d = (CORE + EXTRA[k] - lat) * k
+    d = (CORE + EXTRA[k] - lat) * (2 ** len(stages))
     whole = int(np.floor(d)); frac = d - whole
     if frac < 0.05 and whole > 0: frac += 1; whole -= 1
     a = (1 - frac) / (1 + frac)

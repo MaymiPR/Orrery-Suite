@@ -6,8 +6,8 @@ namespace
 {
 constexpr int kSub = 16;                                        // parameter ramps advance per 16 samples
 // the core path's extra delay with oversampling (bypassed-path impulse peak at 48 kHz: 174 / 179 / 181 vs 151.3)
-// (group delay at 1 kHz: 173.767 / 178.990 / 180.934 vs 151.279)
-double oversamplingExtra (int factor) { return factor >= 8 ? 29.655 : factor >= 4 ? 27.711 : factor >= 2 ? 22.488 : 0.0; }
+// (group delay at 1 kHz: 173.767 / 178.990 vs 151.279; 8x is exactly 4x two samples later)
+double oversamplingExtra (int factor) { return factor >= 8 ? 27.711 + 2.0 : factor >= 4 ? 27.711 : factor >= 2 ? 22.488 : 0.0; }
 }
 
 void Engine::prepare (double sampleRate, int block, int oversampling, const Tuning& t)
@@ -15,7 +15,10 @@ void Engine::prepare (double sampleRate, int block, int oversampling, const Tuni
     tune = &t;
     fs = sampleRate;
     maxBlock = std::max (block, kSub);
-    osFactor = oversampling >= 8 ? 8 : oversampling >= 4 ? 4 : oversampling >= 2 ? 2 : 1;
+    selectedFactor = oversampling >= 8 ? 8 : oversampling >= 4 ? 4 : oversampling >= 2 ? 2 : 1;
+    // the reference's 8x sounds exactly like its 4x (residual -82 dB below 16 kHz, nulltest/NULLTESTS.md), only
+    // ~2 samples later: process at 4x and add the difference to the fixed delay
+    osFactor = std::min (selectedFactor, 4);
     osRate = fs * osFactor;
 
     os.prepare (osFactor, kSub);
@@ -24,7 +27,7 @@ void Engine::prepare (double sampleRate, int block, int oversampling, const Tuni
     for (auto& w : scWork) w.assign ((size_t) (kSub * osFactor), 0.0);
 
     // the fixed delay is a fixed time; with oversampling the reference's path is a little longer
-    const double pathDelay = coreDelay (fs, t) + oversamplingExtra (osFactor) * fs / 48000.0;
+    const double pathDelay = coreDelay (fs, t) + oversamplingExtra (selectedFactor) * fs / 48000.0;
     // the fixed delay sits inside the oversampled part, fraction included (the reference's too: our first-stage filters
     // are fitted with it in place, nulltest/fit_oversampling.py)
     const double osDelay = std::max (0.0, pathDelay - osLatency) * osFactor;     // at the processing rate
@@ -33,7 +36,10 @@ void Engine::prepare (double sampleRate, int block, int oversampling, const Tuni
     reportedLatency = (int) std::lround (pathDelay + limiter.latency());
     bypassDelay.prepare ((double) reportedLatency);
 
-    character.prepare (osRate, osDelay, t);
+    // with oversampling the reference's character path is a little later than its bypassed path (phase vs frequency of
+    // the small-signal response: +0.012 / +0.040 samples at 2x / 4x)
+    const double charOffset = osFactor >= 4 ? 0.0395 : osFactor >= 2 ? 0.0117 : 0.0;
+    character.prepare (osRate, osDelay + charOffset * osFactor, t);
     for (auto& r : eqDb) r.setLength ((int) std::lround (t.rampMs * 1.0e-3 * fs));
     amount.setLength ((int) std::lround (t.rampMs * 1.0e-3 * fs));
     limGain.setLength ((int) std::lround (t.rampMs * 1.0e-3 * fs));

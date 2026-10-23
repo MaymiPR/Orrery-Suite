@@ -150,8 +150,8 @@ private:
         if (inverse) for (auto& x : a) x /= (double) n;
     }
 
-    // the band filters at `rate`: the 48 kHz responses, delay moved to `delaySamples`; above 23 kHz (higher rates)
-    // the low and mid bands are zero and the high band passes
+    // the band filters at `rate`: the 48 kHz responses, delay moved to `delaySamples`. Above 23 kHz (higher rates) all
+    // bands are zero: the reference's section keeps its ~22.5 kHz low-pass with oversampling (-45 dB at 23 kHz at 2x)
     void design (double rate, double delaySamples)
     {
         const double d48 = 151.27917;
@@ -179,12 +179,7 @@ private:
                     for (int i = 0; i < bandTaps48k; ++i) { v += bandIr48k[b][i] * e; e *= step; }
                 }
                 else
-                    v = b == 2 ? std::polar (1.0, -2 * kPi * f * d48 / 48000.0) : std::complex<double> {};
-                if (f > 21000.0 && f <= 23000.0 && b == 2)      // blend into the extrapolation near the old Nyquist
-                {
-                    const double u = (f - 21000.0) / 2000.0;
-                    v = v * (1 - u) + std::polar (1.0, -2 * kPi * f * d48 / 48000.0) * u;
-                }
+                    v = {};
                 v *= std::polar (1.0, -2 * kPi * f * shift);
                 spec[(size_t) k] = v;
                 if (k > 0 && k < m / 2) spec[(size_t) (m - k)] = std::conj (v);

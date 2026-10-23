@@ -32,7 +32,7 @@ public:
     void prepare (double sampleRate, int maxBlock, int oversampling, const Tuning& t);
     void reset();
     int latency() const { return reportedLatency; }
-    int oversamplingFactor() const { return osFactor; }
+    int oversamplingFactor() const { return selectedFactor; }   // as selected (8x processes at 4x, see Engine.cpp)
 
     // stereo in place; sc = side-chain channels (nullptr when there is none)
     void process (float* l, float* r, const float* scL, const float* scR, int n, const Params& p);
@@ -55,7 +55,7 @@ private:
 
     const Tuning* tune = nullptr;
     double fs = 48000.0, osRate = 48000.0;
-    int osFactor = 1, maxBlock = 512, reportedLatency = 0;
+    int osFactor = 1, selectedFactor = 1, maxBlock = 512, reportedLatency = 0;
     Oversampler os;
     std::vector<double> work[2], scWork[2];
 

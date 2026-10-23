@@ -284,19 +284,29 @@ small-signal response below 15 kHz do not change.
 - Simulating the whole path matters. Because of the fractional delay between up- and downsampling, the folded image
   does not add in phase. A filter designed as if it did is off by 2 dB at 20 kHz at 2x.
 - Result: within 0.002 dB and 0.2° of the reference up to 23.9 kHz at all three ratios (`fit_oversampling.py`).
+- The reference's **8x output equals its 4x output, two samples later** (−82 dB below 16 kHz). So ours processes 8x
+  at 4x.
+- With oversampling the reference's character path keeps its ~22.5 kHz low-pass and sits 0.012 / 0.040 samples
+  later than its bypassed path (2x / 4x). Ours does the same.
 
-## 8. What Phase 4 still has to pin down
+## 8. Still open after Phase 4
 
-**Character section** (largest risk for the null tests):
-- the exact waveshaper curve and whether it sits before or after the compressors
-- each band's attack and release laws and the low band's very slow tail
-- the amount mapping of thresholds, ratios and the shaper
-- the M/S detector weighting
-- the residual ±0.1 dB in the small-signal fit
+How closely the result matches is in [NULLTESTS.md](NULLTESTS.md).
 
-**Expect these nulls to be the least deep;** each is reported honestly.
+**Settled in Phase 4:**
+- the crossover: FIR, identified exactly (3.1)
+- the shaper: cubic, after the parallel mix (3.8)
+- the 8x setting: it behaves exactly like 4x, two samples later. Its output equals the 4x output to −82 dB below 16 kHz.
+- the oversampled path: matched within 0.002 dB (7)
 
-**Other items:**
-- the limiter's exact fast stage (window and smoothing lengths around the 19-sample ramp)
-- the side-chain EXT signal path (needs a DAW check)
-- the I/O RMS and LUFS readouts
+**Still open:**
+- **Character section.** The per-band constants are fits, not known values.
+  - The low band's very slow tail is modelled by a second, slow detector.
+  - The detectors' side weighting is a fixed 0.1, not fitted. The stereo tests in 3.6 are not yet matched.
+  - Side signals get 0.06 dB more small-signal gain in the reference; not modelled.
+- **Limiter.** Its fast stage between closely spaced peaks is not identified. Ours ramps linearly in 1 / gain over a
+  fitted 0.30 ms before a peak and 0.19 ms after it. Its slow envelope charges from the sample level (τ 14.8 ms) and
+  releases with τ 0.355 s (fitted on program material; 0.378 s on DC steps).
+- **Side-chain EXT.** Audio fed to the reference's side-chain bus had no effect in our test host. Ours is implemented
+  as described (the side-chain drives the band detectors) but could not be compared.
+- **Meters.** The I/O RMS and LUFS readouts and the limiter's dash meter (step size estimated) are not measured yet.

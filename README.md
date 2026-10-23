@@ -22,8 +22,8 @@ Input gain feeds the signal chain below, which ends in output gain.
 | Character, "amount" 0–200 % | A 3-band split by a linear-phase FIR crossover (157 Hz / 2.68 kHz). Each band runs a stereo-linked parallel compressor and then a cubic shaper (odd harmonics). |
 | Limiter | Look-ahead with a −0.1 dBFS sample-peak ceiling and a two-speed release. |
 
-Oversampling (1 / 2 / 4 / 8x) and the I/O meter mode are global settings, as in the original. The external side-chain
-drives the character section's detectors.
+Oversampling (1 / 2 / 4 / 8x) and the I/O meter mode are global settings. As in the original, 8x sounds like 4x. The
+external side-chain drives the character section's detectors.
 
 ## Building
 

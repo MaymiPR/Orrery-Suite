@@ -126,7 +126,21 @@ def report():
     for name, sig, nm, pm in CASES:
         r = model.get(name, {}); v = vst3.get(name, {})
         lines.append(f'| {name.split(" (")[0]} | {sigdoc[sig]} | {r.get("residual_dB", "")} | {v.get("residual_dB", "")} |')
-    lines += ['', 'Signal list: ' + '; '.join(f'**{k}**: {v}' for k, v in sigdoc.items()) + '.', '']
+    lines += ['', 'Signal list: ' + '; '.join(f'**{k}**: {v}' for k, v in sigdoc.items()) + '.', '',
+              '## What the numbers say', '',
+              'None of these is a perfect null; the full chain lands between about -36 and -41 dB on program material.',
+              '',
+              '- **The path, EQ and crossover are exact for practical purposes** (-79 to -87 dB): the fixed delay, the RBJ',
+              '  filters and the character section\'s FIR crossover (taken from the reference\'s own impulse responses) are',
+              '  linear and fully identified. At amount 0 % the character section nulls at -137 dB.',
+              '- **The character section is the main residual** (-34 to -46 dB). Its structure (parallel compressor and',
+              '  cubic shaper per band) and constants are fitted, not known. It is best at moderate amounts and levels and',
+              '  worst at 200 % and on loud dense material. Most of what is left is in the low band (bass under 160 Hz).',
+              '- **The limiter is close on program material** (-45 dB on the mix at -2 dBFS) but not under heavy, continuous',
+              '  limiting (-26 to -28 dB on loud pink noise and drums with +12 dB of input gain). Its slow release is',
+              '  identified exactly (MEASUREMENTS.md 4); how its fast stage ramps between closely spaced peaks is not.',
+              '- **The built VST3 and the offline renderer give the same numbers**, so these hold for the plug-in itself.',
+              '']
     osp = os.path.join(here, 'results_oversampling.json')
     if os.path.exists(osp):
         lines += ['## Oversampling', '',
