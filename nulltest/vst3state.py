@@ -12,7 +12,7 @@ def wrap(inner):
 
 def own_state(**props):
     attrs = ' '.join(f'{k}="{v}"' for k, v in props.items())
-    x = f'<?xml version="1.0" encoding="UTF-8"?>\n<DevilsParticle {attrs}/>'.encode() + b'\0'
+    x = f'<?xml version="1.0" encoding="UTF-8"?>\n<TheAntiparticle {attrs}/>'.encode() + b'\0'
     return b'VC2!' + struct.pack('<I', len(x)) + x
 
 

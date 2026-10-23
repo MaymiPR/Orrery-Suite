@@ -1,5 +1,5 @@
-// Renders the Devil's Particle editor to a PNG for the visual comparison with the reference (tools/ui_compare.py):
-//   DevilsParticleSnapshot out.png [--scale=2] [paramID=value ...] [--levels=inDb,outDb] [--audio] [--ext] [--devily]
+// Renders the The Antiparticle editor to a PNG for the visual comparison with the reference (tools/ui_compare.py):
+//   AntiparticleSnapshot out.png [--scale=2] [paramID=value ...] [--levels=inDb,outDb] [--audio] [--ext] [--devily]
 // Parameter values are in real units (dB, 0..1); --levels freezes the I/O meters, --audio shows the particles.
 #include <juce_audio_processors/juce_audio_processors.h>
 #include "../Source/PluginProcessor.h"
@@ -9,9 +9,9 @@
 
 int main (int argc, char** argv)
 {
-    if (argc < 2) { std::cerr << "usage: DevilsParticleSnapshot out.png [--scale=2] [paramID=value ...]\n"; return 2; }
+    if (argc < 2) { std::cerr << "usage: AntiparticleSnapshot out.png [--scale=2] [paramID=value ...]\n"; return 2; }
     juce::ScopedJuceInitialiser_GUI init;
-    auto proc = std::make_unique<DevilsParticleProcessor>();
+    auto proc = std::make_unique<AntiparticleProcessor>();
     float scale = 1.0f, inDb = -200.0f, outDb = -200.0f;
     bool audio = false, devily = false;
     for (int i = 2; i < argc; ++i)
@@ -33,11 +33,11 @@ int main (int argc, char** argv)
                     r->setValueNotifyingHost (r->convertTo0to1 (a.fromFirstOccurrenceOf ("=", false, false).getFloatValue()));
     }
     // the particle style is a global setting: switch it for this render only
-    auto& settings = dp::Settings::get();
+    auto& settings = ap::Settings::get();
     const auto oldStyle = settings.particleStyle();
-    if (devily) settings.setParticleStyle (dp::Settings::Particles::devily);
+    if (devily) settings.setParticleStyle (ap::Settings::Particles::devily);
     proc->uiScale = scale;      // rendered through the UI Scale path, as in a host
-    std::unique_ptr<DevilsParticleEditor> ed (dynamic_cast<DevilsParticleEditor*> (proc->createEditor()));
+    std::unique_ptr<AntiparticleEditor> ed (dynamic_cast<AntiparticleEditor*> (proc->createEditor()));
     ed->setTestLevels (inDb, outDb, audio);
     if (audio) for (int i = 0; i < 20; ++i) ed->setTestLevels (inDb, outDb, true);
     auto img = ed->createComponentSnapshot (ed->getLocalBounds(), true, 1.0f);

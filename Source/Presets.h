@@ -3,7 +3,7 @@
 
 // Presets as in the reference: a factory "default" (the reference's defaults) and user presets saved by name.
 // A preset holds the EQ, character and limiter settings; input, output and the side-chain switch are left alone.
-namespace dp
+namespace ap
 {
 class PresetManager
 {
@@ -19,11 +19,11 @@ public:
 
     void load (const Entry&);
     void step (int delta);                               // the arrows: previous / next in list(), wrapping
-    bool save (const juce::String& name);                // writes userFolder()/name.dpp; false on failure
+    bool save (const juce::String& name);                // writes userFolder()/name.antp; false on failure
     bool exists (const juce::String& name) const { return fileFor (name).existsAsFile(); }
 
 private:
-    juce::File fileFor (const juce::String& name) const { return userFolder().getChildFile (juce::File::createLegalFileName (name) + ".dpp"); }
+    juce::File fileFor (const juce::String& name) const { return userFolder().getChildFile (juce::File::createLegalFileName (name) + ".antp"); }
     juce::AudioProcessorValueTreeState& apvts;
     juce::String current { "default" };
 };

@@ -5,7 +5,7 @@
 #include <cmath>
 #include <algorithm>
 
-namespace dp::knobshadow
+namespace ap::knobshadow
 {
 inline constexpr float c[7] { 0.26483f, -0.15751f, -0.37986f, -0.12639f, 0.14852f, 0.07013f, 0.02567f };
 inline constexpr float w1 = 0.58384f, t1 = 10.0000f, w2 = 0.59730f, t2 = 27.9729f;

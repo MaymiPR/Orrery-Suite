@@ -3,7 +3,7 @@
 
 using namespace juce;
 
-namespace dp
+namespace ap
 {
 static const knobmodel::Model& modelFor (MetalKnob::Kind k)
 {

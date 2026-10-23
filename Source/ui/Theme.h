@@ -2,7 +2,7 @@
 #include <juce_gui_basics/juce_gui_basics.h>
 
 // Colours and type measured on the reference at 200 % (RESEARCH.md "GUI"; values in design pixels = 100 %).
-namespace dp::theme
+namespace ap::theme
 {
 inline const juce::Colour topBar { 0xff050607 };
 inline const juce::Colour panel { 0xff010101 };

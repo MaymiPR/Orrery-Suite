@@ -2,7 +2,7 @@
 #include <juce_gui_basics/juce_gui_basics.h>
 #include <vector>
 
-namespace dp
+namespace ap
 {
 // The centre "particle" visualiser, measured on the reference (RESEARCH.md "Visualiser"):
 //  - a black glass racetrack around the amount pill, drawn from the measured lighting field (GlassModel.h);

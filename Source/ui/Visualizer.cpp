@@ -4,7 +4,7 @@
 
 using namespace juce;
 
-namespace dp
+namespace ap
 {
 static Path stadiumAround (float cx, float cy, float halfLength, float r)
 {

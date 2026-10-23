@@ -4,7 +4,7 @@
 #include "Params.h"
 #include "Presets.h"
 
-namespace dp
+namespace ap
 {
 // Levels the editor reads (audio thread writes, message thread reads and resets).
 struct LevelTap
@@ -21,10 +21,10 @@ struct LevelTap
 };
 }
 
-class DevilsParticleProcessor : public juce::AudioProcessor
+class AntiparticleProcessor : public juce::AudioProcessor
 {
 public:
-    DevilsParticleProcessor();
+    AntiparticleProcessor();
 
     void prepareToPlay (double, int) override;
     void releaseResources() override {}
@@ -47,14 +47,14 @@ public:
     void setStateInformation (const void*, int) override;
 
     juce::AudioProcessorValueTreeState apvts;
-    dp::PresetManager presets { apvts };
+    ap::PresetManager presets { apvts };
 
     // host-only state (not part of presets, as in the reference): side-chain source and the editor's zoom
     std::atomic<bool> sidechainExternal { false };
     std::atomic<float> uiScale { 1.0f };
 
     // meters: input / output L R, multiband gain reduction (high, mid, low) and limiter L R, positive dB
-    dp::LevelTap inL, inR, outL, outR;
+    ap::LevelTap inL, inR, outL, outR;
     std::atomic<float> bandGr[3] { 0.0f, 0.0f, 0.0f };
     std::atomic<float> limGr[2] { 0.0f, 0.0f };
     std::atomic<int> blocksProcessed { 0 };
@@ -66,7 +66,7 @@ private:
     juce::SmoothedValue<float> inGainSmoothed, outGainSmoothed;
     float rmsState[4] {};           // mean-square followers (in L, in R, out L, out R)
     float rmsCoef = 0.0f;
-    void measure (const juce::AudioBuffer<float>&, int ch0, dp::LevelTap&, dp::LevelTap&, float* state);
+    void measure (const juce::AudioBuffer<float>&, int ch0, ap::LevelTap&, ap::LevelTap&, float* state);
 
-    JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR (DevilsParticleProcessor)
+    JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR (AntiparticleProcessor)
 };

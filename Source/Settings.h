@@ -4,7 +4,7 @@
 
 // The settings page's options. Like the reference they are global (shared by every instance and project), not part
 // of the plug-in state: oversampling ratio, I/O meter mode, the particle animation and (ours) its style.
-namespace dp
+namespace ap
 {
 class Settings : public juce::ChangeBroadcaster
 {
@@ -32,9 +32,9 @@ private:
     Settings()
     {
         juce::PropertiesFile::Options o;
-        o.applicationName = "Devil's Particle";
+        o.applicationName = "The Antiparticle";
         o.filenameSuffix = ".settings";
-        o.folderName = "Devil's Particle";
+        o.folderName = "The Antiparticle";
         o.osxLibrarySubFolder = "Application Support";
         file = std::make_unique<juce::PropertiesFile> (o);
     }

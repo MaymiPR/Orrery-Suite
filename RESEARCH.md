@@ -1,6 +1,6 @@
-# Devil's Particle — Research
+# The Antiparticle — Research
 
-Phase 1 evidence for the first plugin of the collection: **Devil's Particle**, an open-source recreation of Cradle's
+Phase 1 evidence for the first plugin of the collection: **The Antiparticle**, an open-source recreation of Cradle's
 **The God Particle** (mix-bus / master channel processor made with mix engineer Jaycen Joshua). Everything here was
 written before any DSP or UI code.
 
@@ -144,11 +144,11 @@ pixel:
 
 | Original | Recreation | Product folder / target |
 |---|---|---|
-| Cradle **The God Particle** | **Devil's Particle** | `DevilsParticle` |
+| Cradle **The God Particle** | **The Antiparticle** | `TheAntiparticle` |
 
 The look (layout, sizes, colours, knob style) is recreated with our own drawing code. Cradle's and Jaycen Joshua's
 names, the Cradle logo, the "THE GOD PARTICLE" lettering and all shipped images and fonts are replaced by our own
-("DEVIL'S PARTICLE" lettering, own logo). The repo states clearly that it is an independent project, not affiliated
+("THE ANTIPARTICLE" lettering, own logo). The repo states clearly that it is an independent project, not affiliated
 with Cradle.
 
 ## Open questions for Phase 3 (measurement)
@@ -168,7 +168,7 @@ with Cradle.
 
 All numbers in design pixels (= pixels at 100 %); the reference renders vector-sharp at 200 %, so everything was
 measured there and halved. Screenshots of the reference stay in `reference/` (git-ignored); our editor is compared
-with `DevilsParticleSnapshot` + `tools/ui_compare.py` (mean absolute RGB difference over the window: 8.4 / 255 at
+with `AntiparticleSnapshot` + `tools/ui_compare.py` (mean absolute RGB difference over the window: 8.4 / 255 at
 200 %, most of it in the animated / photographic parts and in anti-aliased text edges).
 
 | Element | Measured |

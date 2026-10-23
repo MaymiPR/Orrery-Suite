@@ -5,7 +5,7 @@
 
 // Host parameters, identical to the reference's list (names, order, ranges, tapers, defaults and display text;
 // RESEARCH.md "Documented controls"). The IDs are ours; the names are what hosts show.
-namespace dp
+namespace ap
 {
 namespace id
 {

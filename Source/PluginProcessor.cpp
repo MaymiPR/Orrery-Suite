@@ -3,7 +3,7 @@
 
 using namespace juce;
 
-namespace dp
+namespace ap
 {
 AudioProcessorValueTreeState::ParameterLayout createLayout()
 {
@@ -38,19 +38,19 @@ AudioProcessorValueTreeState::ParameterLayout createLayout()
 }
 }
 
-DevilsParticleProcessor::DevilsParticleProcessor()
+AntiparticleProcessor::AntiparticleProcessor()
     : AudioProcessor (BusesProperties()
                           .withInput ("Input", AudioChannelSet::stereo(), true)
                           .withOutput ("Output", AudioChannelSet::stereo(), true)
                           .withInput ("Sidechain", AudioChannelSet::stereo(), false)),
-      apvts (*this, nullptr, "DevilsParticle", dp::createLayout())
+      apvts (*this, nullptr, "TheAntiparticle", ap::createLayout())
 {
-    bypassParam = apvts.getParameter (dp::id::bypass);
-    inputGain = apvts.getRawParameterValue (dp::id::inputGain);
-    outputGain = apvts.getRawParameterValue (dp::id::outputGain);
+    bypassParam = apvts.getParameter (ap::id::bypass);
+    inputGain = apvts.getRawParameterValue (ap::id::inputGain);
+    outputGain = apvts.getRawParameterValue (ap::id::outputGain);
 }
 
-bool DevilsParticleProcessor::isBusesLayoutSupported (const BusesLayout& l) const
+bool AntiparticleProcessor::isBusesLayoutSupported (const BusesLayout& l) const
 {
     // stereo only, like the reference (mono -> mono is refused); the side-chain bus is stereo or off
     if (l.getMainInputChannelSet() != AudioChannelSet::stereo() || l.getMainOutputChannelSet() != AudioChannelSet::stereo())
@@ -63,7 +63,7 @@ bool DevilsParticleProcessor::isBusesLayoutSupported (const BusesLayout& l) cons
     return true;
 }
 
-void DevilsParticleProcessor::prepareToPlay (double sampleRate, int)
+void AntiparticleProcessor::prepareToPlay (double sampleRate, int)
 {
     inGainSmoothed.reset (sampleRate, 0.02);
     outGainSmoothed.reset (sampleRate, 0.02);
@@ -74,10 +74,10 @@ void DevilsParticleProcessor::prepareToPlay (double sampleRate, int)
     setLatencySamples (0);
 }
 
-void DevilsParticleProcessor::measure (const AudioBuffer<float>& b, int, dp::LevelTap& l, dp::LevelTap& r, float* state)
+void AntiparticleProcessor::measure (const AudioBuffer<float>& b, int, ap::LevelTap& l, ap::LevelTap& r, float* state)
 {
     const int n = b.getNumSamples();
-    dp::LevelTap* taps[2] { &l, &r };
+    ap::LevelTap* taps[2] { &l, &r };
     for (int c = 0; c < 2; ++c)
     {
         const float* x = b.getReadPointer (jmin (c, b.getNumChannels() - 1));
@@ -92,7 +92,7 @@ void DevilsParticleProcessor::measure (const AudioBuffer<float>& b, int, dp::Lev
     }
 }
 
-void DevilsParticleProcessor::processBlock (AudioBuffer<float>& buffer, MidiBuffer&)
+void AntiparticleProcessor::processBlock (AudioBuffer<float>& buffer, MidiBuffer&)
 {
     ScopedNoDenormals noDenormals;
     auto main = getBusBuffer (buffer, true, 0);
@@ -124,7 +124,7 @@ void DevilsParticleProcessor::processBlock (AudioBuffer<float>& buffer, MidiBuff
     ++blocksProcessed;
 }
 
-void DevilsParticleProcessor::getStateInformation (MemoryBlock& dest)
+void AntiparticleProcessor::getStateInformation (MemoryBlock& dest)
 {
     auto state = apvts.copyState();
     state.setProperty ("sidechain", sidechainExternal.load() ? 1 : 0, nullptr);
@@ -133,7 +133,7 @@ void DevilsParticleProcessor::getStateInformation (MemoryBlock& dest)
     if (auto xml = state.createXml()) copyXmlToBinary (*xml, dest);
 }
 
-void DevilsParticleProcessor::setStateInformation (const void* data, int size)
+void AntiparticleProcessor::setStateInformation (const void* data, int size)
 {
     if (auto xml = getXmlFromBinary (data, size))
         if (xml->hasTagName (apvts.state.getType()))
@@ -146,6 +146,6 @@ void DevilsParticleProcessor::setStateInformation (const void* data, int size)
         }
 }
 
-AudioProcessorEditor* DevilsParticleProcessor::createEditor() { return new DevilsParticleEditor (*this); }
+AudioProcessorEditor* AntiparticleProcessor::createEditor() { return new AntiparticleEditor (*this); }
 
-AudioProcessor* JUCE_CALLTYPE createPluginFilter() { return new DevilsParticleProcessor(); }
+AudioProcessor* JUCE_CALLTYPE createPluginFilter() { return new AntiparticleProcessor(); }

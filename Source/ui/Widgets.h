@@ -4,7 +4,7 @@
 #include "Theme.h"
 
 // Small controls of the editor, drawn like the reference (all positions in design pixels; the editor scales them).
-namespace dp
+namespace ap
 {
 // never take keyboard focus: the host keeps its shortcuts (space bar in FL Studio)
 inline void noFocus (juce::Component& c)

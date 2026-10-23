@@ -7,14 +7,14 @@
 
 // The editor is laid out in the reference's design pixels (888 x 359.5 at 100 %) and scaled as a whole by the
 // UI Scale menu (50 ... 200 %).
-class DevilsParticleEditor : public juce::AudioProcessorEditor,
+class AntiparticleEditor : public juce::AudioProcessorEditor,
                              private juce::Timer,
                              private juce::ChangeListener,
                              private juce::AudioProcessorValueTreeState::Listener
 {
 public:
-    explicit DevilsParticleEditor (DevilsParticleProcessor&);
-    ~DevilsParticleEditor() override;
+    explicit AntiparticleEditor (AntiparticleProcessor&);
+    ~AntiparticleEditor() override;
 
     void resized() override;
     void setUiScale (float);
@@ -35,10 +35,10 @@ private:
     class Content : public juce::Component
     {
     public:
-        explicit Content (DevilsParticleEditor& e) : ed (e) {}
+        explicit Content (AntiparticleEditor& e) : ed (e) {}
         void paint (juce::Graphics&) override;
         void mouseDown (const juce::MouseEvent&) override;
-        DevilsParticleEditor& ed;
+        AntiparticleEditor& ed;
     };
 
     void timerCallback() override;
@@ -51,8 +51,8 @@ private:
     void showSettings();
     void showSavePreset();
     void showAboutMenu();
-    void showDialog (std::unique_ptr<dp::Dialog>);
-    void updateMeter (Meter&, dp::LevelTap&, float dt);
+    void showDialog (std::unique_ptr<ap::Dialog>);
+    void updateMeter (Meter&, ap::LevelTap&, float dt);
 
     void paintTopBar (juce::Graphics&);
     void paintPanel (juce::Graphics&);
@@ -62,23 +62,23 @@ private:
     void paintLimiter (juce::Graphics&);
     void paintAmountText (juce::Graphics&);
 
-    DevilsParticleProcessor& proc;
+    AntiparticleProcessor& proc;
     Content content { *this };
     float scale = 1.0f;
 
-    dp::Logo logo;
-    dp::DropBox presetBox, scaleBox;
-    dp::IconButton prevButton { dp::IconButton::Icon::left }, nextButton { dp::IconButton::Icon::right },
-        saveButton { dp::IconButton::Icon::save };
-    dp::SegmentToggle sidechain;
-    dp::GearButton gear;
+    ap::Logo logo;
+    ap::DropBox presetBox, scaleBox;
+    ap::IconButton prevButton { ap::IconButton::Icon::left }, nextButton { ap::IconButton::Icon::right },
+        saveButton { ap::IconButton::Icon::save };
+    ap::SegmentToggle sidechain;
+    ap::GearButton gear;
 
-    dp::PowerButton eqPower, amountPower, limiterPower;
-    dp::MetalKnob eqHigh { dp::MetalKnob::Kind::small }, eqMid { dp::MetalKnob::Kind::small }, eqLow { dp::MetalKnob::Kind::small };
-    dp::MetalKnob amount { dp::MetalKnob::Kind::large };
-    dp::MetalKnob inputKnob { dp::MetalKnob::Kind::plate }, limiterKnob { dp::MetalKnob::Kind::plate },
-        outputKnob { dp::MetalKnob::Kind::plate };
-    dp::Visualizer visualizer;
+    ap::PowerButton eqPower, amountPower, limiterPower;
+    ap::MetalKnob eqHigh { ap::MetalKnob::Kind::small }, eqMid { ap::MetalKnob::Kind::small }, eqLow { ap::MetalKnob::Kind::small };
+    ap::MetalKnob amount { ap::MetalKnob::Kind::large };
+    ap::MetalKnob inputKnob { ap::MetalKnob::Kind::plate }, limiterKnob { ap::MetalKnob::Kind::plate },
+        outputKnob { ap::MetalKnob::Kind::plate };
+    ap::Visualizer visualizer;
     struct PaintOverlay : juce::Component
     {
         std::function<void (juce::Graphics&)> paintFn;
@@ -86,7 +86,7 @@ private:
     } amountText;
     std::vector<std::unique_ptr<juce::AudioProcessorValueTreeState::SliderAttachment>> attachments;
 
-    std::unique_ptr<dp::DropList> dropList;
+    std::unique_ptr<ap::DropList> dropList;
     std::unique_ptr<juce::Component> dialog;
 
     Meter inMeter[2], outMeter[2];
@@ -99,5 +99,5 @@ private:
     float knobShadowScale = 0.0f;
     int lastBlocks = 0;
 
-    JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR (DevilsParticleEditor)
+    JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR (AntiparticleEditor)
 };

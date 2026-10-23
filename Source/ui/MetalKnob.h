@@ -2,7 +2,7 @@
 #include <juce_gui_basics/juce_gui_basics.h>
 #include "KnobModel.h"
 
-namespace dp
+namespace ap
 {
 // Brushed-metal knob drawn from the measured lighting model (KnobModel.h): the light stays put, only the pointer
 // turns (-135 .. +135 degrees, as the reference). The slider fills the knob's bounding square.

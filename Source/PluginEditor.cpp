@@ -3,8 +3,8 @@
 #include "ui/KnobShadow.h"
 
 using namespace juce;
-namespace theme = dp::theme;
-static const juce::String repository = "https://github.com/MaymiPR/DevilsParticle";
+namespace theme = ap::theme;
+static const juce::String repository = "https://github.com/MaymiPR/TheAntiparticle";
 
 namespace
 {
@@ -36,10 +36,10 @@ String dbText (float db)
 float toDb (float lin) { return lin > 1.0e-6f ? Decibels::gainToDecibels (lin) : -200.0f; }
 }
 
-DevilsParticleEditor::DevilsParticleEditor (DevilsParticleProcessor& p) : AudioProcessorEditor (p), proc (p)
+AntiparticleEditor::AntiparticleEditor (AntiparticleProcessor& p) : AudioProcessorEditor (p), proc (p)
 {
-    dp::noFocus (*this);
-    dp::noFocus (content);
+    ap::noFocus (*this);
+    ap::noFocus (content);
     setOpaque (true);
     addAndMakeVisible (content);
     content.setBounds (0, 0, (int) std::ceil (designW), (int) std::ceil (designH));
@@ -83,19 +83,19 @@ DevilsParticleEditor::DevilsParticleEditor (DevilsParticleProcessor& p) : AudioP
     limiterPower.setBounds (719, 40, 72, 25);
 
     auto& s = proc.apvts;
-    auto attach = [&] (dp::MetalKnob& sl, const char* pid)
+    auto attach = [&] (ap::MetalKnob& sl, const char* pid)
     {
         attachments.push_back (std::make_unique<AudioProcessorValueTreeState::SliderAttachment> (s, pid, sl));
         if (auto* prm = dynamic_cast<RangedAudioParameter*> (s.getParameter (pid)))
             sl.setDefaultValue (prm->convertFrom0to1 (prm->getDefaultValue()));
     };
-    attach (eqHigh, dp::id::eqHigh);
-    attach (eqMid, dp::id::eqMid);
-    attach (eqLow, dp::id::eqLow);
-    attach (amount, dp::id::character);
-    attach (inputKnob, dp::id::inputGain);
-    attach (limiterKnob, dp::id::limiterGain);
-    attach (outputKnob, dp::id::outputGain);
+    attach (eqHigh, ap::id::eqHigh);
+    attach (eqMid, ap::id::eqMid);
+    attach (eqLow, ap::id::eqLow);
+    attach (amount, ap::id::character);
+    attach (inputKnob, ap::id::inputGain);
+    attach (limiterKnob, ap::id::limiterGain);
+    attach (outputKnob, ap::id::outputGain);
 
     auto toggleParam = [&s] (const char* pid)
     {
@@ -106,10 +106,10 @@ DevilsParticleEditor::DevilsParticleEditor (DevilsParticleProcessor& p) : AudioP
             prm->endChangeGesture();
         }
     };
-    eqPower.onClick = [toggleParam] { toggleParam (dp::id::eqBypass); };
-    amountPower.onClick = [toggleParam] { toggleParam (dp::id::characterBypass); };
-    limiterPower.onClick = [toggleParam] { toggleParam (dp::id::limiterBypass); };
-    for (auto* pid : { dp::id::eqBypass, dp::id::characterBypass, dp::id::limiterBypass, dp::id::character })
+    eqPower.onClick = [toggleParam] { toggleParam (ap::id::eqBypass); };
+    amountPower.onClick = [toggleParam] { toggleParam (ap::id::characterBypass); };
+    limiterPower.onClick = [toggleParam] { toggleParam (ap::id::limiterBypass); };
+    for (auto* pid : { ap::id::eqBypass, ap::id::characterBypass, ap::id::limiterBypass, ap::id::character })
         s.addParameterListener (pid, this);
 
     sidechain.external = proc.sidechainExternal.load();
@@ -123,20 +123,20 @@ DevilsParticleEditor::DevilsParticleEditor (DevilsParticleProcessor& p) : AudioP
     logo.onClick = [this] { showAboutMenu(); };
     presetBox.text = proc.presets.currentName();
 
-    dp::Settings::get().addChangeListener (this);
+    ap::Settings::get().addChangeListener (this);
     updateFromParams();
     setUiScale (proc.uiScale.load());
     startTimerHz (30);
 }
 
-DevilsParticleEditor::~DevilsParticleEditor()
+AntiparticleEditor::~AntiparticleEditor()
 {
-    dp::Settings::get().removeChangeListener (this);
-    for (auto* pid : { dp::id::eqBypass, dp::id::characterBypass, dp::id::limiterBypass, dp::id::character })
+    ap::Settings::get().removeChangeListener (this);
+    for (auto* pid : { ap::id::eqBypass, ap::id::characterBypass, ap::id::limiterBypass, ap::id::character })
         proc.apvts.removeParameterListener (pid, this);
 }
 
-void DevilsParticleEditor::setUiScale (float s)
+void AntiparticleEditor::setUiScale (float s)
 {
     scale = s;
     proc.uiScale = s;
@@ -145,20 +145,20 @@ void DevilsParticleEditor::setUiScale (float s)
     setSize ((int) (designW * s), (int) (designH * s));      // truncated, as the reference (359 px at 100 %)
 }
 
-void DevilsParticleEditor::resized() {}
+void AntiparticleEditor::resized() {}
 
-void DevilsParticleEditor::parameterChanged (const String&, float)
+void AntiparticleEditor::parameterChanged (const String&, float)
 {
-    MessageManager::callAsync ([safe = Component::SafePointer<DevilsParticleEditor> (this)] { if (safe) safe->updateFromParams(); });
+    MessageManager::callAsync ([safe = Component::SafePointer<AntiparticleEditor> (this)] { if (safe) safe->updateFromParams(); });
 }
 
-void DevilsParticleEditor::updateFromParams()
+void AntiparticleEditor::updateFromParams()
 {
     auto v = [this] (const char* pid) { return proc.apvts.getRawParameterValue (pid)->load(); };
-    eqOn = v (dp::id::eqBypass) < 0.5f;
-    characterOn = v (dp::id::characterBypass) < 0.5f;
-    limiterOn = v (dp::id::limiterBypass) < 0.5f;
-    characterValue = v (dp::id::character);
+    eqOn = v (ap::id::eqBypass) < 0.5f;
+    characterOn = v (ap::id::characterBypass) < 0.5f;
+    limiterOn = v (ap::id::limiterBypass) < 0.5f;
+    characterValue = v (ap::id::character);
     eqPower.active = eqOn;
     amountPower.active = characterOn;
     limiterPower.active = limiterOn;
@@ -166,9 +166,9 @@ void DevilsParticleEditor::updateFromParams()
     content.repaint();
 }
 
-void DevilsParticleEditor::changeListenerCallback (ChangeBroadcaster*) { content.repaint(); }
+void AntiparticleEditor::changeListenerCallback (ChangeBroadcaster*) { content.repaint(); }
 
-void DevilsParticleEditor::updateMeter (Meter& m, dp::LevelTap& tap, float dt)
+void AntiparticleEditor::updateMeter (Meter& m, ap::LevelTap& tap, float dt)
 {
     const float pk = toDb (tap.takePeak());
     const float rms = toDb (tap.rms.load());
@@ -183,7 +183,7 @@ void DevilsParticleEditor::updateMeter (Meter& m, dp::LevelTap& tap, float dt)
     }
 }
 
-void DevilsParticleEditor::timerCallback()
+void AntiparticleEditor::timerCallback()
 {
     if (frozen) return;
     const float dt = 1.0f / 30.0f;
@@ -198,23 +198,23 @@ void DevilsParticleEditor::timerCallback()
     lastBlocks = blocks;
     const bool audio = running && jmax (inMeter[0].barDb, inMeter[1].barDb, inMeter[0].peakDb) > -80.0f;
     const float mix = characterOn ? jlimit (0.0f, 1.0f, characterValue / 0.5f) : 0.0f;
-    visualizer.advance (audio, mix, dp::Settings::get().animation(), dp::Settings::get().particleStyle() == dp::Settings::Particles::devily);
+    visualizer.advance (audio, mix, ap::Settings::get().animation(), ap::Settings::get().particleStyle() == ap::Settings::Particles::devily);
     content.repaint();
     amountText.repaint();
 }
 
-void DevilsParticleEditor::setTestLevels (float inDb, float outDb, bool audio)
+void AntiparticleEditor::setTestLevels (float inDb, float outDb, bool audio)
 {
     frozen = true;
     for (auto& m : inMeter) { m.barDb = inDb - 3.0f; m.peakDb = inDb; m.peakHoldDb = inDb; m.rmsHoldDb = inDb - 3.0f; }
     for (auto& m : outMeter) { m.barDb = outDb - 3.0f; m.peakDb = outDb; m.peakHoldDb = outDb; m.rmsHoldDb = outDb - 3.0f; }
     if (audio) visualizer.advance (true, characterOn ? jlimit (0.0f, 1.0f, characterValue / 0.5f) : 0.0f, true,
-                                   dp::Settings::get().particleStyle() == dp::Settings::Particles::devily);
+                                   ap::Settings::get().particleStyle() == ap::Settings::Particles::devily);
     content.repaint();
 }
 
 //==============================================================================
-void DevilsParticleEditor::Content::paint (Graphics& g)
+void AntiparticleEditor::Content::paint (Graphics& g)
 {
     g.fillAll (Colours::black);
     ed.paintTopBar (g);
@@ -222,7 +222,7 @@ void DevilsParticleEditor::Content::paint (Graphics& g)
     ed.paintPlate (g);
 }
 
-void DevilsParticleEditor::Content::mouseDown (const MouseEvent& e)
+void AntiparticleEditor::Content::mouseDown (const MouseEvent& e)
 {
     // clicking a readout resets the held readouts of that meter
     const auto p = e.position;
@@ -235,7 +235,7 @@ void DevilsParticleEditor::Content::mouseDown (const MouseEvent& e)
     if (ed.dropList != nullptr) ed.closePopups();
 }
 
-void DevilsParticleEditor::paintTopBar (Graphics& g)
+void AntiparticleEditor::paintTopBar (Graphics& g)
 {
     g.setColour (theme::topBar);
     g.fillRect (0.0f, 0.0f, designW, 30.5f);
@@ -246,7 +246,7 @@ void DevilsParticleEditor::paintTopBar (Graphics& g)
     theme::textAt (g, "UI Scale", 747.5f, 19.5f);
 }
 
-void DevilsParticleEditor::paintPanel (Graphics& g)
+void AntiparticleEditor::paintPanel (Graphics& g)
 {
     const Rectangle<float> panel (1.5f, panelTop, designW - 3.0f, panelBottom - panelTop);
     g.setColour (theme::panel);
@@ -292,7 +292,7 @@ void DevilsParticleEditor::paintPanel (Graphics& g)
     paintLimiter (g);
 }
 
-void DevilsParticleEditor::paintIoMeter (Graphics& g, float x0, const Meter (&m)[2], bool target)
+void AntiparticleEditor::paintIoMeter (Graphics& g, float x0, const Meter (&m)[2], bool target)
 {
     const float centres[2] { x0 + 28.75f, x0 + 65.25f };
     g.setFont (theme::font (12.0f));
@@ -359,7 +359,7 @@ void DevilsParticleEditor::paintIoMeter (Graphics& g, float x0, const Meter (&m)
     }
 }
 
-void DevilsParticleEditor::paintAmountText (Graphics& g)
+void AntiparticleEditor::paintAmountText (Graphics& g)
 {
     g.setColour (characterOn ? theme::mint : theme::plateText);
     g.setFont (theme::font (16.75f));
@@ -368,7 +368,7 @@ void DevilsParticleEditor::paintAmountText (Graphics& g)
     theme::textAt (g, String (roundToInt (characterValue * 200.0f)) + "%", 363.0f, 159.5f);
 }
 
-void DevilsParticleEditor::paintGainReduction (Graphics& g)
+void AntiparticleEditor::paintGainReduction (Graphics& g)
 {
     const float meterY[3] { 86.0f, 151.0f, 216.0f };
     const float targetX[3] { 681.0f, 621.0f, 653.0f };
@@ -411,7 +411,7 @@ void DevilsParticleEditor::paintGainReduction (Graphics& g)
     }
 }
 
-void DevilsParticleEditor::paintLimiter (Graphics& g)
+void AntiparticleEditor::paintLimiter (Graphics& g)
 {
     const float centres[2] { 737.5f, 774.0f };
     g.setFont (theme::font (12.0f));
@@ -427,7 +427,7 @@ void DevilsParticleEditor::paintLimiter (Graphics& g)
     }
 }
 
-void DevilsParticleEditor::paintPlate (Graphics& g)
+void AntiparticleEditor::paintPlate (Graphics& g)
 {
     // the plate: a separate rounded panel (measured: x 0.5 .. 887.5, y 266.5 .. 358.75, corner radius 11) on a dark
     // ground, leather grain at the physical pixel (std ~3.9 grey levels, embossed: lag-1 correlation ~ -0.3)
@@ -484,7 +484,7 @@ void DevilsParticleEditor::paintPlate (Graphics& g)
                     if (d < -1.0f || d >= reach) continue;
                     const float a = std::atan2 (dx, -dy);                               // from up, clockwise
                     const float fade = jlimit (0.0f, 1.0f, (reach - d) / 15.0f);       // soft end, no ring
-                    const float f = 1.0f - (1.0f - dp::knobshadow::factor (jmax (0.0f, d), a)) * fade;
+                    const float f = 1.0f - (1.0f - ap::knobshadow::factor (jmax (0.0f, d), a)) * fade;
                     bd.setPixelColour (x, y, Colours::black.withAlpha (jlimit (0.0f, 1.0f, 1.0f - f)));
                 }
             knobShadowScale = dpx;
@@ -524,7 +524,7 @@ void DevilsParticleEditor::paintPlate (Graphics& g)
     }
 
     // lettering, spaced like the reference's sixteen glyph slots
-    const String word = "DEVIL'S PARTICLE";
+    const String word = "THE ANTIPARTICLE";
     g.setFont (theme::font (9.5f));
     for (int i = 0; i < word.length(); ++i)
     {
@@ -538,7 +538,7 @@ void DevilsParticleEditor::paintPlate (Graphics& g)
 }
 
 //==============================================================================
-void DevilsParticleEditor::closePopups()
+void AntiparticleEditor::closePopups()
 {
     if (dropList != nullptr) content.removeChildComponent (dropList.get());
     dropList.reset();
@@ -546,11 +546,11 @@ void DevilsParticleEditor::closePopups()
     presetBox.repaint(); scaleBox.repaint();
 }
 
-void DevilsParticleEditor::showPresetList()
+void AntiparticleEditor::showPresetList()
 {
     closePopups();
     const auto all = proc.presets.list();
-    std::vector<dp::DropList::Item> items { { "factory", true } };
+    std::vector<ap::DropList::Item> items { { "factory", true } };
     std::vector<int> map { -1 };
     for (int i = 0; i < (int) all.size(); ++i)
         if (all[(size_t) i].factory) { items.push_back ({ all[(size_t) i].name, false, all[(size_t) i].name == proc.presets.currentName() }); map.push_back (i); }
@@ -559,7 +559,7 @@ void DevilsParticleEditor::showPresetList()
     for (int i = 0; i < (int) all.size(); ++i)
         if (! all[(size_t) i].factory) { items.push_back ({ all[(size_t) i].name }); map.push_back (i); anyUser = true; }
     if (! anyUser) { items.push_back ({ "-" }); map.push_back (-1); }
-    dropList = std::make_unique<dp::DropList>();
+    dropList = std::make_unique<ap::DropList>();
     dropList->setItems (items, 24.0f, true);
     dropList->onPick = [this, all, map] (int row)
     {
@@ -572,14 +572,14 @@ void DevilsParticleEditor::showPresetList()
     content.addAndMakeVisible (*dropList);
 }
 
-void DevilsParticleEditor::showScaleList()
+void AntiparticleEditor::showScaleList()
 {
     closePopups();
-    std::vector<dp::DropList::Item> items;
+    std::vector<ap::DropList::Item> items;
     for (float s : scales) items.push_back ({ String (roundToInt (s * 100.0f)) + "%", false, std::abs (s - scale) < 0.01f });
-    dropList = std::make_unique<dp::DropList>();
+    dropList = std::make_unique<ap::DropList>();
     dropList->setItems (items, 24.0f, false);
-    dropList->onPick = [safe = Component::SafePointer<DevilsParticleEditor> (this)] (int row)
+    dropList->onPick = [safe = Component::SafePointer<AntiparticleEditor> (this)] (int row)
     {
         const float s = scales[row];
         safe->closePopups();
@@ -593,7 +593,7 @@ void DevilsParticleEditor::showScaleList()
 namespace
 {
 // settings page: oversampling ratio, I/O metering, particle animation (layout measured on the reference)
-class SettingsDialog : public dp::Dialog
+class SettingsDialog : public ap::Dialog
 {
 public:
     // the reference's three rows plus ours: particle style (godly / devily)
@@ -601,7 +601,7 @@ public:
     void paint (Graphics& g) override
     {
         Dialog::paint (g);
-        auto& st = dp::Settings::get();
+        auto& st = ap::Settings::get();
         g.setColour (Colour (0xff050505));
         g.fillRect (box.getX(), 145.0f, box.getWidth(), 1.0f);
         g.fillRect (box.getX(), 236.5f, box.getWidth(), 1.0f);
@@ -617,23 +617,23 @@ public:
         for (int i = 0; i < 4; ++i) if (ratios[i] == st.oversampling()) sel = i;
         segments (g, { 454.0f, 101.5f, 167.5f, 23.0f }, { "1", "2", "4", "8" }, sel);
         segments (g, { 454.0f, 257.5f, 84.0f, 23.0f }, { "ON", "OFF" }, st.animation() ? 0 : 1);
-        segments (g, { 454.0f, 309.0f, 128.0f, 23.0f }, { "GODLY", "DEVILY" }, st.particleStyle() == dp::Settings::Particles::devily ? 1 : 0);
-        radio (g, 178.0f, "RMS & Peak", st.meterMode() == dp::Settings::Meter::rmsPeak);
-        radio (g, 204.0f, "Short-term LUFS & Peak", st.meterMode() == dp::Settings::Meter::lufsPeak);
+        segments (g, { 454.0f, 309.0f, 128.0f, 23.0f }, { "GODLY", "DEVILY" }, st.particleStyle() == ap::Settings::Particles::devily ? 1 : 0);
+        radio (g, 178.0f, "RMS & Peak", st.meterMode() == ap::Settings::Meter::rmsPeak);
+        radio (g, 204.0f, "Short-term LUFS & Peak", st.meterMode() == ap::Settings::Meter::lufsPeak);
     }
     void mouseDown (const MouseEvent& e) override
     {
-        auto& st = dp::Settings::get();
+        auto& st = ap::Settings::get();
         const auto p = e.position;
         if (Rectangle<float> (454.0f, 101.5f, 167.5f, 23.0f).contains (p)) { const int r[4] { 1, 2, 4, 8 }; st.setOversampling (r[jlimit (0, 3, (int) ((p.x - 454.0f) / (167.5f / 4.0f)))]); repaint(); return; }
         if (Rectangle<float> (454.0f, 257.5f, 84.0f, 23.0f).contains (p)) { st.setAnimation (p.x < 496.0f); repaint(); return; }
         if (Rectangle<float> (454.0f, 309.0f, 128.0f, 23.0f).contains (p))
         {
-            st.setParticleStyle (p.x < 518.0f ? dp::Settings::Particles::godly : dp::Settings::Particles::devily);
+            st.setParticleStyle (p.x < 518.0f ? ap::Settings::Particles::godly : ap::Settings::Particles::devily);
             repaint(); return;
         }
-        if (Rectangle<float> (450.0f, 168.0f, 190.0f, 20.0f).contains (p)) { st.setMeterMode (dp::Settings::Meter::rmsPeak); repaint(); return; }
-        if (Rectangle<float> (450.0f, 194.0f, 190.0f, 20.0f).contains (p)) { st.setMeterMode (dp::Settings::Meter::lufsPeak); repaint(); return; }
+        if (Rectangle<float> (450.0f, 168.0f, 190.0f, 20.0f).contains (p)) { st.setMeterMode (ap::Settings::Meter::rmsPeak); repaint(); return; }
+        if (Rectangle<float> (450.0f, 194.0f, 190.0f, 20.0f).contains (p)) { st.setMeterMode (ap::Settings::Meter::lufsPeak); repaint(); return; }
         Dialog::mouseDown (e);
     }
 private:
@@ -672,10 +672,10 @@ private:
 };
 
 // save preset: a name field and save / cancel
-class SaveDialog : public dp::Dialog
+class SaveDialog : public ap::Dialog
 {
 public:
-    SaveDialog (dp::PresetManager& pm, std::function<void()> saved)
+    SaveDialog (ap::PresetManager& pm, std::function<void()> saved)
         : Dialog ("save preset", { 240.0f, 74.0f, 408.0f, 209.0f }, true), presets (pm), onSaved (std::move (saved))
     {
         addAndMakeVisible (name);
@@ -725,18 +725,18 @@ private:
         g.drawText (t, r, Justification::centred, false);
     }
     const Rectangle<float> saveArea { 297.0f, 230.5f, 179.0f, 35.5f }, cancelArea { 501.0f, 230.5f, 89.5f, 35.5f };
-    dp::PresetManager& presets;
+    ap::PresetManager& presets;
     std::function<void()> onSaved;
     TextEditor name;
 };
 }
 
-void DevilsParticleEditor::showSettings()
+void AntiparticleEditor::showSettings()
 {
     closePopups();
     auto d = std::make_unique<SettingsDialog>();
     d->setBounds (0, 0, (int) std::ceil (designW), (int) std::ceil (designH));
-    d->onClose = [safe = Component::SafePointer<DevilsParticleEditor> (this)]
+    d->onClose = [safe = Component::SafePointer<AntiparticleEditor> (this)]
     {
         MessageManager::callAsync ([safe] { if (safe != nullptr) { safe->content.removeChildComponent (safe->dialog.get()); safe->dialog.reset(); } });
     };
@@ -744,12 +744,12 @@ void DevilsParticleEditor::showSettings()
     dialog = std::move (d);
 }
 
-void DevilsParticleEditor::showSavePreset()
+void AntiparticleEditor::showSavePreset()
 {
     closePopups();
     auto d = std::make_unique<SaveDialog> (proc.presets, [this] { presetBox.text = proc.presets.currentName(); presetBox.repaint(); });
     d->setBounds (0, 0, (int) std::ceil (designW), (int) std::ceil (designH));
-    d->onClose = [safe = Component::SafePointer<DevilsParticleEditor> (this)]
+    d->onClose = [safe = Component::SafePointer<AntiparticleEditor> (this)]
     {
         MessageManager::callAsync ([safe] { if (safe != nullptr) { safe->content.removeChildComponent (safe->dialog.get()); safe->dialog.reset(); } });
     };
@@ -759,12 +759,12 @@ void DevilsParticleEditor::showSavePreset()
     raw->focusName();
 }
 
-void DevilsParticleEditor::showDialog (std::unique_ptr<dp::Dialog> d)
+void AntiparticleEditor::showDialog (std::unique_ptr<ap::Dialog> d)
 {
     closePopups();
     if (dialog != nullptr) { content.removeChildComponent (dialog.get()); dialog.reset(); }
     d->setBounds (0, 0, (int) std::ceil (designW), (int) std::ceil (designH));
-    d->onClose = [safe = Component::SafePointer<DevilsParticleEditor> (this)]
+    d->onClose = [safe = Component::SafePointer<AntiparticleEditor> (this)]
     {
         MessageManager::callAsync ([safe] { if (safe != nullptr) { safe->content.removeChildComponent (safe->dialog.get()); safe->dialog.reset(); } });
     };
@@ -773,14 +773,14 @@ void DevilsParticleEditor::showDialog (std::unique_ptr<dp::Dialog> d)
 }
 
 // the logo's menu, like Chan Sampler's (version, About, repository, issues, licence), drawn like the preset list
-void DevilsParticleEditor::showAboutMenu()
+void AntiparticleEditor::showAboutMenu()
 {
     if (dropList != nullptr) { closePopups(); return; }
     const String version = JucePlugin_VersionString;
-    dropList = std::make_unique<dp::DropList>();
-    dropList->setItems ({ { "Devil's Particle v" + version, true }, { "About Devil's Particle" }, { "Devil's Particle on GitHub" },
+    dropList = std::make_unique<ap::DropList>();
+    dropList->setItems ({ { "The Antiparticle v" + version, true }, { "About The Antiparticle" }, { "The Antiparticle on GitHub" },
                           { "Report an Issue" }, { "License (AGPL-3.0)" } }, 24.0f, true);
-    dropList->onPick = [safe = Component::SafePointer<DevilsParticleEditor> (this), version] (int row)
+    dropList->onPick = [safe = Component::SafePointer<AntiparticleEditor> (this), version] (int row)
     {
         if (safe == nullptr) return;
         safe->closePopups();
@@ -788,7 +788,7 @@ void DevilsParticleEditor::showAboutMenu()
         {
             const auto wrapper = safe->proc.wrapperType;
             const String format = AudioProcessor::getWrapperTypeDescription (wrapper);
-            safe->showDialog (std::make_unique<dp::InfoDialog> ("about Devil's Particle", std::vector<std::pair<String, String>> {
+            safe->showDialog (std::make_unique<ap::InfoDialog> ("about The Antiparticle", std::vector<std::pair<String, String>> {
                 { "Version", version + (wrapper == AudioProcessor::wrapperType_Undefined ? String() : " (" + format + ")") },
                 { {}, {} },
                 { "What it is", "An open-source mix-bus processor modelled on and measured against Cradle's The God Particle" },
