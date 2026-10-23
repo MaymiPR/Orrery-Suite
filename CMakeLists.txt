@@ -90,6 +90,11 @@ if(AP_TOOLS)
     target_link_libraries(ParamDump PRIVATE
         juce::juce_audio_processors juce::juce_gui_basics
         juce::juce_recommended_config_flags)
+    # offline renders through any VST3 (the measurements and null tests; tools/RefRender.cpp)
+    juce_add_console_app(RefRender PRODUCT_NAME "RefRender")
+    target_sources(RefRender PRIVATE tools/RefRender.cpp)
+    target_compile_definitions(RefRender PRIVATE JUCE_PLUGINHOST_VST3=1 JUCE_WEB_BROWSER=0 JUCE_USE_CURL=0)
+    target_link_libraries(RefRender PRIVATE juce::juce_audio_processors juce::juce_recommended_config_flags)
     if(WIN32)
         # films / screenshots the reference editor while audio plays (tools/RefCapture.cpp)
         juce_add_gui_app(RefCapture PRODUCT_NAME "RefCapture")

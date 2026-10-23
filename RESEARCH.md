@@ -152,6 +152,8 @@ names, the Cradle logo, the "THE GOD PARTICLE" lettering and all shipped images 
 with Cradle.
 
 ## Open questions for Phase 3 (measurement)
+Answered by the Phase 3 measurements in [MEASUREMENTS.md](MEASUREMENTS.md); what is still open is listed in its section 8.
+
 1. EQ: band types (shelf / bell / tilt), corner frequencies and Q; does each knob scale a fixed curve (macro)?
 2. Character: crossover frequencies and slopes; per-band threshold / ratio / knee / attack / release; peak or RMS
    detector; how `Amount` maps onto them (0 … 200 %: threshold, ratio, mix?); any saturation / harmonic stage
