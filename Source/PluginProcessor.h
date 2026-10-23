@@ -1,0 +1,72 @@
+#pragma once
+#include <juce_audio_processors/juce_audio_processors.h>
+#include <atomic>
+#include "Params.h"
+#include "Presets.h"
+
+namespace dp
+{
+// Levels the editor reads (audio thread writes, message thread reads and resets).
+struct LevelTap
+{
+    std::atomic<float> peak { 0.0f };     // highest sample since the editor last took it (linear)
+    std::atomic<float> rms { 0.0f };      // latest RMS (linear, AES: a sine reads its peak)
+    void push (float blockPeak, float blockRms)
+    {
+        float p = peak.load();
+        while (blockPeak > p && ! peak.compare_exchange_weak (p, blockPeak)) {}
+        rms.store (blockRms);
+    }
+    float takePeak() { return peak.exchange (0.0f); }
+};
+}
+
+class DevilsParticleProcessor : public juce::AudioProcessor
+{
+public:
+    DevilsParticleProcessor();
+
+    void prepareToPlay (double, int) override;
+    void releaseResources() override {}
+    bool isBusesLayoutSupported (const BusesLayout&) const override;
+    void processBlock (juce::AudioBuffer<float>&, juce::MidiBuffer&) override;
+    juce::AudioProcessorParameter* getBypassParameter() const override { return bypassParam; }
+
+    juce::AudioProcessorEditor* createEditor() override;
+    bool hasEditor() const override { return true; }
+    const juce::String getName() const override { return JucePlugin_Name; }
+    bool acceptsMidi() const override { return false; }
+    bool producesMidi() const override { return false; }
+    double getTailLengthSeconds() const override { return 0.0; }
+    int getNumPrograms() override { return 1; }
+    int getCurrentProgram() override { return 0; }
+    void setCurrentProgram (int) override {}
+    const juce::String getProgramName (int) override { return {}; }
+    void changeProgramName (int, const juce::String&) override {}
+    void getStateInformation (juce::MemoryBlock&) override;
+    void setStateInformation (const void*, int) override;
+
+    juce::AudioProcessorValueTreeState apvts;
+    dp::PresetManager presets { apvts };
+
+    // host-only state (not part of presets, as in the reference): side-chain source and the editor's zoom
+    std::atomic<bool> sidechainExternal { false };
+    std::atomic<float> uiScale { 1.0f };
+
+    // meters: input / output L R, multiband gain reduction (high, mid, low) and limiter L R, positive dB
+    dp::LevelTap inL, inR, outL, outR;
+    std::atomic<float> bandGr[3] { 0.0f, 0.0f, 0.0f };
+    std::atomic<float> limGr[2] { 0.0f, 0.0f };
+    std::atomic<int> blocksProcessed { 0 };
+
+private:
+    juce::AudioProcessorParameter* bypassParam = nullptr;
+    std::atomic<float>* inputGain = nullptr;
+    std::atomic<float>* outputGain = nullptr;
+    juce::SmoothedValue<float> inGainSmoothed, outGainSmoothed;
+    float rmsState[4] {};           // mean-square followers (in L, in R, out L, out R)
+    float rmsCoef = 0.0f;
+    void measure (const juce::AudioBuffer<float>&, int ch0, dp::LevelTap&, dp::LevelTap&, float* state);
+
+    JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR (DevilsParticleProcessor)
+};

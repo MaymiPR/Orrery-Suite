@@ -163,3 +163,32 @@ with Cradle.
 6. Meters: peak / RMS / short-term LUFS ballistics, GR meter ballistics, target positions.
 7. Where the 1.2.2 settings (oversampling, meter mode) are stored, so the harness can render at a known setting.
 8. Side-chain EXT: confirm only the character dynamics follow it.
+
+## Phase 2: GUI measurements (L5 + `tools/RefCapture`, 200 % screenshots)
+
+All numbers in design pixels (= pixels at 100 %); the reference renders vector-sharp at 200 %, so everything was
+measured there and halved. Screenshots of the reference stay in `reference/` (git-ignored); our editor is compared
+with `DevilsParticleSnapshot` + `tools/ui_compare.py` (mean absolute RGB difference over the window: 8.4 / 255 at
+200 %, most of it in the animated / photographic parts and in anti-aliased text edges).
+
+| Element | Measured |
+|---|---|
+| Window | 888 × 359.5 (heights truncate: 359 at 100 %, 719 at 200 %); UI Scale 50 / 75 / 85 / 100 / 125 / 150 / 200 %, saved per instance |
+| Top bar | 0 … 30.5, #050607. Text #E7F1F4, 12 px. Preset box (176, 3, 193 × 24.5) fill #121211, 1 px #7F7E7A; ← → and save boxes 24 × 24.5 with a #E7F1F4 frame; INT/EXT (560, 3, 85 × 24.5), selected half filled #E7F1F4; UI Scale box (794, 3, 66 × 24.5); gear #7F7E7A |
+| Main panel | rounded outline r ≈ 15, 2 px #C0C0C0, black inside; column dividers at x 89 / 176 / 559 / 711 / 798, 1 px #3C3C3C |
+| Mint | #8EDBC4: readouts, labels, power buttons (72 × 24.5, filled = on, 1 px outline = bypassed) |
+| I/O meters | readouts at x 28.75 / 65.25 (input) and 824.75 / 861.25 (output), peak baseline 56.5, RMS 79.5. 40 LEDs per channel, 8 × 1.5 on a 4 px pitch, bottom LED at y 248; **LED k lights at −58.5 + 1.5 k dB** (level ramp). Green #00824B bar = RMS (a sine reads 3 dB under its peak), one mint LED = peak. Input target: brackets (15 / 71, 103, 8 × 20.5) + line pair (35, 103 / 122, 24 wide), #00824B, solid while the level sits in it |
+| EQ | knobs R 19.74 at (133.73, 90.69 / 155.69 / 220.69); labels 11.25 px at baselines 125.5 / 190.5 / 255.5; labels turn #BCBABB while the EQ is bypassed |
+| Amount | knob R 50.6 at (293.52, 148.51); "amount" 16.75 px at (364, 120.5); value 40 px-class digits at baseline 159.5, 0 … 200 %; text #BCBABB while bypassed |
+| Gain reduction | labels at x 571, values right-aligned at 701.5 (same baselines as the EQ); meters = 1 × 8.5 bars on a 4 px pitch growing left from x 700 at y 86 / 151 / 216; targets 19 wide at x 681 (high), 621 (mid), 653 (low); labels, values and targets #808080 while the character section is bypassed |
+| Limiter | readouts at 737.5 / 774 (baseline 80), mint dashes at y 90; #808080 while bypassed |
+| Visualiser | racetrack centred (367.75, 148.25), straight half-length 75.25, pill r 50.5 (1 px #A6A3A4), glass ring to r 113: body #030303, two white crescents on the left (r 98 and 84.5, 190 … 290°, peak ≈ 150 grey), cold band lower right. Particles: on at once when audio starts, off 0.55 s after it stops (0.35 s fade); colour mix = amount / 100 % (white at 0 % or bypassed); "particle animation" off = static frame |
+| Plate | from y 265.5, #46453F with fine grain; labels #BCBABB 12 px at baseline 280 (centres 46 / 132.25 / 636.75 / 755 / 841.75); knobs R 24.17 at y 312.86, long soft shadows to the lower **left** (light from the upper right); grille 19 staggered rows on a 24 px pitch, bar length 21 → 7 |
+| Knobs | brushed metal, light fixed, pointer turns −135 … +135°. Lighting fitted per knob size (8-harmonic angle series × radial profile, rim as 6 bands) → `Source/ui/KnobModel.h` (numbers only) |
+| Mouse | vertical drag: 1 % of the range per design pixel (full range in 100 px at every UI scale); Ctrl: same speed; Shift: fine; double-click or Alt-click: default value (RefCapture drag scripts) |
+| Settings dialog | (234, 50.5, 420 × 255.5); oversampling 1 / 2 / 4 / 8, I/O metering RMS & Peak / Short-term LUFS & Peak, particle animation ON / OFF; defaults 1, RMS & Peak, ON; global (all instances) |
+| Save dialog | (240, 74, 408 × 209): "preset name" field, save / cancel |
+| Preset list | FACTORY / USER captions (spaced capitals, #C8785A), factory "default", user presets by name |
+
+Font: Whyte is replaced by **Instrument Sans** Regular (SIL OFL, `resources/fonts`), picked by comparing rendered
+words ("amount", "Sidechain", "high", "Preset") with the reference: closest widths and shapes of five candidates.
