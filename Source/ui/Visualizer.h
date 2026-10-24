@@ -10,8 +10,11 @@ namespace ap
 //    (the reference's sprite repeats every second and does not restart with the audio), ~290 sparks on screen,
 //    drifting counter-clockwise at ~95 px/s with a large random scatter (median speed ~160 px/s), lifetimes mostly
 //    under 0.2 s, the outer ones pulled inwards;
-//  - on at once when audio starts; ~0.45 s after it stops the sparks dim out in ~0.26 s and the glow in ~0.40 s; white at amount 0 % or with the
-//    character section bypassed, blending linearly to full colour at 100 %.
+//  - driven by the input's level (after the input gain): a peak meter that jumps up at once and falls 90 dB/s. Full
+//    brightness down to -40 dBFS, dark at -75 (measured with sine and noise staircases, ramps and stops from five
+//    levels): with v = (meter + 75) / 35, the glow is v^1.6 and the sparks ((v - 0.4) / 0.6)^0.7. So after a stop
+//    from -6 dBFS the light holds ~0.4 s and fades in ~0.4 s, and a quiet ending fades with the music. White at
+//    amount 0 % or with the character section bypassed, blending linearly to full colour at 100 %.
 //  - our own "antiparticle" style (settings page): bubble-chamber pair creation and annihilation, a 3 s loop.
 // Drawn in editor design coordinates (the component covers the centre column).
 class Visualizer : public juce::Component
@@ -20,9 +23,10 @@ public:
     Visualizer();
     void paint (juce::Graphics&) override;
 
-    // called at 30 Hz by the editor: audio present this frame, colour mix 0 (white / ash) .. 1 (colour), animation
-    // on/off, and the style: the god particle (the reference's sparks) or the antiparticle (ours)
-    void advance (bool audio, float colourMix, bool animate, bool antiparticle = false);
+    // called at 30 Hz by the editor: the input's sample peak this frame (dBFS; -200 when no audio is processed), colour
+    // mix 0 (white / ash) .. 1 (colour), animation on/off, and the style: the god particle (the reference's sparks) or
+    // the antiparticle (ours)
+    void advance (float inputPeakDb, float colourMix, bool animate, bool antiparticle = false);
 
     // racetrack geometry (editor design px): the glass, and the amount pill on it (not quite concentric: measured)
     static constexpr float cx = 367.75f, cy = 148.25f, halfLength = 75.25f;
@@ -46,7 +50,8 @@ private:
     void paintAntiparticle (juce::Graphics&);
     float level = 0.0f;           // the sparks' visibility 0 .. 1
     float glow = 0.0f;            // the lit glass's visibility 0 .. 1 (fades slower than the sparks)
-    double silentFor = 10.0;      // seconds since audio was last present
+    float meterDb = -200.0f;      // the input peak meter that drives both (dBFS)
+    double lastAdvance = 0.0;     // when advance() last ran (s)
     float colourMix = 1.0f;
     double clock = 0.0;           // free-running animation clock (s)
     juce::Image frame, lit, litGrey, litViolet;  // the glass unlit / lit (colour, white, antiparticle violet), per size

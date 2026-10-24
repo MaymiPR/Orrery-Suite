@@ -123,23 +123,26 @@ Visualizer::Visualizer()
     }
 }
 
-void Visualizer::advance (bool audio, float mix, bool animate, bool antiparticle)
+void Visualizer::advance (float inputPeakDb, float mix, bool animate, bool antiparticle)
 {
     antiStyle = antiparticle;
     const float dt = 1.0f / 30.0f;
     colourMix = mix;
-    if (audio) silentFor = 0.0; else silentFor += dt;
-    // measured through abrupt stops (four per film): on at once; after the audio stops everything holds ~0.45 s (0.39
-    // here: detection adds a frame), then two layers fade at different speeds: the sparks dim out linearly in ~0.26 s,
-    // the glass glow follows (1 - u)^1.6 over ~0.40 s (quick at first, soft tail)
+    // the reference's light follows a peak meter on the input: up at once, down 90 dB/s. Both layers are functions of
+    // v = (meter + 75) / 35: the glass glow v^1.6 (quick at first, soft tail), the sparks ((v - 0.4) / 0.6)^0.7 (they
+    // go out first: after a stop they last ~0.25 s of the glow's ~0.4 s; steady at -55 dBFS about half are lit)
+    // (it falls with the time that really passed: a busy message thread must not stretch the fade)
+    const double now = juce::Time::getMillisecondCounterHiRes() * 0.001;
+    const float elapsed = lastAdvance > 0.0 ? (float) juce::jlimit (0.0, 0.25, now - lastAdvance) : dt;
+    lastAdvance = now;
+    meterDb = jmax (inputPeakDb, jmax (-200.0f, meterDb - 90.0f * elapsed));
+    const float v = jlimit (0.0f, 1.0f, (meterDb + 75.0f) / 35.0f);
     const bool wasOn = level > 0.0f || glow > 0.0f;
     if (! animate) { level = glow = 0.0f; }
-    else if (audio) { level = glow = 1.0f; }
     else
     {
-        const float u = (float) silentFor - 0.39f;
-        level = u <= 0.0f ? 1.0f : jmax (0.0f, 1.0f - u / 0.26f);
-        glow = u <= 0.0f ? 1.0f : std::pow (jmax (0.0f, 1.0f - u / 0.40f), 1.6f);
+        level = std::pow (jlimit (0.0f, 1.0f, (v - 0.4f) / 0.6f), 0.7f);
+        glow = std::pow (v, 1.6f);
     }
     clock += dt;                                                       // free-running, like the reference's loop
     if (wasOn || level > 0.0f || glow > 0.0f) repaint();

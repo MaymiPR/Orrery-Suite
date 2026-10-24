@@ -406,6 +406,22 @@ made the music objective slightly worse. At 100 % (fitted with `--relative`) it 
 | Character only, pink −6, 100 % | −42.9 | −42.3 |
 | Limiter at +12 dB, pink −10, full chain | −41.2 | −43.1 |
 
+**Fitted on a mastered track too** (`fit_music.py --track`, `nulltest/track.py`). A 70 s future-house demo track
+(44.1 kHz, about −10 dBFS RMS) nulled only at −40.3 dB with the default settings and −42.1 dB with the limiter
+bypassed. 84 % of the character section's residual was in the high band (−34 dB relative to that band), at 44.1 and
+48 kHz alike, and the same with the irregular host blocks FL Studio sends. The band's gain was right on average
+(±0.1 dB per 20 ms frame), so the difference is in how fast the detector moves. Two 6 s excerpts of the track
+(30 s and 44 s) were added to the program set, and the 100 % and 200 % nodes refitted. At 100 % the knee is softer
+again (1.9 dB, ratio 2.2, release 138 ms).
+
+| Case | Before | After |
+|---|---|---|
+| The track, defaults (44.1 kHz, whole track) | −40.3 dB | −43.0 dB |
+| The track, limiter bypassed | −42.1 | −45.5 |
+| The track, character 200 % | −37.1 | −38.0 |
+| Full chain, drums peaking at −1 dBFS | −50.0 | −56.5 |
+| Character only, pink −10, 100 % | −47.7 | −44.6 |
+
 ## 4. Limiter (`measure_limiter.py`)
 
 | Property | Measured |
@@ -656,8 +672,10 @@ null like 512); the limiter's on-sample level (4.1).
 **Still open:**
 - **The high band on loud material.** Its steady gain curve matches (3.14: within 0.02 dB from −18 to 0 dBFS), so
   what is left is the detector's timing. Its probes (tones up to +4 dBFS, band noise) still null only to
-  −25 … −45 dB at 100 % and above. Loud dense material is the weakest case: pink noise at −6 dBFS RMS −40.5 dB, drums
-  peaking at −1 dBFS −50.0 dB, and at 44.1 kHz −38.6 / −40.8 dB (the laws are fitted at 48 kHz).
+  −25 … −45 dB at 100 % and above. Loud dense material is the weakest case: a mastered track −43.0 dB, pink noise at
+  −6 dBFS RMS −40.4 dB, drums peaking at −1 dBFS −56.5 dB. At 44.1 kHz drums −1 drop to −41.4 dB and pink −6 to
+  −38.4 (the laws are fitted at 48 kHz; the track is about the same at both rates).
+- **The limiter at 44.1 kHz** nulls the track to −46.3 dB on its own, against −52.9 dB at 48 kHz.
 - **Limiter.** Dense, continuous limiting (pink noise driven 5 dB into it) nulls to −47.5 dB; isolated peaks and
   drum hits match to −62 dB. The differences are near-ties in the inter-sample level; the reference's interpolator
   is not a linear 16- or 32-tap table near Nyquist (4.1). At 96 kHz one drum event sits on such a tie.

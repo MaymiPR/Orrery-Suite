@@ -40,25 +40,26 @@ def _stereo(x):
     return x
 
 
-def _key(j, plugin, fs, block):
+def _key(j, plugin, fs, block, vary=False):
     h = hashlib.sha1(_stereo(j['x']).tobytes())
     for k in ('params', 'norm', 'auto', 'raw', 'reset', 'state'): h.update(repr((k, j.get(k))).encode())
     if j.get('salt'): h.update(repr(('salt', j['salt'])).encode())     # global state a job can't carry (oversampling)
     if j.get('sc') is not None: h.update(_stereo(j['sc']).tobytes())
-    h.update(repr((plugin, fs, block)).encode())
+    h.update(repr((plugin, fs, block) + (('vary',) if vary else ())).encode())
     return h.hexdigest()
 
 
-def render_many(jobs, plugin='ref', fs=FS, block=512, cache=False, tuning=None):
+def render_many(jobs, plugin='ref', fs=FS, block=512, cache=False, tuning=None, vary=False):
     """jobs: dicts with x, and optional params / norm / auto / raw / sc / state / reset. Returns a list of (2, n).
     cache=True keeps each output in renders/cache (keyed by the input and settings) so analyses can be re-run without
-    rendering again; jobs with reset=False are never cached (they depend on the previous job)."""
+    rendering again; jobs with reset=False are never cached (they depend on the previous job). vary=True (reference and
+    VST3 only): irregular blocks of 1 ... block samples, as FL Studio delivers them."""
     if cache and plugin != 'model':          # our processor changes with every build / tuning: never cached
         os.makedirs(CACHE, exist_ok=True)
-        keys = [None if any(j.get('reset') is False for j in jobs) else _key(j, plugin, fs, block) for j in jobs]
+        keys = [None if any(j.get('reset') is False for j in jobs) else _key(j, plugin, fs, block, vary) for j in jobs]
         have = {i: np.load(os.path.join(CACHE, k + '.npy')) for i, k in enumerate(keys) if k and os.path.exists(os.path.join(CACHE, k + '.npy'))}
         todo = [i for i in range(len(jobs)) if i not in have]
-        new = render_many([jobs[i] for i in todo], plugin, fs, block) if todo else []
+        new = render_many([jobs[i] for i in todo], plugin, fs, block, vary=vary) if todo else []
         for i, y in zip(todo, new):
             have[i] = y
             if keys[i]: np.save(os.path.join(CACHE, keys[i] + '.npy'), y)
@@ -88,7 +89,7 @@ def render_many(jobs, plugin='ref', fs=FS, block=512, cache=False, tuning=None):
         cmd = [APEXE, jobfile, f'fs={fs}', f'block={block}'] + ([f'tuning={tuning}'] if tuning else [])
     else:
         path, name = PLUGINS[plugin]
-        cmd = [EXE, path, name, jobfile, f'fs={fs}', f'block={block}']
+        cmd = [EXE, path, name, jobfile, f'fs={fs}', f'block={block}'] + (['vary=1'] if vary else [])
     r = subprocess.run(cmd, capture_output=True, text=True)
     if 'no parameter' in r.stdout or 'unknown tuning' in r.stdout: raise RuntimeError(r.stdout)
     res = []

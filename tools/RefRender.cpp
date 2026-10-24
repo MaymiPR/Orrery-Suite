@@ -1,5 +1,6 @@
 // RefRender: offline host for the measurements (Phase 3). Renders stereo float32 files through a VST3.
-//   RefRender plugin.vst3 "name" jobs.txt [fs=48000] [block=512]
+//   RefRender plugin.vst3 "name" jobs.txt [fs=48000] [block=512] [vary=1]   (vary: irregular blocks of 1 ... block
+//   samples from a fixed seed, as hosts like FL Studio deliver them)
 // jobs.txt: one render per line:  in.f32 out.f32 [key=value ...]
 //   param:Name=text      set a parameter by its displayed value (e.g. param:Character=0.25)
 //   norm:Name=0.5        set a parameter by its normalised value
@@ -68,10 +69,12 @@ int main (int argc, char** argv)
     if (args.size() < 3) { std::printf ("usage: RefRender plugin.vst3 name jobs.txt [fs=48000] [block=512]\n"); return 2; }
     double fs = 48000.0;
     int block = 512;
+    bool vary = false;
     for (int i = 3; i < args.size(); ++i)
     {
         if (args[i].startsWith ("fs=")) fs = args[i].substring (3).getDoubleValue();
         if (args[i].startsWith ("block=")) block = args[i].substring (6).getIntValue();
+        if (args[i] == "vary=1") vary = true;
     }
 
     AudioPluginFormatManager fm;
@@ -174,12 +177,15 @@ int main (int argc, char** argv)
         AudioBuffer<float> buf (jmax (nIn, nOut), block);
         MidiBuffer midi;
         auto next = autom.begin();
-        for (int pos = 0; pos < n + latency; pos += block)
+        Random rng (1234);
+        for (int pos = 0, len = block; pos < n + latency; pos += len)
         {
+            len = ! vary ? block : rng.nextInt (4) == 0 ? block : 1 + rng.nextInt (block);
+            buf.setSize (buf.getNumChannels(), len, false, false, true);
             // parameter changes land on block boundaries (512 = 10.7 ms at 48 kHz unless block= is smaller)
-            while (next != autom.end() && next->first < pos + block) { next->second.first->setValueNotifyingHost (next->second.second); ++next; }
+            while (next != autom.end() && next->first < pos + len) { next->second.first->setValueNotifyingHost (next->second.second); ++next; }
             buf.clear();
-            for (int i = 0; i < block; ++i)
+            for (int i = 0; i < len; ++i)
             {
                 const int k = pos + i;
                 if (k < n)
@@ -191,7 +197,7 @@ int main (int argc, char** argv)
             }
             head.pos = pos;
             plugin->processBlock (buf, midi);
-            for (int i = 0; i < block; ++i)
+            for (int i = 0; i < len; ++i)
             {
                 const int k = pos + i - latency;
                 if (k >= 0 && k < n)

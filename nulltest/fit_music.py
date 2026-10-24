@@ -8,6 +8,8 @@ Python (charmodel.py, identical to the plug-in to -120 dB); the other two bands 
 writes bandlaw_music[_tp]_loud[_shp].json
 --static W: (high band) the reference's steady gain curve too (staticn.py: tone, two tones, band noise at -18 ... 0 dBFS,
 read through the measured shaper), its error in nepers weighed by W; writes ..._static.json
+--track: two 6 s excerpts of the demo track (reference/demo_future_house.wav, 30 s and 44 s, resampled to 48 kHz) too;
+writes ..._track.json
 --shaper: the shaper's k and dry share fixed at the values read directly with anti-phase tones (shapeside.py,
 measurements/character/shaper_<band>.txt); the other bands from bandlaw_final.json; writes bandlaw_music_shp.json"""
 import json, os, sys
@@ -18,7 +20,7 @@ import tgp, charsim as C, ident as I, nulltest as N, stress as S, ident_signals 
 D = os.path.join(tgp.ROOT, 'measurements', 'character')
 OUT = os.path.join(D, ('bandlaw_music_tp' if '--truepeak' in sys.argv else 'bandlaw_music') + ('_rel' if '--relative' in sys.argv else '')
                    + ('_loud' if '--loud' in sys.argv else '') + ('_shp' if '--shaper' in sys.argv else '')
-                   + ('_static' if '--static' in sys.argv else '') + '.json')
+                   + ('_static' if '--static' in sys.argv else '') + ('_track' if '--track' in sys.argv else '') + '.json')
 SHAPER = '--shaper' in sys.argv
 
 
@@ -47,6 +49,12 @@ def signals(band):
     pad = lambda x: np.concatenate([np.zeros((2, N.PRE), np.float32), stereo(x)], -1)
     progs = [pad(N.sig_music(-10)), pad(N.sig_music(-2)), pad(N.sig_drums(-6)), pad(S.sig_bass(-6)), pad(N.sig_noise(-18))]
     if '--loud' in sys.argv: progs += [pad(N.sig_drums(-1)), pad(N.sig_noise(-6)), pad(N.sig_music(0)), pad(S.sig_bright(-8))]
+    if '--track' in sys.argv:
+        from scipy.signal import resample_poly
+        import track as T
+        x, fs = T.load(T.WAV)
+        x = resample_poly(x, 160, 147, axis=1).astype(np.float32) if fs == 44100 else x
+        progs += [pad(x[:, int(t * tgp.FS):int(t * tgp.FS) + N.SECS * tgp.FS]) for t in (30, 44)]
     probes = [stereo(IS.static_signal(band)), stereo(IS.burst_signal(band)), stereo(IS.twotone_signal(band)), stereo(IS.noise_signal(band))]
     return progs + probes
 

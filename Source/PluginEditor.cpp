@@ -289,11 +289,10 @@ void AntiparticleEditor::timerCallback()
     const int blocks = proc.blocksProcessed.load();
     const bool running = blocks != lastBlocks;
     lastBlocks = blocks;
-    // audio present = this frame's input samples are not silent (not the meters: they fall slowly, which kept the
-    // particles going for seconds after the sound stopped); the visualiser then holds and fades like the reference
-    const bool audio = running && jmax (inMeter[0].rawPeakDb, inMeter[1].rawPeakDb) > -100.0f;
+    // the visualiser follows this frame's input sample peak (not the meters: they fall slowly); no blocks = silence
+    const float inPeak = running ? jmax (inMeter[0].rawPeakDb, inMeter[1].rawPeakDb) : -200.0f;
     const float mix = characterOn ? jlimit (0.0f, 1.0f, characterValue / 0.5f) : 0.0f;
-    visualizer.advance (audio, mix, ap::Settings::get().animation(), ap::Settings::get().particleStyle() == ap::Settings::Particles::antiparticle);
+    visualizer.advance (inPeak, mix, ap::Settings::get().animation(), ap::Settings::get().particleStyle() == ap::Settings::Particles::antiparticle);
     content.repaint();
     amountText.repaint();
 }
@@ -303,7 +302,7 @@ void AntiparticleEditor::setTestLevels (float inDb, float outDb, bool audio)
     frozen = true;
     for (auto& m : inMeter) { m.barDb = inDb - 3.0f; m.fastDb = inDb; m.peakHoldDb = inDb; m.rmsHoldDb = inDb - 3.0f; }
     for (auto& m : outMeter) { m.barDb = outDb - 3.0f; m.fastDb = outDb; m.peakHoldDb = outDb; m.rmsHoldDb = outDb - 3.0f; }
-    if (audio) visualizer.advance (true, characterOn ? jlimit (0.0f, 1.0f, characterValue / 0.5f) : 0.0f, true,
+    if (audio) visualizer.advance (0.0f, characterOn ? jlimit (0.0f, 1.0f, characterValue / 0.5f) : 0.0f, true,
                                    ap::Settings::get().particleStyle() == ap::Settings::Particles::antiparticle);
     content.repaint();
 }
