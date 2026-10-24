@@ -2,7 +2,7 @@
 y = M (d u + (1 - d) sin(k u) / k), u = n s): a staircase of tones (1 dB steps, 1.5 s each), n solved per step over
 its last half second. Reference against ours; tone, two tones and band noise (a peak detector reads them apart).
 
-    python staticn.py [amount 0..1] [freq Hz]"""
+    python staticn.py [amount 0..1] [freq Hz]          (the in-phase shaper includes the mid gain, shapemid.py)"""
 import os, sys
 import numpy as np
 from scipy.optimize import minimize_scalar
@@ -32,8 +32,18 @@ def staircase(kind, f0, seed=3):
     return np.concatenate([np.zeros(I.PRE), w * g]), n
 
 
-def solve_n(y, s, k, d, M):
-    F = lambda n: M * (d * n * s + (1 - d) * np.sin(k * n * s) / k)
+def gamma(amt):
+    """the mid output's extra distortion share (shapemid.py, 1 + gamma at the row)"""
+    row = int(round(amt * 16))
+    for l in open(os.path.join(D, 'shapemid_high.txt')):
+        f = l.split()
+        if f[0] == 'SHAPEMID' and int(f[1]) == row: return float(f[2]) - 1
+    return 0.0
+
+
+def solve_n(y, s, k, d, M, g=0.0):
+    """n from the band's in-phase output: u + (1 + g)(1 - d)(sin(k u) / k - u), u = n s"""
+    F = lambda n: M * (n * s + (1 + g) * (1 - d) * (np.sin(k * n * s) / k - n * s))
     return minimize_scalar(lambda n: np.sum((y - F(n)) ** 2), bounds=(0.05, 1.5), method='bounded', options=dict(xatol=1e-9)).x
 
 
@@ -53,7 +63,7 @@ if __name__ == '__main__':
             ns = []
             for i in range(len(LEVELS)):
                 s = slice(I.PRE + i * n + n * 2 // 3, I.PRE + (i + 1) * n)
-                ns.append(solve_n(yh[s], nl[2][s], k, d, M[2]))
+                ns.append(solve_n(yh[s], nl[2][s], k, d, M[2], gamma(amt)))
             res[kind, who] = 20 * np.log10(np.array(ns))
         print(f'{kind:8s} level: ' + ' '.join(f'{l:+6d}' for l in LEVELS))
         print(f'{"":8s} ref n: ' + ' '.join(f'{v:+6.2f}' for v in res[kind, 'ref']))

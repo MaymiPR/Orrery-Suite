@@ -390,9 +390,21 @@ pink −6 and bright −8 best; at the other amounts the plain energy objective 
 | EQ + character, 200 %, pink −10 | −38.2 | −42.2 |
 | Bright −8, defaults | −76.1 | −110.8 |
 
-The gain law itself, read through the shaper on steady tones (`staticn.py`), still differs a little: the reference
-has a sharper knee and compresses 0.08–0.24 dB more above it (at the same sampled peak), which our parallel soft-knee
-form cannot follow (it fits the reference's curve to 0.027 dB rms, ours to 0.001).
+**The steady gain curve already matches** (`staticn.py`, `fit_music.py --static`). Read through the shaper on
+steady staircases (tone, two tones, band noise, −18 … 0 dBFS in 1 dB steps), the reference's band gain had looked
+like a sharper knee and a steeper slope. That reading left out the mid/side difference γ. With γ included, the laws
+above already follow the reference's curve at every amount: 0.003 dB rms at 12.5 %, 0.019 at 100 %, 0.023 at 87.5 %.
+Fitting each node to the music set and the steady curve together therefore changed little, and at most amounts it
+made the music objective slightly worse. At 100 % (fitted with `--relative`) it helped: a slightly softer knee
+(3.3 instead of 4.0 dB), ratio 2.7 instead of 3.5, release 113 instead of 98 ms. The static curve still matches to
+0.05 dB, so the remaining high-band difference is in the detector's timing on loud material, not in the curve.
+
+| Case (stress suite) | Before | After (node 100 % refit) |
+|---|---|---|
+| Full chain, drums peaking at −1 dBFS | −44.7 dB | −50.0 dB |
+| Character only, pink −10, 100 % | −44.7 | −47.7 |
+| Character only, pink −6, 100 % | −42.9 | −42.3 |
+| Limiter at +12 dB, pink −10, full chain | −41.2 | −43.1 |
 
 ## 4. Limiter (`measure_limiter.py`)
 
@@ -642,10 +654,10 @@ detector (3.13); host blocks under 128 samples (5.1: the switches wait for a ful
 null like 512); the limiter's on-sample level (4.1).
 
 **Still open:**
-- **The high band's gain law.** Its knee is sharper and its slope steeper than our parallel soft-knee form allows
-  (3.14), and its probes (tones up to +4 dBFS, band noise) still null only to −25 … −45 dB at 100 % and above. Loud
-  dense material is the weakest case: pink noise at −6 dBFS RMS −40.6 dB, drums peaking at −1 dBFS −44.7 dB, and at
-  44.1 kHz −38.6 / −39.5 dB (the laws are fitted at 48 kHz).
+- **The high band on loud material.** Its steady gain curve matches (3.14: within 0.02 dB from −18 to 0 dBFS), so
+  what is left is the detector's timing. Its probes (tones up to +4 dBFS, band noise) still null only to
+  −25 … −45 dB at 100 % and above. Loud dense material is the weakest case: pink noise at −6 dBFS RMS −40.5 dB, drums
+  peaking at −1 dBFS −50.0 dB, and at 44.1 kHz −38.6 / −40.8 dB (the laws are fitted at 48 kHz).
 - **Limiter.** Dense, continuous limiting (pink noise driven 5 dB into it) nulls to −47.5 dB; isolated peaks and
   drum hits match to −62 dB. The differences are near-ties in the inter-sample level; the reference's interpolator
   is not a linear 16- or 32-tap table near Nyquist (4.1). At 96 kHz one drum event sits on such a tie.
@@ -654,7 +666,8 @@ null like 512); the limiter's on-sample level (4.1).
   that starts a few samples later, a release restarted from a slowly falling level). The slow envelope's times are
   sharply optimal there, and letting the state rest below the slow envelope or be lifted by the level made every case
   worse. Through the whole chain at 12 dB the character section's small differences are amplified by the limiting
-  (music −10: −69.4 dB character only, −57.1 full chain), so the high band's gain law is the lever there.
+  (music −10: −69.4 dB character only, −57.1 full chain). The refit of 3.14 moved pink −10 there from −41.2 to
+  −43.1 dB and left the others unchanged.
 - **The sweep's crossover region.** Between 1.5 and 3.5 kHz ours compresses up to 0.1 dB more (sweep at −6 dBFS:
   −45 dB). That is where the mid band's steep edge and the high band meet.
 - **Side-chain EXT.** Audio fed to the reference's side-chain bus had no effect in our test host. Ours is implemented

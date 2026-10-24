@@ -6,16 +6,19 @@ Python (charmodel.py, identical to the plug-in to -120 dB); the other two bands 
     measurements/character/bandlaw_music.json (bandlaw_music_tp.json with --truepeak)
 --loud: the loud program signals too (drums -1, pink -6, music 0, bright -8), where the high band works hardest;
 writes bandlaw_music[_tp]_loud[_shp].json
+--static W: (high band) the reference's steady gain curve too (staticn.py: tone, two tones, band noise at -18 ... 0 dBFS,
+read through the measured shaper), its error in nepers weighed by W; writes ..._static.json
 --shaper: the shaper's k and dry share fixed at the values read directly with anti-phase tones (shapeside.py,
 measurements/character/shaper_<band>.txt); the other bands from bandlaw_final.json; writes bandlaw_music_shp.json"""
 import json, os, sys
 import numpy as np
 from scipy.optimize import least_squares
-import tgp, nulltest as N, stress as S, ident_signals as IS, charmodel as M, fit_bandlaw as F
+import tgp, charsim as C, ident as I, nulltest as N, stress as S, ident_signals as IS, charmodel as M, fit_bandlaw as F
 
 D = os.path.join(tgp.ROOT, 'measurements', 'character')
 OUT = os.path.join(D, ('bandlaw_music_tp' if '--truepeak' in sys.argv else 'bandlaw_music') + ('_rel' if '--relative' in sys.argv else '')
-                   + ('_loud' if '--loud' in sys.argv else '') + ('_shp' if '--shaper' in sys.argv else '') + '.json')
+                   + ('_loud' if '--loud' in sys.argv else '') + ('_shp' if '--shaper' in sys.argv else '')
+                   + ('_static' if '--static' in sys.argv else '') + '.json')
 SHAPER = '--shaper' in sys.argv
 
 
@@ -68,7 +71,8 @@ def other_laws(band, node, table, broad):
 
 if __name__ == '__main__':
     band, node = sys.argv[1], float(sys.argv[2]); node = int(node) if node == int(node) else node
-    starts = [a for a in sys.argv[3:] if not a.startswith('--')] or ['bandlaw_sd.json', 'bandlaw.json', 'bandlaw_lowrich.json']
+    skip = {sys.argv.index('--static') + 1} if '--static' in sys.argv else set()
+    starts = [a for i, a in enumerate(sys.argv) if i >= 3 and i not in skip and not a.startswith('--')] or ['bandlaw_sd.json', 'bandlaw.json', 'bandlaw_lowrich.json']
     table = json.load(open(os.path.join(D, 'bandlaw_final.json' if SHAPER else 'bandlaw_sd.json'))); broad = json.load(open(os.path.join(D, 'fit_char.json')))
     if os.path.exists(OUT): table.update(json.load(open(OUT)))       # laws already fitted this way take precedence
     xs = signals(band)
@@ -91,6 +95,26 @@ if __name__ == '__main__':
         drop = [i for i, k in enumerate(KEYS) if k in fixed_law]
         KEYS = [k for i, k in enumerate(KEYS) if i not in drop]; LO = [v for i, v in enumerate(LO) if i not in drop]; HI = [v for i, v in enumerate(HI) if i not in drop]
         print('shaper fixed', fixed_law, flush=True)
+    static_w = float(sys.argv[sys.argv.index('--static') + 1]) if '--static' in sys.argv else 0.0
+    static_data = None
+    if static_w > 0 and band == 'high':
+        import staticn as SN
+        ref_n = np.load(os.path.join(D, f'staticn_{node / 8}_8000.npy'))[:, 0]
+        sel = [i for i, l in enumerate(SN.LEVELS) if -18 <= l <= 0]
+        static_data = []
+        for kk, kind in enumerate(('tone', 'twotone', 'noise')):
+            xs_, ns_ = SN.staircase(kind, 8000.0)
+            xs_ = xs_[:I.PRE + (max(sel) + 1) * ns_]
+            static_data.append((M.I.nl_bands(xs_)[2, 0], ns_, ref_n[kk, sel], sel))
+    def static_resid(law):
+        if static_data is None: return np.zeros(0)
+        pp = {k: v for k, v in law.items() if k in C.NAMES}
+        out = []
+        for sb, ns_, rn, sel in static_data:
+            gg = C.band_gain(sb, pp, peak=int(law.get('peak', 0)))
+            nn = np.array([np.median(gg[I.PRE + i * ns_ + ns_ * 2 // 3:I.PRE + (i + 1) * ns_]) for i in sel])
+            out.append(np.log(nn) - rn / 8.685889638)
+        return static_w * np.concatenate(out)
     wts = np.ones(len(data))                 # --relative: each signal weighed by its starting residual (set per start)
     def per_signal(q):
         law = dict(zip(KEYS, q), peak=peak, **fixed_law)
@@ -98,7 +122,7 @@ if __name__ == '__main__':
     def resid(q):
         law = dict(zip(KEYS, q), peak=peak, **fixed_law)
         return np.concatenate([w * ((M.band(xb, sb, law, M.I.GAINS16[bi][k17], M.WIDTH[band][k17]) - t) / nrm)[:, ::4].ravel()
-                               for w, (xb, sb, t, nrm) in zip(wts, data)])
+                               for w, (xb, sb, t, nrm) in zip(wts, data)] + [static_resid(law)])
     def score(r):
         e = per_signal(r)
         return float(np.mean(10 * np.log10(e))) if RELATIVE else 10 * np.log10(np.mean(e))
@@ -117,6 +141,8 @@ if __name__ == '__main__':
         r = least_squares(resid, q0, bounds=(LO, HI), x_scale='jac', max_nfev=300)
         sc = score(r.x)
         print('   per signal', ' '.join('%.1f' % (10 * np.log10(v)) for v in per_signal(r.x)), flush=True)
+        if static_data is not None:
+            print('   static curve rms %.3f dB' % (8.686 * np.sqrt(np.mean((static_resid(dict(zip(KEYS, r.x), peak=peak, **fixed_law)) / static_w) ** 2))), flush=True)
         print('   ->', '%.2f dB' % sc, {k: round(v, 4) for k, v in zip(KEYS, r.x)}, flush=True)
         if best is None or sc < best[0]: best = (sc, r.x)
     res = dict(zip(KEYS, [float(v) for v in best[1]]), peak=peak, residual_dB=float(best[0]), **fixed_law)

@@ -15,19 +15,19 @@ Reproduce: `python nulltest/nulltest.py` (our processor through tools/ApRender) 
 | path: all stages bypassed | pink noise, -18 dBFS RMS | -85.41 | -85.41 |
 | eq: low +6 mid -4 high +3 | pink noise, -18 dBFS RMS | -87.26 | -87.26 |
 | eq: sweep, low -6 high +6 | log sine sweep 20 Hz - 20 kHz, -12 dBFS | -79.39 | -79.39 |
-| lim: pink -6, gain 5 | pink noise, -6 dBFS RMS | -47.54 | -47.47 |
-| lim: drums -6, gain 12 | synthetic drum loop (kick, snare, hats), peaks -6 dBFS | -62.68 | -62.51 |
-| lim: music -2, gain 5 | the same mix, peaks -2 dBFS | -62.26 | -60.84 |
-| char: pink -18, 100 % | pink noise, -18 dBFS RMS | -55.06 | -54.99 |
-| char: pink -6, 100 % | pink noise, -6 dBFS RMS | -42.92 | -42.82 |
-| char: music -10, 50 % | synthetic mix (bass, chords, noise bed, drums), stereo, peaks -10 dBFS | -76.43 | -76.45 |
+| lim: pink -6, gain 5 | pink noise, -6 dBFS RMS | -47.54 | -47.54 |
+| lim: drums -6, gain 12 | synthetic drum loop (kick, snare, hats), peaks -6 dBFS | -62.68 | -62.68 |
+| lim: music -2, gain 5 | the same mix, peaks -2 dBFS | -62.26 | -62.26 |
+| char: pink -18, 100 % | pink noise, -18 dBFS RMS | -55.06 | -55.06 |
+| char: pink -6, 100 % | pink noise, -6 dBFS RMS | -42.27 | -42.27 |
+| char: music -10, 50 % | synthetic mix (bass, chords, noise bed, drums), stereo, peaks -10 dBFS | -76.43 | -76.43 |
 | char: music -10, 100 % | synthetic mix (bass, chords, noise bed, drums), stereo, peaks -10 dBFS | -69.4 | -69.4 |
-| char: music -10, 200 % | synthetic mix (bass, chords, noise bed, drums), stereo, peaks -10 dBFS | -62.25 | -62.26 |
-| char: drums -6, 100 % | synthetic drum loop (kick, snare, hats), peaks -6 dBFS | -62.61 | -62.45 |
+| char: music -10, 200 % | synthetic mix (bass, chords, noise bed, drums), stereo, peaks -10 dBFS | -62.25 | -62.25 |
+| char: drums -6, 100 % | synthetic drum loop (kick, snare, hats), peaks -6 dBFS | -62.61 | -62.61 |
 | full: music -10, defaults | synthetic mix (bass, chords, noise bed, drums), stereo, peaks -10 dBFS | -69.4 | -69.4 |
-| full: music -2, defaults | the same mix, peaks -2 dBFS | -55.33 | -54.89 |
-| full: drums -6, defaults | synthetic drum loop (kick, snare, hats), peaks -6 dBFS | -62.48 | -62.28 |
-| full: music -10, 200 %, gain 10, eq +3/-2/+4, in -3 out +2 | synthetic mix (bass, chords, noise bed, drums), stereo, peaks -10 dBFS | -64.01 | -61.07 |
+| full: music -2, defaults | the same mix, peaks -2 dBFS | -55.33 | -55.33 |
+| full: drums -6, defaults | synthetic drum loop (kick, snare, hats), peaks -6 dBFS | -62.48 | -62.48 |
+| full: music -10, 200 %, gain 10, eq +3/-2/+4, in -3 out +2 | synthetic mix (bass, chords, noise bed, drums), stereo, peaks -10 dBFS | -64.01 | -64.01 |
 
 Signal list: **pink -18**: pink noise, -18 dBFS RMS; **pink -6**: pink noise, -6 dBFS RMS; **sweep -12**: log sine sweep 20 Hz - 20 kHz, -12 dBFS; **drums -6**: synthetic drum loop (kick, snare, hats), peaks -6 dBFS; **music -10**: synthetic mix (bass, chords, noise bed, drums), stereo, peaks -10 dBFS; **music -2**: the same mix, peaks -2 dBFS.
 
@@ -77,23 +77,23 @@ Median -62.5 dB, worst -38.6 dB.
 | Run | Group | Cases | Median (dB) | Worst (dB), case |
 |---|---|---|---|---|
 | 48 kHz, block 512 | amount | 11 | -69.5 | -62.2, amount 200 %, music -10 |
-| 48 kHz, block 512 | amount char-only | 5 | -45.6 | -42.7, char only 200 %, pink -10 |
+| 48 kHz, block 512 | amount char-only | 5 | -47.7 | -42.7, char only 200 %, pink -10 |
 | 48 kHz, block 512 | limiter gain | 12 | -54.8 | -41.1, limiter 7.5 dB, drums -6 |
 | 48 kHz, block 512 | eq | 9 | -69.4 | -60.3, eq -6/+6/-6, music -10 |
-| 48 kHz, block 512 | io gain | 6 | -64.2 | -49.9, input +12 output -12, music -10 |
-| 48 kHz, block 512 | levels | 10 | -58.8 | -40.6, defaults, pink -6 |
+| 48 kHz, block 512 | io gain | 6 | -64.2 | -49.8, input +12 output -12, music -10 |
+| 48 kHz, block 512 | levels | 10 | -58.8 | -40.5, defaults, pink -6 |
 | 48 kHz, block 512 | combos | 7 | -61.1 | -42.2, eq + char (lim off), 200 %, pink -10 |
 | 48 kHz, block 512 | automation | 7 | -61.3 | -51.1, input gain jumps -12/+12, music -10 |
 | 44.1 kHz | amount | 11 | -69.6 | -62.5, amount 200 %, music -10 |
 | 44.1 kHz | levels | 10 | -58.0 | -38.6, defaults, pink -6 |
 | 96 kHz | amount | 11 | -67.4 | -63.1, amount 200 %, music -10 |
-| 96 kHz | levels | 10 | -55.7 | -41.8, defaults, pink -6 |
-| 88.2 kHz | levels | 10 | -55.5 | -42.3, defaults, pink -6 |
-| block 64 | levels | 10 | -58.8 | -40.6, defaults, pink -6 |
+| 96 kHz | levels | 10 | -55.7 | -41.4, defaults, pink -6 |
+| 88.2 kHz | levels | 10 | -55.5 | -41.6, defaults, pink -6 |
+| block 64 | levels | 10 | -58.8 | -40.5, defaults, pink -6 |
 | block 64 | automation | 7 | -59.3 | -51.1, input gain jumps -12/+12, music -10 |
-| block 4096 | levels | 10 | -58.8 | -40.6, defaults, pink -6 |
-| block 4096 | automation | 7 | -61.5 | -51.0, input gain jumps -12/+12, music -10 |
-| block 333 | levels | 10 | -58.8 | -40.6, defaults, pink -6 |
+| block 4096 | levels | 10 | -58.8 | -40.5, defaults, pink -6 |
+| block 4096 | automation | 7 | -61.5 | -50.9, input gain jumps -12/+12, music -10 |
+| block 333 | levels | 10 | -58.8 | -40.5, defaults, pink -6 |
 
 Every case at 48 kHz, block 512:
 
@@ -112,7 +112,7 @@ Every case at 48 kHz, block 512:
 | amount | amount 200 %, music -10 | -62.25 |
 | amount char-only | char only 25 %, pink -10 | -58.69 |
 | amount char-only | char only 62.5 %, pink -10 | -53.52 |
-| amount char-only | char only 100 %, pink -10 | -44.72 |
+| amount char-only | char only 100 %, pink -10 | -47.74 |
 | amount char-only | char only 150 %, pink -10 | -45.59 |
 | amount char-only | char only 200 %, pink -10 | -42.68 |
 | limiter gain | limiter 0 dB, music -2 | -59.16 |
@@ -139,29 +139,29 @@ Every case at 48 kHz, block 512:
 | io gain | input -12 output +0, music -10 | -99.58 |
 | io gain | input -6 output +3, music -10 | -68.59 |
 | io gain | input +6 output -6, music -10 | -59.75 |
-| io gain | input +12 output -12, music -10 | -49.85 |
+| io gain | input +12 output -12, music -10 | -49.81 |
 | io gain | input +0 output +12, music -10 | -69.40 |
 | io gain | input +9.5 output +0, music -10 | -52.75 |
 | levels | defaults, music -20 | -77.32 |
 | levels | defaults, music 0 | -53.58 |
-| levels | defaults, drums -1 | -44.70 |
+| levels | defaults, drums -1 | -50.00 |
 | levels | defaults, pink -18 | -55.09 |
-| levels | defaults, pink -6 | -40.58 |
+| levels | defaults, pink -6 | -40.49 |
 | levels | defaults, bass -6 | -62.45 |
 | levels | defaults, bright -8 | -110.78 |
 | levels | defaults, wide -10 | -63.98 |
 | levels | defaults, dynamic -4 | -64.52 |
-| levels | defaults, sweep -6 | -44.29 |
+| levels | defaults, sweep -6 | -44.72 |
 | combos | 200 %, lim 12, eq +6/+6/+6, in +6, music -10 | -49.92 |
 | combos | 150 %, lim 0, eq -6/0/+6, bass -6 | -63.52 |
 | combos | 25 %, lim 8, bright -8 | -112.40 |
 | combos | 175 %, wide -10, eq +4/-3/+2 | -67.60 |
-| combos | char + lim (eq off), 100 %, drums -1 | -44.70 |
+| combos | char + lim (eq off), 100 %, drums -1 | -50.00 |
 | combos | eq + lim (char off), eq +6/-6/+6, music -2 | -61.14 |
 | combos | eq + char (lim off), 200 %, pink -10 | -42.24 |
 | automation | amount sweep 0 -> 200 %, music -10 | -65.90 |
 | automation | amount jumps 50/150/0/200 %, music -10 | -61.28 |
-| automation | input gain jumps -12/+12, music -10 | -51.13 |
+| automation | input gain jumps -12/+12, music -10 | -51.10 |
 | automation | limiter gain ramp 0 -> 12 dB, music -2 | -53.21 |
 | automation | eq moves, music -10 | -60.15 |
 | automation | output gain jumps, drums -6 | -62.43 |
