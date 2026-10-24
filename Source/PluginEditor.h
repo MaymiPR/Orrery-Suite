@@ -29,10 +29,9 @@ private:
     struct Meter                                     // one channel of an I/O meter as drawn
     {
         float peakHoldDb = -200.0f, rmsHoldDb = -200.0f;   // the readouts (held until clicked)
-        float barDb = -200.0f, peakDb = -200.0f;           // LED bar (RMS) and peak LED
-        float framePeakDb = -200.0f;                        // peak follower (drives the input target)
+        float barDb = -200.0f;                              // green LED bar (RMS, 150 ms)
+        float fastDb = -200.0f;                             // top of the mint run (fast peak); drives the input target
         float rawPeakDb = -200.0f;                          // this frame's sample peak (is audio playing?)
-        double peakAge = 0.0;
     };
     class Content : public juce::Component
     {
@@ -54,7 +53,7 @@ private:
     void showSavePreset();
     void showAboutMenu();
     void showDialog (std::unique_ptr<ap::Dialog>);
-    void updateMeter (Meter&, ap::LevelTap&, float dt);
+    void updateMeter (Meter&, ap::LevelTap&);
 
     void paintTopBar (juce::Graphics&);
     void paintPanel (juce::Graphics&);
@@ -119,7 +118,6 @@ private:
     Meter inMeter[2], outMeter[2];
     float bandGrDb[3] {}, limGrDb[2] {};                     // now (the bars)
     float bandGrHold[3] {}, limGrHold[2] {};                 // deepest since the last click (the readouts)
-    bool bandTargetLit[3] {};                                // GR targets, with a bar of hysteresis
     bool eqOn = true, characterOn = true, limiterOn = true;
     float characterValue = 0.5f;
     bool frozen = false;

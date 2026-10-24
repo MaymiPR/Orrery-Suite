@@ -266,31 +266,24 @@ void AntiparticleEditor::endLink (ap::MetalKnob& src)
     content.repaint();
 }
 
-void AntiparticleEditor::updateMeter (Meter& m, ap::LevelTap& tap, float dt)
+void AntiparticleEditor::updateMeter (Meter& m, ap::LevelTap& tap)
 {
     const float pk = toDb (tap.takePeak());
     const float rms = toDb (tap.rms.load());
-    m.framePeakDb = toDb (tap.follower.load());
     m.rawPeakDb = pk;
     m.peakHoldDb = jmax (m.peakHoldDb, pk);
     m.rmsHoldDb = jmax (m.rmsHoldDb, rms);
-    m.barDb = rms;
-    if (pk >= m.peakDb) { m.peakDb = pk; m.peakAge = 0.0; }
-    else
-    {
-        m.peakAge += dt;
-        if (m.peakAge > 1.0) m.peakDb = jmax (pk, m.peakDb - 20.0f * dt);   // placeholder ballistics (Phase 3)
-    }
+    m.barDb = toDb (tap.bar.load());
+    m.fastDb = toDb (tap.takeFast());
 }
 
 void AntiparticleEditor::timerCallback()
 {
     if (frozen) return;
-    const float dt = 1.0f / 30.0f;
-    updateMeter (inMeter[0], proc.inL, dt);
-    updateMeter (inMeter[1], proc.inR, dt);
-    updateMeter (outMeter[0], proc.outL, dt);
-    updateMeter (outMeter[1], proc.outR, dt);
+    updateMeter (inMeter[0], proc.inL);
+    updateMeter (inMeter[1], proc.inR);
+    updateMeter (outMeter[0], proc.outL);
+    updateMeter (outMeter[1], proc.outR);
     for (int b = 0; b < 3; ++b) { bandGrDb[b] = proc.bandGr[b].exchange (0.0f); bandGrHold[b] = jmax (bandGrHold[b], bandGrDb[b]); }
     for (int c = 0; c < 2; ++c) { limGrDb[c] = proc.limGr[c].exchange (0.0f); limGrHold[c] = jmax (limGrHold[c], limGrDb[c]); }
     const int blocks = proc.blocksProcessed.load();
@@ -308,8 +301,8 @@ void AntiparticleEditor::timerCallback()
 void AntiparticleEditor::setTestLevels (float inDb, float outDb, bool audio)
 {
     frozen = true;
-    for (auto& m : inMeter) { m.barDb = inDb - 3.0f; m.peakDb = m.framePeakDb = inDb; m.peakHoldDb = inDb; m.rmsHoldDb = inDb - 3.0f; }
-    for (auto& m : outMeter) { m.barDb = outDb - 3.0f; m.peakDb = outDb; m.peakHoldDb = outDb; m.rmsHoldDb = outDb - 3.0f; }
+    for (auto& m : inMeter) { m.barDb = inDb - 3.0f; m.fastDb = inDb; m.peakHoldDb = inDb; m.rmsHoldDb = inDb - 3.0f; }
+    for (auto& m : outMeter) { m.barDb = outDb - 3.0f; m.fastDb = outDb; m.peakHoldDb = outDb; m.rmsHoldDb = outDb - 3.0f; }
     if (audio) visualizer.advance (true, characterOn ? jlimit (0.0f, 1.0f, characterValue / 0.5f) : 0.0f, true,
                                    ap::Settings::get().particleStyle() == ap::Settings::Particles::antiparticle);
     content.repaint();
@@ -415,42 +408,37 @@ void AntiparticleEditor::paintIoMeter (Graphics& g, float x0, const Meter (&m)[2
     }
 
     const float (&lx)[2] = ledX[x0 > 0.0f ? 1 : 0];
-    // the input target lights while the input's peak sits in it: LEDs 32 .. 36, i.e. -10.5 .. -3 dBFS (measured with
-    // up / down ramps of sine and noise: it follows the momentary peak, not the RMS bar; all three parts light together)
-    const float framePeak = jmax (m[0].framePeakDb, m[1].framePeakDb);
-    const bool lit = framePeak >= theme::ledThresholdDb (32) && framePeak < theme::ledThresholdDb (37);
-    const bool inTarget[2] { lit, lit };
     for (int c = 0; c < 2; ++c)
     {
-        int top = -1, peak = -1;
-        for (int k = 0; k < theme::numLeds; ++k)
-        {
-            if (m[c].barDb > theme::ledThresholdDb (k)) top = k;            // strict: a -6.0 dB peak does not light the -6 LED
-            if (m[c].peakDb > theme::ledThresholdDb (k)) peak = k;
-        }
+        // green up to the RMS, mint from there up to the fast peak, and one mint LED at the peak readout's held value
+        // (until the readout is clicked); once that is over 0 dBFS (the readout turns red) the LED is not drawn
+        auto topLed = [] (float db) { int top = -1; for (int k = 0; k < theme::numLeds; ++k) if (db > theme::ledThresholdDb (k)) top = k; return top; };
+        const int top = topLed (m[c].barDb), run = topLed (m[c].fastDb);       // strict thresholds
+        const int dot = m[c].peakHoldDb > 0.0f ? theme::numLeds : topLed (m[c].peakHoldDb);
         g.setColour (theme::ledGreen);
         for (int k = 0; k <= top; ++k) g.fillRect (lx[c], 248.0f - 4.0f * (float) k, 8.0f, 1.0f);   // LEDs 1 px tall (measured)
-        if (peak >= 0)
-        {
-            g.setColour (theme::mint);
-            g.fillRect (lx[c], 248.0f - 4.0f * (float) peak, 8.0f, 1.0f);
-        }
+        g.setColour (theme::mint);
+        for (int k = top + 1; k <= run; ++k) g.fillRect (lx[c], 248.0f - 4.0f * (float) k, 8.0f, 1.0f);
+        if (dot > jmax (top, run) && dot < theme::numLeds) g.fillRect (lx[c], 248.0f - 4.0f * (float) dot, 8.0f, 1.0f);
     }
+    // the input target fills with the fast peak (the top of the mint run, either channel): fully from -12 to -3 dBFS,
+    // fading over 1.5 dB (one LED) at each end (measured frame by frame against the reference's own LEDs)
+    const float fast = jmax (m[0].fastDb, m[1].fastDb);
+    const float fill = jlimit (0.0f, 1.0f, (fast + 13.5f) / 1.5f) * jlimit (0.0f, 1.0f, (-1.5f - fast) / 1.5f);
 
     if (target)
     {
         // green target: two brackets and a line pair; filled while the level sits inside it
         // measured at 200 %: 1 px strokes, outer edges y 103.25 .. 122.75, corner radius 2.5; lit, each bracket is a solid
         // block rounded on its outer corners (y 103.25 .. 123.25) and the line pair becomes a solid block
-        auto bracket = [&g] (float x, bool right, bool filled)
+        auto bracket = [&g] (float x, bool right, float filled)
         {
-            if (filled)
+            if (filled > 0.0f)
             {
                 Path f;
                 f.addRoundedRectangle (x, 103.25f, 8.0f, 20.0f, 2.5f, 2.5f, ! right, right, ! right, right);
-                g.setColour (theme::targetFill);
+                g.setColour (theme::targetFill.withAlpha (filled));
                 g.fillPath (f);
-                return;
             }
             const float top = 103.75f, bottom = 122.75f, r = 2.5f;           // stroke centre lines (measured)
             const float ox = right ? x : x + 8.0f, ix = right ? x + 7.5f : x + 0.5f, d = right ? -r : r;
@@ -464,18 +452,15 @@ void AntiparticleEditor::paintIoMeter (Graphics& g, float x0, const Meter (&m)[2
             g.setColour (theme::target);
             g.strokePath (p, PathStrokeType (1.0f));
         };
-        bracket (15.0f, false, inTarget[0]);
-        bracket (71.0f, true, inTarget[1]);
-        if (lit)
+        bracket (15.0f, false, fill);
+        bracket (71.0f, true, fill);
+        g.setColour (theme::targetLine);
+        g.fillRect (35.0f, 103.25f, 24.0f, 1.0f);
+        g.fillRect (35.0f, 122.25f, 24.0f, 1.0f);
+        if (fill > 0.0f)
         {
-            g.setColour (theme::targetFill);
+            g.setColour (theme::targetFill.withAlpha (fill));
             g.fillRect (35.0f, 103.25f, 24.0f, 20.0f);
-        }
-        else
-        {
-            g.setColour (theme::targetLine);
-            g.fillRect (35.0f, 103.25f, 24.0f, 1.0f);
-            g.fillRect (35.0f, 122.25f, 24.0f, 1.0f);
         }
     }
 }
@@ -503,22 +488,27 @@ void AntiparticleEditor::paintGainReduction (Graphics& g)
         theme::textAt (g, names[b], 571.0f, baselines[b]);
         theme::textAt (g, grText (bandGrHold[b]), 701.5f, baselines[b], Justification::right);
 
-        // 33 bars over 6 dB (MEASUREMENTS.md 6: 4.7 dB = 25 bars, 2.8 dB = 15); one bar stays lit while any is left
-        const float gr = bandGrDb[b];
-        const int bars = characterOn && gr > 0.005f ? jlimit (1, 33, (int) std::floor (gr * 33.0f / 6.0f)) : 0;
-        const float tipX = 700.0f - 4.0f * (float) (bars - 1);
-        // lit while the deepest bar ends inside the bracket (measured on the reference; it lags by a bar or so, hence
-        // a bar of hysteresis once lit)
-        const float slack = bandTargetLit[b] ? 4.0f : 0.0f;
-        const bool hit = bars > 0 && tipX >= targetX[b] - slack && tipX <= targetX[b] + 19.0f + slack;
-        bandTargetLit[b] = hit;
-        // target: an upside-down U above the meter and a U below it; one filled block while the meter ends inside
-        if (hit)
+        // 33 bars over 6 dB: floor (5.5 GR), no bar under 0.18 dB (MEASUREMENTS.md 6, tone staircases per band); and one
+        // marker bar at the deepest reduction the readout holds (until it is clicked), drawn on a 20 dB scale (1.65 bars
+        // per dB)
+        const float gr = characterOn ? bandGrDb[b] : 0.0f;
+        const int bars = jlimit (0, 33, (int) std::floor (gr * 5.5f));
+        const int marker = characterOn ? jlimit (0, 33, (int) std::floor (bandGrHold[b] * 1.65f)) : 0;
+        // the target fills with the band's gain reduction, fully over a range in dB and fading over ~0.22 dB at each end
+        // (fitted to the reference on tone staircases and a pink-noise ramp); not where the bracket is drawn
+        struct Range { float lo, hi, edge; };
+        constexpr Range ranges[3] { { 0.341f, 1.378f, 0.25f }, { 2.452f, 3.978f, 0.219f }, { 0.965f, 2.455f, 0.211f } };
+        const auto& rg = ranges[b];
+        const float fill = jlimit (0.0f, 1.0f, (gr - rg.lo) / rg.edge + 1.0f) * jlimit (0.0f, 1.0f, (rg.hi - gr) / rg.edge + 1.0f);
+        // target: an upside-down U above the meter and a U below it, each filled while lit (the bars pass between)
+        if (fill > 0.0f)
         {
-            g.setColour (theme::targetFill);
-            g.fillRoundedRectangle (targetX[b], meterY[b] - 10.0f, 19.0f, 28.5f, 2.5f);
+            g.setColour (theme::targetFill.withAlpha (fill));
+            g.fillRoundedRectangle (targetX[b], meterY[b] - 10.0f, 19.0f, 8.0f, 3.5f);
+            g.fillRect (targetX[b], meterY[b] - 6.0f, 19.0f, 4.0f);
+            g.fillRoundedRectangle (targetX[b], meterY[b] + 10.0f, 19.0f, 8.0f, 3.5f);
+            g.fillRect (targetX[b], meterY[b] + 10.0f, 19.0f, 4.0f);
         }
-        else
         {
             g.setColour (characterOn ? theme::target : theme::dimLabel);
             Path p;
@@ -536,6 +526,7 @@ void AntiparticleEditor::paintGainReduction (Graphics& g)
         }
         g.setColour (theme::mint);
         for (int k = 0; k < bars; ++k) g.fillRect (700.0f - 4.0f * (float) k, meterY[b], 1.0f, 8.5f);
+        if (marker > bars) g.fillRect (700.0f - 4.0f * (float) (marker - 1), meterY[b], 1.0f, 8.5f);
     }
 }
 

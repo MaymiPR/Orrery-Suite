@@ -37,7 +37,7 @@ def levels(x):
     return np.maximum(1, m), np.maximum(1, mp)
 
 
-def env(x, trace=None, window=WINDOW, release=RELEASE, reach=REACH, rule=(), prom=0.0):
+def env(x, trace=None, window=WINDOW, release=RELEASE, reach=REACH, rule=(), prom=0.0, states=False):
     """rule: 'sample' (peaks are local maxima of the sample magnitudes), 'wide2' (local maxima over two neighbours
     each side), 'steep' (a new plan heads for the peak in the window it can reach with the least descent);
     prom: a peak must stand this far above both neighbours' levels"""
@@ -57,13 +57,14 @@ def env(x, trace=None, window=WINDOW, release=RELEASE, reach=REACH, rule=(), pro
     peak[1:-1] = np.where(loc, lv[1:-1], 1.0)
     steep_new = 'steep' in rule
     state, slope, left, target, rel, slow = 1.0, 0.0, 0, 1.0, False, 1.0
-    out = np.ones(n)
+    out = np.ones(n); st_arr = np.ones(n); sl_arr = np.ones(n)
     pk = lambda i: peak[i] if i < n - 1 else 1.0
     for o in range(n):
         now = lv[o]
         e = max(state, slow, now)
-        out[o] = e
-        if left <= 0 and slope == 0.0: state = max(state, slow)
+        out[o] = e; st_arr[o] = state; sl_arr[o] = slow
+        if left <= 0 and slope == 0.0 and 'norest' not in rule: state = max(state, slow)
+        if 'lift' in rule and rel and now > state: state = now          # a release restarts from a level above its line
         why = ''
         if left > 0:
             steep, at = -1e9, 0
@@ -93,8 +94,8 @@ def env(x, trace=None, window=WINDOW, release=RELEASE, reach=REACH, rule=(), pro
         if left > 0:
             state += slope; left -= 1
             if left == 0: state = target
-            if rel and state <= slow: state, left, slope = slow, 0, 0.0
+            if rel and state <= slow and 'nostop' not in rule: state, left, slope = slow, 0, 0.0
         slow = slow + (now - slow) * SLOW_ATT if now > slow else now + (slow - now) * SLOW_REL
         if trace and trace[0] <= o < trace[1]:
             print(f'{o:8d} level {now:.3f} peak {peak[o]:.3f} env {e:.3f} state {state:.3f} slow {slow:.3f} {why}')
-    return out
+    return (out, st_arr, sl_arr, lv) if states else out

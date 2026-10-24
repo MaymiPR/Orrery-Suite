@@ -63,6 +63,27 @@ public:
     std::vector<float> input;
 };
 
+// the editor's pixels, taken from its own window (PrintWindow with full content: right even while other windows
+// cover it, which a grab of the screen is not)
+static void grabEditor (Component& c, HDC dst, int w, int h)
+{
+    HWND hwnd = nullptr; juce::Rectangle<int> r; double scale = 1.0;
+    {
+        MessageManagerLock mml;
+        hwnd = (HWND) c.getTopLevelComponent()->getWindowHandle();
+        r = c.getScreenBounds();
+        scale = Desktop::getInstance().getDisplays().getDisplayForRect (r)->scale;
+    }
+    RECT wr; GetWindowRect (hwnd, &wr);
+    const int ww = wr.right - wr.left, wh = wr.bottom - wr.top;
+    HDC screen = GetDC (nullptr), mem = CreateCompatibleDC (screen);
+    HBITMAP bmp = CreateCompatibleBitmap (screen, ww, wh);
+    auto old = SelectObject (mem, bmp);
+    PrintWindow (hwnd, mem, 2 /* PW_RENDERFULLCONTENT */);
+    BitBlt (dst, 0, 0, w, h, mem, roundToInt (r.getX() * scale) - wr.left, roundToInt (r.getY() * scale) - wr.top, SRCCOPY);
+    SelectObject (mem, old); DeleteObject (bmp); DeleteDC (mem); ReleaseDC (nullptr, screen);
+}
+
 class Capture : public Timer
 {
 public:
@@ -82,7 +103,7 @@ public:
         HDC screen = GetDC (nullptr), mem = CreateCompatibleDC (screen);
         HBITMAP bmp = CreateCompatibleBitmap (screen, w, h);
         auto old = SelectObject (mem, bmp);
-        BitBlt (mem, 0, 0, w, h, screen, x, y, SRCCOPY);
+        grabEditor (editor, mem, w, h); ignoreUnused (x, y);
         BITMAPINFO bi {}; bi.bmiHeader.biSize = sizeof (BITMAPINFOHEADER); bi.bmiHeader.biWidth = w; bi.bmiHeader.biHeight = -h;
         bi.bmiHeader.biPlanes = 1; bi.bmiHeader.biBitCount = 24; bi.bmiHeader.biCompression = BI_RGB;
         const int stride = ((w * 3 + 3) / 4) * 4;
@@ -124,7 +145,7 @@ static Image grabImage (Component& c)
     HDC screen = GetDC (nullptr), mem = CreateCompatibleDC (screen);
     HBITMAP bmp = CreateCompatibleBitmap (screen, w, h);
     auto old = SelectObject (mem, bmp);
-    BitBlt (mem, 0, 0, w, h, screen, x, y, SRCCOPY);
+    grabEditor (c, mem, w, h); ignoreUnused (x, y);
     BITMAPINFO bi {}; bi.bmiHeader.biSize = sizeof (BITMAPINFOHEADER); bi.bmiHeader.biWidth = w; bi.bmiHeader.biHeight = -h;
     bi.bmiHeader.biPlanes = 1; bi.bmiHeader.biBitCount = 32; bi.bmiHeader.biCompression = BI_RGB;
     Image img (Image::ARGB, w, h, true);

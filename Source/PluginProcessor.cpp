@@ -85,34 +85,36 @@ void AntiparticleProcessor::prepareToPlay (double sampleRate, int block)
     meterBuf.setSize (2, jmax (1, block));
     const auto& t = ap::dsp::tuning();
     engine.prepare (sampleRate, block, t.forceOversampling > 0 ? (int) t.forceOversampling : ap::Settings::get().oversampling(), t);
-    rmsCoef = (float) std::exp (-1.0 / (0.3 * sampleRate));       // placeholder RMS window (MEASUREMENTS.md 6: open)
-    std::fill (std::begin (rmsState), std::end (rmsState), 0.0f);
-    std::fill (std::begin (followState), std::end (followState), 0.0f);
-    // the input target's detector, fitted to the reference with sine / noise ramps
-    followAttack = 1.0f - (float) std::exp (-1.0 / (0.0002 * sampleRate));
-    followRelease = (float) std::exp (-1.0 / (0.3 * sampleRate));
+    rmsCoef = (float) std::exp (-1.0 / (0.3 * sampleRate));       // placeholder readout RMS window (MEASUREMENTS.md 6: open)
+    // the meters as fitted to the reference's LEDs on a pink-noise ramp (MEASUREMENTS.md 6): the green bar is the plain
+    // RMS over 150 ms, the mint run and the input target follow a fast peak (1 ms attack, 50 ms release)
+    barCoef = (float) std::exp (-1.0 / (0.15 * sampleRate));
+    fastAttack = 1.0f - (float) std::exp (-1.0 / (0.001 * sampleRate));
+    fastRelease = (float) std::exp (-1.0 / (0.05 * sampleRate));
+    for (auto& m : meterState) std::fill (std::begin (m), std::end (m), 0.0f);
     setLatencySamples (engine.latency());
 }
 
-void AntiparticleProcessor::measure (const AudioBuffer<float>& b, ap::LevelTap& l, ap::LevelTap& r, float* state, float* follow)
+void AntiparticleProcessor::measure (const AudioBuffer<float>& b, ap::LevelTap& l, ap::LevelTap& r, float* state)
 {
     const int n = b.getNumSamples();
     ap::LevelTap* taps[2] { &l, &r };
     for (int c = 0; c < 2; ++c)
     {
         const float* x = b.getReadPointer (jmin (c, b.getNumChannels() - 1));
-        float pk = 0.0f, ms = state[c], fol = follow[c], folMax = 0.0f;
+        float* st = state + 3 * c;
+        float pk = 0.0f, ms = st[0], bar = st[1], fast = st[2], fastMax = 0.0f;
         for (int i = 0; i < n; ++i)
         {
-            const float a = std::abs (x[i]);
+            const float a = std::abs (x[i]), sq = x[i] * x[i];
             pk = jmax (pk, a);
-            ms = x[i] * x[i] + rmsCoef * (ms - x[i] * x[i]);
-            fol = a > fol ? fol + (a - fol) * followAttack : fol * followRelease;
-            folMax = jmax (folMax, fol);
+            ms = sq + rmsCoef * (ms - sq);
+            bar = sq + barCoef * (bar - sq);
+            fast = a > fast ? fast + (a - fast) * fastAttack : fast * fastRelease;
+            fastMax = jmax (fastMax, fast);
         }
-        state[c] = ms;
-        follow[c] = fol;
-        taps[c]->push (pk, std::sqrt (2.0f * ms), folMax);
+        st[0] = ms; st[1] = bar; st[2] = fast;
+        taps[c]->push (pk, std::sqrt (2.0f * ms), std::sqrt (bar), fastMax);
     }
 }
 
@@ -147,10 +149,10 @@ void AntiparticleProcessor::processBlock (AudioBuffer<float>& buffer, MidiBuffer
         const float g = Decibels::decibelsToGain (p.inputGainDb);
         meterBuf.setSize (2, n, false, false, true);
         for (int c = 0; c < 2; ++c) FloatVectorOperations::copyWithMultiply (meterBuf.getWritePointer (c), main.getReadPointer (c), p.bypass ? 1.0f : g, n);
-        measure (meterBuf, inL, inR, rmsState, followState);
+        measure (meterBuf, inL, inR, &meterState[0][0]);
     }
     engine.process (main.getWritePointer (0), main.getWritePointer (1), sc[0], sc[1], n, p);
-    measure (main, outL, outR, rmsState + 2, followState + 2);
+    measure (main, outL, outR, &meterState[2][0]);
 
     float gr[3];
     engine.takeBandGr (gr);

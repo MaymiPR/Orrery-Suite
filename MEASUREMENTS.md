@@ -547,6 +547,41 @@ take effect once a control chunk's worth has gathered: 128 − n rounded up to w
   - high: ≈ 0.2 s
   - low: ≈ 1 bar per 0.5 s
 
+**Bars and targets, measured exactly** (`nulltest/stairgr.py`, `grtarget.py`: RefCapture films of per-band tone
+staircases, `reference/stairs_bands.f32`, and of a pink-noise ramp; the band's gain reduction from our model, which
+nulls the band closely):
+- **Bars:** floor(5.5 × GR), i.e. 33 bars over 6 dB with no bar under 0.18 dB (no bar is forced on). Ours matches
+  bar for bar, except where its own gain reduction differs by a bar.
+- **Marker:** one more bar marks the deepest reduction the readout holds (until it is clicked), on a 20 dB scale
+  (1.65 bars per dB). After a high-band tone at −4 dBFS (6.1 dB) it sits at bar 10; after −2 dBFS (7.5 dB), at 13.
+  The filled bars fall back to the actual reduction (a quiet bed or digital silence behave the same, and the audio
+  carries no residual reduction: band gains on the bed match ours to 0.05 dB).
+- **Targets:** each target fills with the band's gain reduction itself, not with where its bracket is drawn. It is
+  full over a range and fades linearly over about 0.22 dB at each end, so it brightens gradually as a meter
+  approaches. Fitted to the staircases and the ramp together:
+
+| Band | Full | Edge |
+|---|---|---|
+| high | 0.34 … 1.38 dB | 0.25 dB |
+| mid | 2.45 … 3.98 dB | 0.22 dB |
+| low | 0.97 … 2.46 dB | 0.21 dB |
+
+  Lit, a target is two filled blocks, the upper U (meter y − 10 … − 2) and the lower U (+ 10 … + 18), with the bar
+  row passing between them.
+
+**I/O LED meters** (ramp film, every LED read per frame, `ledread.py`; the meter redraws about 22 times a second):
+- **Green bar:** the plain RMS (one-pole on x², 150 ms), within ±0.15 dB on rising, steady and falling levels. It is
+  not the AES value the readout shows.
+- **Mint run:** from the green bar's top up to a fast peak (|x| follower, 1 ms attack, 50 ms release; about 2 dB
+  under the 10 ms sample peak). This is the colour change near the target: louder peaks light more mint above the
+  green.
+- **Held peak:** one mint LED at the peak readout's held value (until clicked), not drawn once that is above 0 dBFS
+  (when the readout turns red).
+- **Input target:** fills with the same fast peak (either channel). Full from −12 to −3 dBFS, fading over 1.5 dB
+  (one LED) at each end. Read frame by frame against the reference's own LEDs, so no timing jitter: off at LED 29,
+  half at 30, full 31 … 36, half at 37, off from 38. This replaces the earlier rule (the 0.2 ms / 0.3 s follower in
+  LEDs 32 … 36).
+
 **Numeric readouts beside the bars** (band and limiter) **hold the deepest GR so far.**
 - mid: −7.1 (1 kHz −6 dBFS), −9.9 (0 dBFS), −13.1 (+6 dBFS)
 - high: −4.7
@@ -614,6 +649,12 @@ null like 512); the limiter's on-sample level (4.1).
 - **Limiter.** Dense, continuous limiting (pink noise driven 5 dB into it) nulls to −47.5 dB; isolated peaks and
   drum hits match to −62 dB. The differences are near-ties in the inter-sample level; the reference's interpolator
   is not a linear 16- or 32-tap table near Nyquist (4.1). At 96 kHz one drum event sits on such a tie.
+  At the maximum input gain (12 dB, `limmax.py`) the limiter alone nulls music at −2 dBFS to −55.8 dB, drums to
+  −62.7 and music at −10 dBFS to −88.6. 94 % of the residual sits in 5 % of the time: single plan decisions (a plan
+  that starts a few samples later, a release restarted from a slowly falling level). The slow envelope's times are
+  sharply optimal there, and letting the state rest below the slow envelope or be lifted by the level made every case
+  worse. Through the whole chain at 12 dB the character section's small differences are amplified by the limiting
+  (music −10: −69.4 dB character only, −57.1 full chain), so the high band's gain law is the lever there.
 - **The sweep's crossover region.** Between 1.5 and 3.5 kHz ours compresses up to 0.1 dB more (sweep at −6 dBFS:
   −45 dB). That is where the mid band's steep edge and the high band meet.
 - **Side-chain EXT.** Audio fed to the reference's side-chain bus had no effect in our test host. Ours is implemented

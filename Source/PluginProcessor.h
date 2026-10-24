@@ -9,19 +9,24 @@
 namespace ap
 {
 // Levels the editor reads (audio thread writes, message thread reads and resets).
+// One I/O meter channel as the reference draws it (MEASUREMENTS.md 6): a green bar on the RMS, a mint run above it up
+// to the fast peak, a held peak LED; the readouts beside it.
 struct LevelTap
 {
-    std::atomic<float> peak { 0.0f };     // highest sample since the editor last took it (linear)
-    std::atomic<float> rms { 0.0f };      // latest RMS (linear, AES: a sine reads its peak)
-    std::atomic<float> follower { 0.0f }; // latest block's peak follower (0.2 ms attack, 0.3 s release): input target
-    void push (float blockPeak, float blockRms, float blockFollower)
+    std::atomic<float> peak { 0.0f };     // highest sample since the editor last took it (linear): peak readout
+    std::atomic<float> rms { 0.0f };      // latest RMS for the readout (linear, AES: a sine reads its peak)
+    std::atomic<float> bar { 0.0f };      // latest RMS for the green bar (linear, plain; one-pole on x^2, 150 ms)
+    std::atomic<float> fast { 0.0f };     // highest fast peak (|x| follower, 1 ms / 50 ms) since the editor took it
+    void push (float blockPeak, float blockRms, float blockBar, float blockFast)
     {
-        follower.store (blockFollower);
-        float p = peak.load();
-        while (blockPeak > p && ! peak.compare_exchange_weak (p, blockPeak)) {}
+        auto raise = [] (std::atomic<float>& a, float v) { float p = a.load(); while (v > p && ! a.compare_exchange_weak (p, v)) {} };
+        raise (peak, blockPeak);
+        raise (fast, blockFast);
         rms.store (blockRms);
+        bar.store (blockBar);
     }
     float takePeak() { return peak.exchange (0.0f); }
+    float takeFast() { return fast.exchange (0.0f); }
 };
 }
 
@@ -75,10 +80,9 @@ private:
     juce::AudioBuffer<float> meterBuf;    // the input meters' copy (after the input gain)
     double preparedRate = 0.0;
     int preparedBlock = 0;
-    float rmsState[4] {};           // mean-square followers (in L, in R, out L, out R)
-    float followState[4] {};        // peak followers (same order)
-    float rmsCoef = 0.0f, followAttack = 0.0f, followRelease = 0.0f;
-    void measure (const juce::AudioBuffer<float>&, ap::LevelTap&, ap::LevelTap&, float* msState, float* followerState);
+    float meterState[4][3] {};      // per channel (in L, in R, out L, out R): readout mean square, bar mean square, fast peak
+    float rmsCoef = 0.0f, barCoef = 0.0f, fastAttack = 0.0f, fastRelease = 0.0f;
+    void measure (const juce::AudioBuffer<float>&, ap::LevelTap&, ap::LevelTap&, float* state);
 
     JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR (AntiparticleProcessor)
 };
