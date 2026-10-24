@@ -79,14 +79,14 @@ private:
     void updateReadout (const juce::MouseEvent&, bool released);
     juce::String captionText (const ap::MetalKnob&, const char* name) const;
     const ap::MetalKnob* readoutKnob = nullptr;
-    const ap::LinkButton* hoverLink = nullptr;
 
-    // input / output link (ours): while linked, a gesture on one knob keeps input + output at its starting sum
+    // I/O link (ours): while linked the output gain is always the input gain's opposite. A gesture on either knob
+    // moves the other (as one host gesture each); changes from the host are mirrored too
     void beginLink (ap::MetalKnob&);
-    void applyLink (ap::MetalKnob&);
     void endLink (ap::MetalKnob&);
+    void mirror (bool fromInput);
     ap::MetalKnob* linkSource = nullptr;
-    double linkSum = 0.0;
+    bool mirroring = false;
 
     AntiparticleProcessor& proc;
     Content content { *this };
@@ -105,7 +105,7 @@ private:
     ap::MetalKnob inputKnob { ap::MetalKnob::Kind::plate }, limiterKnob { ap::MetalKnob::Kind::plate },
         outputKnob { ap::MetalKnob::Kind::plate };
     ap::Visualizer visualizer;
-    ap::LinkButton linkIn, linkOut;
+    ap::LinkButton ioLinkButton;
     struct PaintOverlay : juce::Component
     {
         std::function<void (juce::Graphics&)> paintFn;

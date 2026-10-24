@@ -24,8 +24,8 @@ public:
     std::function<void()> onClick;
 };
 
-// Chain-link toggle beside the input and output captions (ours, not on the reference): linked, turning one of the
-// two knobs turns the other the opposite way. Mint while linked, the plate's label grey while not.
+// I/O LINK toggle of the top bar, beside the side-chain switch (ours, not on the reference): drawn like a segment of
+// INT / EXT, filled while linked (the output gain then mirrors the input gain).
 class LinkButton : public juce::Component
 {
 public:

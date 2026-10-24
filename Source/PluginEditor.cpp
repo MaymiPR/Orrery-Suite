@@ -51,7 +51,7 @@ AntiparticleEditor::AntiparticleEditor (AntiparticleProcessor& p) : AudioProcess
 
     for (auto* c : std::initializer_list<Component*> { &logo, &presetBox, &prevButton, &nextButton, &saveButton, &sidechain, &scaleBox, &gear,
                                                        &visualizer, &amountText, &eqPower, &eqHigh, &eqMid, &eqLow, &amount, &amountPower, &limiterPower,
-                                                       &inputKnob, &limiterKnob, &outputKnob, &linkIn, &linkOut })
+                                                       &inputKnob, &limiterKnob, &outputKnob, &ioLinkButton })
         content.addAndMakeVisible (*c);
     content.addMouseListener (&hoverTracker, true);
 
@@ -84,9 +84,7 @@ AntiparticleEditor::AntiparticleEditor (AntiparticleProcessor& p) : AudioProcess
     place (inputKnob, 45.755f, 313.11f, 25.06f);
     place (limiterKnob, 754.745f, 313.11f, 25.06f);
     place (outputKnob, 841.74f, 313.11f, 25.06f);
-    // link toggles beside the input and output captions (clear of the widest readout, "-12.0 dB")
-    linkIn.setBounds (72, 269, 14, 14);
-    linkOut.setBounds (798, 269, 14, 14);
+    ioLinkButton.setBounds (655, 3, 64, 25);      // right of the side-chain switch, the gap before the save button
     eqPower.setBounds (97, 40, 72, 25);
     amountPower.setBounds (364, 167, 72, 25);
     limiterPower.setBounds (719, 40, 72, 25);
@@ -109,17 +107,23 @@ AntiparticleEditor::AntiparticleEditor (AntiparticleProcessor& p) : AudioProcess
     for (auto* k : { &inputKnob, &outputKnob })
     {
         k->onDragStart = [this, k] { beginLink (*k); };
-        k->onValueChange = [this, k] { applyLink (*k); };
+        k->onValueChange = [this, k] { if (linkSource == k) mirror (k == &inputKnob); };
         k->onDragEnd = [this, k] { endLink (*k); };
     }
-    linkIn.active = linkOut.active = proc.ioLink.load();
-    for (auto* b : { &linkIn, &linkOut })
-        b->onClick = [this]
-        {
-            proc.ioLink = ! proc.ioLink.load();
-            linkIn.active = linkOut.active = proc.ioLink.load();
-            linkIn.repaint(); linkOut.repaint(); content.repaint();
-        };
+    ioLinkButton.active = proc.ioLink.load();
+    ioLinkButton.onClick = [this]
+    {
+        proc.ioLink = ! proc.ioLink.load();
+        ioLinkButton.active = proc.ioLink.load();
+        ioLinkButton.repaint();
+        if (proc.ioLink.load())                    // linking snaps the output to the input's opposite
+            if (auto* prm = proc.apvts.getParameter (ap::id::outputGain))
+            {
+                prm->beginChangeGesture();
+                mirror (true);
+                prm->endChangeGesture();
+            }
+    };
 
     auto toggleParam = [&s] (const char* pid)
     {
@@ -133,7 +137,7 @@ AntiparticleEditor::AntiparticleEditor (AntiparticleProcessor& p) : AudioProcess
     eqPower.onClick = [toggleParam] { toggleParam (ap::id::eqBypass); };
     amountPower.onClick = [toggleParam] { toggleParam (ap::id::characterBypass); };
     limiterPower.onClick = [toggleParam] { toggleParam (ap::id::limiterBypass); };
-    for (auto* pid : { ap::id::eqBypass, ap::id::characterBypass, ap::id::limiterBypass, ap::id::character })
+    for (auto* pid : { ap::id::eqBypass, ap::id::characterBypass, ap::id::limiterBypass, ap::id::character, ap::id::inputGain, ap::id::outputGain })
         s.addParameterListener (pid, this);
 
     sidechain.external = proc.sidechainExternal.load();
@@ -157,7 +161,7 @@ AntiparticleEditor::~AntiparticleEditor()
 {
     content.removeMouseListener (&hoverTracker);
     ap::Settings::get().removeChangeListener (this);
-    for (auto* pid : { ap::id::eqBypass, ap::id::characterBypass, ap::id::limiterBypass, ap::id::character })
+    for (auto* pid : { ap::id::eqBypass, ap::id::characterBypass, ap::id::limiterBypass, ap::id::character, ap::id::inputGain, ap::id::outputGain })
         proc.apvts.removeParameterListener (pid, this);
 }
 
@@ -172,9 +176,15 @@ void AntiparticleEditor::setUiScale (float s)
 
 void AntiparticleEditor::resized() {}
 
-void AntiparticleEditor::parameterChanged (const String&, float)
+void AntiparticleEditor::parameterChanged (const String& id, float)
 {
-    MessageManager::callAsync ([safe = Component::SafePointer<AntiparticleEditor> (this)] { if (safe) safe->updateFromParams(); });
+    const bool gain = id == ap::id::inputGain || id == ap::id::outputGain, fromInput = id == ap::id::inputGain;
+    MessageManager::callAsync ([safe = Component::SafePointer<AntiparticleEditor> (this), gain, fromInput]
+    {
+        if (safe == nullptr) return;
+        if (! gain) safe->updateFromParams();
+        else if (safe->linkSource == nullptr) safe->mirror (fromInput);    // automation, presets: keep the link
+    });
 }
 
 void AntiparticleEditor::updateFromParams()
@@ -203,53 +213,46 @@ void AntiparticleEditor::updateReadout (const MouseEvent& e, bool released)
             if (k->isMouseButtonDown()) t = k;          // a drag keeps its readout wherever the mouse goes
     const bool inside = content.getLocalBounds().toFloat().contains (p) && dialog == nullptr && dropList == nullptr
                         && ! (e.eventComponent == &content && ! content.isMouseOver (true));
-    const ap::LinkButton* link = nullptr;
     if (t == nullptr && inside)
     {
-        if (linkIn.getBounds().toFloat().contains (p)) link = &linkIn;
-        else if (linkOut.getBounds().toFloat().contains (p)) link = &linkOut;
-        else
-        {
-            const std::pair<const ap::MetalKnob*, Rectangle<float>> cells[] {
-                { &inputKnob, plateCell (45.755f) }, { &limiterKnob, plateCell (754.745f) }, { &outputKnob, plateCell (841.74f) },
-                { &eqHigh, eqCell (90.75f) }, { &eqMid, eqCell (155.75f) }, { &eqLow, eqCell (220.75f) } };
-            for (auto& [k, r] : cells)
-                if (r.contains (p)) t = k;
-        }
+        const std::pair<const ap::MetalKnob*, Rectangle<float>> cells[] {
+            { &inputKnob, plateCell (45.755f) }, { &limiterKnob, plateCell (754.745f) }, { &outputKnob, plateCell (841.74f) },
+            { &eqHigh, eqCell (90.75f) }, { &eqMid, eqCell (155.75f) }, { &eqLow, eqCell (220.75f) } };
+        for (auto& [k, r] : cells)
+            if (r.contains (p)) t = k;
     }
-    if (t != readoutKnob || link != hoverLink) { readoutKnob = t; hoverLink = link; content.repaint(); }
+    if (t != readoutKnob) { readoutKnob = t; content.repaint(); }
 }
 
 String AntiparticleEditor::captionText (const ap::MetalKnob& k, const char* name) const
 {
     const bool linkedPartner = linkSource != nullptr && linkSource != &k && (&k == &inputKnob || &k == &outputKnob);
     if (&k == readoutKnob || linkedPartner) return String::formatted ("%.1f dB", k.getValue());
-    // hovering a link toggle names it in the caption beside it
-    if ((hoverLink == &linkIn && &k == &inputKnob) || (hoverLink == &linkOut && &k == &outputKnob))
-        return proc.ioLink.load() ? "linked" : "link";
     return name;
 }
 
 void AntiparticleEditor::beginLink (ap::MetalKnob& src)
 {
     if (! proc.ioLink.load() || linkSource != nullptr) return;
-    auto& other = &src == &inputKnob ? outputKnob : inputKnob;
-    if (auto* prm = proc.apvts.getParameter (&other == &inputKnob ? ap::id::inputGain : ap::id::outputGain))
+    if (auto* prm = proc.apvts.getParameter (&src == &inputKnob ? ap::id::outputGain : ap::id::inputGain))
     {
         linkSource = &src;
-        linkSum = inputKnob.getValue() + outputKnob.getValue();
         prm->beginChangeGesture();
+        mirror (&src == &inputKnob);
     }
 }
 
-void AntiparticleEditor::applyLink (ap::MetalKnob& src)
+void AntiparticleEditor::mirror (bool fromInput)
 {
-    if (linkSource != &src) return;
-    auto& other = &src == &inputKnob ? outputKnob : inputKnob;
-    if (auto* prm = dynamic_cast<RangedAudioParameter*> (proc.apvts.getParameter (&other == &inputKnob ? ap::id::inputGain : ap::id::outputGain)))
+    if (! proc.ioLink.load() || mirroring) return;
+    const ScopedValueSetter<bool> guard (mirroring, true);
+    const auto* srcId = fromInput ? ap::id::inputGain : ap::id::outputGain;
+    const auto* dstId = fromInput ? ap::id::outputGain : ap::id::inputGain;
+    if (auto* dst = dynamic_cast<RangedAudioParameter*> (proc.apvts.getParameter (dstId)))
     {
-        const auto r = prm->getNormalisableRange();
-        prm->setValueNotifyingHost (prm->convertTo0to1 (jlimit (r.start, r.end, (float) (linkSum - src.getValue()))));
+        const float target = dst->getNormalisableRange().snapToLegalValue (-proc.apvts.getRawParameterValue (srcId)->load());
+        if (std::abs (proc.apvts.getRawParameterValue (dstId)->load() - target) > 1.0e-5f)
+            dst->setValueNotifyingHost (dst->convertTo0to1 (target));
     }
     content.repaint();
 }

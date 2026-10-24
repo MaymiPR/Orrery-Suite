@@ -125,6 +125,7 @@ void AntiparticleProcessor::processBlock (AudioBuffer<float>& buffer, MidiBuffer
 
     ap::dsp::Params p;
     p.inputGainDb = raw[0]->load(); p.outputGainDb = raw[1]->load();
+    if (ioLink.load()) p.outputGainDb = -p.inputGainDb;      // the I/O link (ours): output = -input, always
     p.eqLowDb = raw[2]->load(); p.eqMidDb = raw[3]->load(); p.eqHighDb = raw[4]->load();
     p.eqBypass = raw[5]->load() >= 0.5f;
     p.amount = raw[6]->load();

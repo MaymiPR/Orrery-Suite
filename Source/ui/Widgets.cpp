@@ -50,18 +50,14 @@ void PowerButton::paint (Graphics& g)
 
 void LinkButton::paint (Graphics& g)
 {
-    // two rounded links crossing at 45 degrees, centred in the button
-    const auto c = getLocalBounds().toFloat().getCentre();
-    const auto col = active ? theme::mint : theme::plateText.withAlpha (isMouseOver() ? 0.85f : 0.55f);
-    g.setColour (isMouseOver() && active ? col.brighter (0.15f) : col);
-    const float len = 6.2f, w = 3.6f, r = w * 0.5f, off = 1.9f;
-    for (float s : { -1.0f, 1.0f })
-    {
-        Path link;
-        link.addRoundedRectangle (-len * 0.5f, -w * 0.5f, len, w, r);
-        link.applyTransform (AffineTransform::translation (s * off, 0.0f).rotated (-MathConstants<float>::pi / 4.0f).translated (c));
-        g.strokePath (link, PathStrokeType (1.1f));
-    }
+    const auto b = getLocalBounds().toFloat().withHeight (24.5f).reduced (0.5f);
+    g.setColour (active ? theme::text : theme::boxFill);
+    g.fillRoundedRectangle (b, 4.0f);
+    g.setColour (theme::text.withAlpha (isMouseOver() || active ? 1.0f : 0.95f));
+    g.drawRoundedRectangle (b, 4.0f, 1.0f);
+    g.setFont (theme::font (12.0f));
+    g.setColour (active ? theme::boxFill : theme::text);
+    g.drawText ("I/O LINK", Rectangle<float> (0.0f, 0.0f, (float) getWidth(), 24.5f).translated (0.5f, -0.5f), Justification::centred, false);
 }
 
 void IconButton::paint (Graphics& g)
