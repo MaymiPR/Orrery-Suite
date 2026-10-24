@@ -18,33 +18,36 @@ Reproduce: `python nulltest/nulltest.py` (our processor through tools/ApRender) 
 | lim: pink -6, gain 5 | pink noise, -6 dBFS RMS | -47.47 | -47.47 |
 | lim: drums -6, gain 12 | synthetic drum loop (kick, snare, hats), peaks -6 dBFS | -62.51 | -62.51 |
 | lim: music -2, gain 5 | the same mix, peaks -2 dBFS | -60.84 | -60.84 |
-| char: pink -18, 100 % | pink noise, -18 dBFS RMS | -52.6 | -52.6 |
-| char: pink -6, 100 % | pink noise, -6 dBFS RMS | -42.64 | -42.64 |
-| char: music -10, 50 % | synthetic mix (bass, chords, noise bed, drums), stereo, peaks -10 dBFS | -55.74 | -55.74 |
-| char: music -10, 100 % | synthetic mix (bass, chords, noise bed, drums), stereo, peaks -10 dBFS | -62.96 | -62.96 |
-| char: music -10, 200 % | synthetic mix (bass, chords, noise bed, drums), stereo, peaks -10 dBFS | -62.55 | -62.55 |
-| char: drums -6, 100 % | synthetic drum loop (kick, snare, hats), peaks -6 dBFS | -60.68 | -60.68 |
-| full: music -10, defaults | synthetic mix (bass, chords, noise bed, drums), stereo, peaks -10 dBFS | -62.96 | -62.96 |
-| full: music -2, defaults | the same mix, peaks -2 dBFS | -52.62 | -52.62 |
-| full: drums -6, defaults | synthetic drum loop (kick, snare, hats), peaks -6 dBFS | -60.88 | -60.88 |
-| full: music -10, 200 %, gain 10, eq +3/-2/+4, in -3 out +2 | synthetic mix (bass, chords, noise bed, drums), stereo, peaks -10 dBFS | -61.77 | -61.77 |
+| char: pink -18, 100 % | pink noise, -18 dBFS RMS | -54.99 | -54.99 |
+| char: pink -6, 100 % | pink noise, -6 dBFS RMS | -42.82 | -42.82 |
+| char: music -10, 50 % | synthetic mix (bass, chords, noise bed, drums), stereo, peaks -10 dBFS | -76.45 | -76.45 |
+| char: music -10, 100 % | synthetic mix (bass, chords, noise bed, drums), stereo, peaks -10 dBFS | -69.4 | -69.4 |
+| char: music -10, 200 % | synthetic mix (bass, chords, noise bed, drums), stereo, peaks -10 dBFS | -62.26 | -62.26 |
+| char: drums -6, 100 % | synthetic drum loop (kick, snare, hats), peaks -6 dBFS | -62.45 | -62.45 |
+| full: music -10, defaults | synthetic mix (bass, chords, noise bed, drums), stereo, peaks -10 dBFS | -69.4 | -69.4 |
+| full: music -2, defaults | the same mix, peaks -2 dBFS | -54.89 | -54.89 |
+| full: drums -6, defaults | synthetic drum loop (kick, snare, hats), peaks -6 dBFS | -62.28 | -62.28 |
+| full: music -10, 200 %, gain 10, eq +3/-2/+4, in -3 out +2 | synthetic mix (bass, chords, noise bed, drums), stereo, peaks -10 dBFS | -61.07 | -61.07 |
 
 Signal list: **pink -18**: pink noise, -18 dBFS RMS; **pink -6**: pink noise, -6 dBFS RMS; **sweep -12**: log sine sweep 20 Hz - 20 kHz, -12 dBFS; **drums -6**: synthetic drum loop (kick, snare, hats), peaks -6 dBFS; **music -10**: synthetic mix (bass, chords, noise bed, drums), stereo, peaks -10 dBFS; **music -2**: the same mix, peaks -2 dBFS.
 
 ## What the numbers say
 
-None of these is a perfect null. On program material the full chain lands between about -52 and -63 dB:
-well below audibility, though not bit-identical.
+None of these is a perfect null. On program material the full chain lands between about -55 and -69 dB, and the
+stress tests below (163 cases over settings, levels, signals, automation, rates and block sizes) have a median of -62 dB.
 
-- **The path, EQ and crossover are exact for practical purposes** (-79 to -87 dB): the fixed delay, the RBJ
-  filters and the character section's FIR crossover (taken from the reference's own impulse responses) are
-  linear and fully identified. At amount 0 % the character section nulls at -137 dB.
-- **The character section** reaches -55 to -63 dB on music and drums at 50 to 200 %. Its structure is
-  identified (MEASUREMENTS.md 3.9 - 3.11): a sine shaper, mid-only detectors, a side gain per band, and a mid
-  band whose nonlinear stage hears a steep upper edge. Its constants are fits per amount node. It is weakest
-  on loud dense noise (-43 dB for pink noise at -6 dBFS RMS), mostly in the high band.
+- **The path, EQ and crossover are exact for practical purposes** (-79 to -87 dB): the fixed delay, the
+  filters and the character section's FIR crossover (taken from the reference's own impulse responses, at every
+  supported rate) are linear and fully identified. At amount 0 % the character section nulls at -135 dB.
+- **The character section** nulls music at -66 to -76 dB from 12.5 to 187.5 %. Its structure is identified
+  (MEASUREMENTS.md 3.9 - 3.13): a sine shaper faded in by the amount, mid-only detectors, a side gain per band,
+  and a mid band whose nonlinear stage hears a steep upper edge. The low and mid laws are fitted on program
+  material. Weakest: loud dense noise and hot drums (-35 to -43 dB), in the high band, whose peak-sensitive
+  detector is not fully captured.
 - **The limiter** follows the probe-identified algorithm (MEASUREMENTS.md 4.1): -61 to -63 dB on music and
   drums, -47 dB under continuous heavy limiting of pink noise.
+- **Parameter changes** follow the reference's control-rate smoothing (MEASUREMENTS.md 5.1): gain, EQ, amount
+  and limiter moves null at -51 to -61 dB, switching stages on and off at -60 dB.
 - **The built VST3 and the offline renderer give the same numbers**, so these hold for the plug-in itself.
 
 ## Oversampling
@@ -54,12 +57,112 @@ ours forced to the same ratio (`python nulltest/null_oversampling.py`).
 
 | Ratio, signal | Residual, ours (dB) |
 |---|---|
-| 2x, defaults, music -10 | -61.64 |
-| 2x, defaults, drums -6 | -61.13 |
-| 2x, defaults, pink -18 | -52.33 |
-| 4x, defaults, music -10 | -58.9 |
-| 4x, defaults, drums -6 | -52.9 |
-| 4x, defaults, pink -18 | -50.49 |
-| 8x, defaults, music -10 | -59.37 |
-| 8x, defaults, drums -6 | -52.96 |
-| 8x, defaults, pink -18 | -50.65 |
+| 2x, defaults, music -10 | -65.07 |
+| 2x, defaults, drums -6 | -59.27 |
+| 2x, defaults, pink -18 | -54.5 |
+| 4x, defaults, music -10 | -61.84 |
+| 4x, defaults, drums -6 | -52.73 |
+| 4x, defaults, pink -18 | -52.03 |
+| 8x, defaults, music -10 | -62.2 |
+| 8x, defaults, drums -6 | -52.7 |
+| 8x, defaults, pink -18 | -52.13 |
+
+## Stress tests
+
+`python nulltest/stress.py`: 163 cases over the settings (amounts and gains between the fitted nodes,
+EQ extremes, input / output gain, stage combinations), levels and signals (bass-heavy, bright, extreme stereo,
+quiet / loud passages, a sweep), parameter automation (sweeps, jumps, switches), sample rates and block sizes.
+Median -62.3 dB, worst -33.2 dB.
+
+| Run | Group | Cases | Median (dB) | Worst (dB), case |
+|---|---|---|---|---|
+| 48 kHz, block 512 | amount | 11 | -69.5 | -62.3, amount 200 %, music -10 |
+| 48 kHz, block 512 | amount char-only | 5 | -43.5 | -34.8, char only 200 %, pink -10 |
+| 48 kHz, block 512 | limiter gain | 12 | -54.4 | -41.1, limiter 7.5 dB, drums -6 |
+| 48 kHz, block 512 | eq | 9 | -69.4 | -60.3, eq -6/+6/-6, music -10 |
+| 48 kHz, block 512 | io gain | 6 | -64.2 | -49.9, input +12 output -12, music -10 |
+| 48 kHz, block 512 | levels | 10 | -58.7 | -34.7, defaults, drums -1 |
+| 48 kHz, block 512 | combos | 7 | -61.5 | -34.7, char + lim (eq off), 100 %, drums -1 |
+| 48 kHz, block 512 | automation | 7 | -61.3 | -51.1, input gain jumps -12/+12, music -10 |
+| 44.1 kHz | amount | 11 | -69.6 | -62.5, amount 200 %, music -10 |
+| 44.1 kHz | levels | 10 | -58.0 | -35.3, defaults, drums -1 |
+| 96 kHz | amount | 11 | -67.4 | -63.1, amount 200 %, music -10 |
+| 96 kHz | levels | 10 | -56.1 | -40.7, defaults, pink -6 |
+| 88.2 kHz | levels | 10 | -55.9 | -41.1, defaults, pink -6 |
+| block 64 | levels | 10 | -58.7 | -34.7, defaults, drums -1 |
+| block 64 | automation | 7 | -59.3 | -33.2, bypass toggles: char, lim, eq, music -10 |
+| block 4096 | levels | 10 | -58.7 | -34.7, defaults, drums -1 |
+| block 4096 | automation | 7 | -61.5 | -51.1, input gain jumps -12/+12, music -10 |
+| block 333 | levels | 10 | -58.7 | -34.7, defaults, drums -1 |
+
+Every case at 48 kHz, block 512:
+
+| Group | Case | Residual (dB) |
+|---|---|---|
+| amount | amount 0 %, music -10 | -135.15 |
+| amount | amount 12.5 %, music -10 | -70.29 |
+| amount | amount 37.5 %, music -10 | -70.61 |
+| amount | amount 62.5 %, music -10 | -69.73 |
+| amount | amount 87.5 %, music -10 | -68.96 |
+| amount | amount 100 %, music -10 | -69.40 |
+| amount | amount 112.5 %, music -10 | -68.55 |
+| amount | amount 137.5 %, music -10 | -69.51 |
+| amount | amount 162.5 %, music -10 | -70.82 |
+| amount | amount 187.5 %, music -10 | -66.53 |
+| amount | amount 200 %, music -10 | -62.26 |
+| amount char-only | char only 25 %, pink -10 | -48.17 |
+| amount char-only | char only 62.5 %, pink -10 | -43.54 |
+| amount char-only | char only 100 %, pink -10 | -45.93 |
+| amount char-only | char only 150 %, pink -10 | -42.27 |
+| amount char-only | char only 200 %, pink -10 | -34.76 |
+| limiter gain | limiter 0 dB, music -2 | -59.16 |
+| limiter gain | limiter 2.5 dB, music -2 | -59.37 |
+| limiter gain | limiter 5 dB, music -2 | -54.89 |
+| limiter gain | limiter 7.5 dB, music -2 | -54.00 |
+| limiter gain | limiter 10 dB, music -2 | -52.68 |
+| limiter gain | limiter 12 dB, music -2 | -51.41 |
+| limiter gain | limiter 0 dB, drums -6 | -62.45 |
+| limiter gain | limiter 2.5 dB, drums -6 | -62.45 |
+| limiter gain | limiter 5 dB, drums -6 | -62.28 |
+| limiter gain | limiter 7.5 dB, drums -6 | -41.11 |
+| limiter gain | limiter 10 dB, drums -6 | -50.94 |
+| limiter gain | limiter 12 dB, drums -6 | -50.60 |
+| eq | eq +6/+0/+0, music -10 | -69.36 |
+| eq | eq -6/+0/+0, music -10 | -61.28 |
+| eq | eq +0/+6/+0, music -10 | -65.03 |
+| eq | eq +0/-6/+0, music -10 | -71.38 |
+| eq | eq +0/+0/+6, music -10 | -69.37 |
+| eq | eq +0/+0/-6, music -10 | -69.44 |
+| eq | eq +6/-6/+6, music -10 | -66.46 |
+| eq | eq -6/+6/-6, music -10 | -60.29 |
+| eq | eq +3.5/-1.5/+4.5, music -10 | -72.64 |
+| io gain | input -12 output +0, music -10 | -99.58 |
+| io gain | input -6 output +3, music -10 | -68.59 |
+| io gain | input +6 output -6, music -10 | -59.76 |
+| io gain | input +12 output -12, music -10 | -49.94 |
+| io gain | input +0 output +12, music -10 | -69.40 |
+| io gain | input +9.5 output +0, music -10 | -52.26 |
+| levels | defaults, music -20 | -77.32 |
+| levels | defaults, music 0 | -53.18 |
+| levels | defaults, drums -1 | -34.70 |
+| levels | defaults, pink -18 | -55.03 |
+| levels | defaults, pink -6 | -40.08 |
+| levels | defaults, bass -6 | -62.45 |
+| levels | defaults, bright -8 | -78.41 |
+| levels | defaults, wide -10 | -63.98 |
+| levels | defaults, dynamic -4 | -64.28 |
+| levels | defaults, sweep -6 | -45.26 |
+| combos | 200 %, lim 12, eq +6/+6/+6, in +6, music -10 | -49.61 |
+| combos | 150 %, lim 0, eq -6/0/+6, bass -6 | -63.52 |
+| combos | 25 %, lim 8, bright -8 | -67.44 |
+| combos | 175 %, wide -10, eq +4/-3/+2 | -67.60 |
+| combos | char + lim (eq off), 100 %, drums -1 | -34.70 |
+| combos | eq + lim (char off), eq +6/-6/+6, music -2 | -61.50 |
+| combos | eq + char (lim off), 200 %, pink -10 | -38.22 |
+| automation | amount sweep 0 -> 200 %, music -10 | -65.91 |
+| automation | amount jumps 50/150/0/200 %, music -10 | -61.29 |
+| automation | input gain jumps -12/+12, music -10 | -51.08 |
+| automation | limiter gain ramp 0 -> 12 dB, music -2 | -53.07 |
+| automation | eq moves, music -10 | -60.15 |
+| automation | output gain jumps, drums -6 | -62.23 |
+| automation | bypass toggles: char, lim, eq, music -10 | -62.08 |

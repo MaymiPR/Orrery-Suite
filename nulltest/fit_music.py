@@ -2,14 +2,15 @@
 fits of fit_bandlaw.py alone have near-equivalent minima that differ on music). The whole section is modelled in
 Python (charmodel.py, identical to the plug-in to -120 dB); the other two bands are fixed, each signal weighs the same.
 
-    python fit_music.py low 2 [start law files ...]     writes the best into measurements/character/bandlaw_music.json"""
+    python fit_music.py low 2 [start law files ... | broad] [--truepeak]     writes the best into
+    measurements/character/bandlaw_music.json (bandlaw_music_tp.json with --truepeak)"""
 import json, os, sys
 import numpy as np
 from scipy.optimize import least_squares
 import tgp, nulltest as N, stress as S, ident_signals as IS, charmodel as M, fit_bandlaw as F
 
 D = os.path.join(tgp.ROOT, 'measurements', 'character')
-OUT = os.path.join(D, 'bandlaw_music.json')
+OUT = os.path.join(D, 'bandlaw_music_tp.json' if '--truepeak' in sys.argv else 'bandlaw_music.json')
 KEYS = ['k', 'mix', 'thresh', 'knee', 'ratio', 'attack', 'release', 'shapeDry']
 LO = [1e-3, 0.0, -60, 0.0, 1.0, 0.005, 0.5, 0.0]
 HI = [10, 1.0, 0, 80, 20, 3000, 5000, 0.99]
@@ -44,7 +45,7 @@ def other_laws(band, node, table, broad):
 
 if __name__ == '__main__':
     band, node = sys.argv[1], float(sys.argv[2]); node = int(node) if node == int(node) else node
-    starts = sys.argv[3:] or ['bandlaw_sd.json', 'bandlaw.json', 'bandlaw_lowrich.json']
+    starts = [a for a in sys.argv[3:] if not a.startswith('--')] or ['bandlaw_sd.json', 'bandlaw.json', 'bandlaw_lowrich.json']
     table = json.load(open(os.path.join(D, 'bandlaw_sd.json'))); broad = json.load(open(os.path.join(D, 'fit_char.json')))
     if os.path.exists(OUT): table.update(json.load(open(OUT)))       # laws already fitted this way take precedence
     xs = signals(band)
@@ -57,15 +58,21 @@ if __name__ == '__main__':
         fixed = sum(M.band(xb[b], sb[b], laws[M.NAMES[b]], M.I.GAINS16[b][k17], M.WIDTH[M.NAMES[b]][k17]) for b in range(3) if b != bi)
         tgt = (r - fixed)[:, N.PRE:]
         data.append((xb[bi][:, N.PRE:], sb[bi][:, N.PRE:], tgt, np.sqrt(np.sum(r[:, N.PRE:] ** 2))))
-    peak = 0 if band != 'high' else 1
+    peak = 0 if band != 'high' else (2 if '--truepeak' in sys.argv else 1)
+    if band == 'high':        # the high band also has a slow second detector (the broadband fit's structure)
+        KEYS = KEYS + ['attack2', 'release2', 'slowOffset']; LO = LO + [1.0, 1.0, -60.0]; HI = HI + [20000.0, 20000.0, 20.0]
     def resid(q):
         law = dict(zip(KEYS, q), peak=peak)
         return np.concatenate([((M.band(xb, sb, law, M.I.GAINS16[bi][k17], M.WIDTH[band][k17]) - t) / nrm)[:, ::4].ravel() for xb, sb, t, nrm in data])
     def score(r): return 10 * np.log10(np.mean([np.sum(((M.band(xb, sb, dict(zip(KEYS, r), peak=peak), M.I.GAINS16[bi][k17], M.WIDTH[band][k17]) - t) / nrm) ** 2) for xb, sb, t, nrm in data]))
     best = None
     for sf in starts:
-        tb = json.load(open(os.path.join(D, sf)))
-        st = F.law_at(tb, band, node) if f'{band}|{node}' not in tb else tb[f'{band}|{node}']
+        if sf == 'broad':         # the broadband fit (fit_char.json)
+            row = broad[band][int(node)]
+            st = dict(row, k=float(np.sqrt(6 * row['cubic'])))
+        else:
+            tb = json.load(open(os.path.join(D, sf)))
+            st = F.law_at(tb, band, node) if f'{band}|{node}' not in tb else tb[f'{band}|{node}']
         if not st: continue
         q0 = [min(max(st.get(k, 0.0 if k == 'shapeDry' else (LO[i] + HI[i]) / 2), LO[i]), HI[i]) for i, k in enumerate(KEYS)]
         print(band, node, 'start', sf, 'mean residual %.2f dB' % score(q0), flush=True)

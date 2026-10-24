@@ -128,18 +128,21 @@ def report():
         lines.append(f'| {name.split(" (")[0]} | {sigdoc[sig]} | {r.get("residual_dB", "")} | {v.get("residual_dB", "")} |')
     lines += ['', 'Signal list: ' + '; '.join(f'**{k}**: {v}' for k, v in sigdoc.items()) + '.', '',
               '## What the numbers say', '',
-              'None of these is a perfect null. On program material the full chain lands between about -52 and -63 dB:',
-              'well below audibility, though not bit-identical.',
+              'None of these is a perfect null. On program material the full chain lands between about -55 and -69 dB, and the',
+              'stress tests below (163 cases over settings, levels, signals, automation, rates and block sizes) have a median of -62 dB.',
               '',
-              '- **The path, EQ and crossover are exact for practical purposes** (-79 to -87 dB): the fixed delay, the RBJ',
-              "  filters and the character section's FIR crossover (taken from the reference's own impulse responses) are",
-              '  linear and fully identified. At amount 0 % the character section nulls at -137 dB.',
-              '- **The character section** reaches -55 to -63 dB on music and drums at 50 to 200 %. Its structure is',
-              '  identified (MEASUREMENTS.md 3.9 - 3.11): a sine shaper, mid-only detectors, a side gain per band, and a mid',
-              '  band whose nonlinear stage hears a steep upper edge. Its constants are fits per amount node. It is weakest',
-              '  on loud dense noise (-43 dB for pink noise at -6 dBFS RMS), mostly in the high band.',
+              '- **The path, EQ and crossover are exact for practical purposes** (-79 to -87 dB): the fixed delay, the',
+              "  filters and the character section's FIR crossover (taken from the reference's own impulse responses, at every",
+              '  supported rate) are linear and fully identified. At amount 0 % the character section nulls at -135 dB.',
+              '- **The character section** nulls music at -66 to -76 dB from 12.5 to 187.5 %. Its structure is identified',
+              '  (MEASUREMENTS.md 3.9 - 3.13): a sine shaper faded in by the amount, mid-only detectors, a side gain per band,',
+              '  and a mid band whose nonlinear stage hears a steep upper edge. The low and mid laws are fitted on program',
+              '  material. Weakest: loud dense noise and hot drums (-35 to -43 dB), in the high band, whose peak-sensitive',
+              '  detector is not fully captured.',
               '- **The limiter** follows the probe-identified algorithm (MEASUREMENTS.md 4.1): -61 to -63 dB on music and',
               '  drums, -47 dB under continuous heavy limiting of pink noise.',
+              "- **Parameter changes** follow the reference's control-rate smoothing (MEASUREMENTS.md 5.1): gain, EQ, amount",
+              '  and limiter moves null at -51 to -61 dB, switching stages on and off at -60 dB.',
               '- **The built VST3 and the offline renderer give the same numbers**, so these hold for the plug-in itself.',
               '']
     osp = os.path.join(here, 'results_oversampling.json')
@@ -150,6 +153,28 @@ def report():
                   '| Ratio, signal | Residual, ours (dB) |', '|---|---|']
         for name, v in json.load(open(osp)).items():
             lines.append(f'| {name} | {v["residual_dB"]} |')
+        lines.append('')
+    stp = os.path.join(here, 'results_stress.json')
+    if os.path.exists(stp):
+        st = json.load(open(stp))
+        vals = list(st.values())
+        lines += ['## Stress tests', '',
+                  f'`python nulltest/stress.py`: {len(vals)} cases over the settings (amounts and gains between the fitted nodes,',
+                  'EQ extremes, input / output gain, stage combinations), levels and signals (bass-heavy, bright, extreme stereo,',
+                  'quiet / loud passages, a sweep), parameter automation (sweeps, jumps, switches), sample rates and block sizes.',
+                  f'Median {np.median(vals):.1f} dB, worst {max(vals):.1f} dB.', '',
+                  '| Run | Group | Cases | Median (dB) | Worst (dB), case |', '|---|---|---|---|---|']
+        groups = {}
+        for key, v in st.items():
+            run, group, case = key.split(' | ')
+            groups.setdefault((run, group), []).append((v, case))
+        for (run, group), items in groups.items():
+            worst = max(items)
+            lines.append(f'| {run} | {group} | {len(items)} | {np.median([v for v, _ in items]):.1f} | {worst[0]:.1f}, {worst[1]} |')
+        lines += ['', 'Every case at 48 kHz, block 512:', '', '| Group | Case | Residual (dB) |', '|---|---|---|']
+        for key, v in st.items():
+            run, group, case = key.split(' | ')
+            if run.startswith('48 kHz'): lines.append(f'| {group} | {case} | {v:.2f} |')
         lines.append('')
     return lines
 

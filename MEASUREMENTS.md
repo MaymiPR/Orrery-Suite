@@ -288,6 +288,35 @@ The small-signal response is unchanged and still exact.
 A steep low edge for the high band's stage, by symmetry, made the broadband nulls worse. A steep edge for the low
 band would need more pre-ringing than the 151 samples the delay allows. So only the mid band's upper edge is steep.
 
+### 3.11b The amount fades the shaper in (Phase 4, `fit_bandlaw.py --shapedry`, `fit_music.py`)
+
+Below 100 % the shaper is not driven more gently. A fully driven shaper is blended with the dry band:
+
+  y = d · u + (1 − d) · sin(k · u) / k
+
+The evidence:
+- At 50 % the low band's 5th harmonic is far above what a sine of the fitted drive makes (−41 against −49 dBc at
+  +4 dBFS). Compared with the 3rd harmonic squared it is 0.62–0.73, where a pure sine gives 0.3.
+- With d free, the probe fits jump: low band at 25 % from −42 to −64 dB, mid at 25 % from −52 to −88 dB.
+- d comes out as 1 − amount / 100 % in both bands (low 0.73 / 0.47 / 0.23 / 0, mid 0.76 / 0.50 / 0.22 / 0 at 25 /
+  50 / 75 / 100 %). The drive rises only slowly below 100 % and faster above.
+
+**Fitted on program material.** Fits to the probes alone have near-equivalent minima that differ on music.
+`fit_music.py` therefore fits each band and node against the reference on music, drums, a bass-heavy mix, pink
+noise and the probes at once. The whole section is modelled in Python (`charmodel.py`, identical to the plug-in to
+−120 dB). Every start then converges to the same law, and the laws come out the same at every amount:
+
+| Band | Threshold | Knee | Ratio | Attack / release | What moves with the amount |
+|---|---|---|---|---|---|
+| Low | −9.4 dB | 29.7 dB | 1.33 | 1.0 ms / 2.0 s | drive 1.89 … 2.59, mix 0.19 … 1.0, d |
+| Mid | −19 … −20 dB | 44 … 47 dB | 2.3 … 2.7 | 310 … 325 ms / 86 … 88 ms | drive 1.75 … 3.42, mix 0.25 … 1.0, d |
+
+Between the nodes the laws interpolate well: 37.5 % nulls at −71 dB that way, against −34 dB with laws fitted
+directly at the half nodes. On music the character section now nulls to −70 dB from 12.5 to 162.5 %.
+
+The same approach did not work for the high band. Its music-fitted laws null music as well, but drums 5 dB worse.
+Its detector reacts to peaks (3.13) in a way our gain computer does not capture, so it keeps the broadband fit.
+
 ### 3.12 Other sample rates (Phase 4, `nulltest/ident_rate.py`)
 
 At 44.1, 88.2, 96 and 192 kHz the nine small-signal impulse responses again span exactly three filters (rank-3 fit
@@ -505,10 +534,16 @@ How closely the result matches is in [NULLTESTS.md](NULLTESTS.md).
 - the oversampled path: matched within 0.002 dB (7)
 
 **Still open:**
-- **Character section.** The band laws are fits per amount node, not known formulas. The fits reach −50 to −56 dB
-  on the probes. Loud broadband signals (pink noise at −6 dBFS RMS) are matched least well.
+- **The high band's detector.** It reacts to peaks (3.13). Neither a sample-peak nor a true-peak detector, with or
+  without a slow second stage, fits tones, two tones and band noise at once (−31 … −42 dB). Every refit of its
+  parameters traded drums for pink noise. This leaves loud dense material as the weakest case: pink noise at
+  −6 dBFS RMS −40 dB, drums peaking at −1 dBFS −35 dB, the character at 200 % on pink noise −35 dB.
 - **Limiter.** Dense, continuous limiting (pink noise driven 5 dB into it) nulls to −47.5 dB; isolated peaks and
-  drum hits match to −62 dB.
+  drum hits match to −62 dB. At 96 kHz one drum event sits on a tie in its peak planning (4.1).
+- **Host blocks under 128 samples.** The reference switches the character section later there (5.1). A 64-sample
+  host block leaves the bypass toggles at −33 dB; static settings are unaffected.
+- **The sweep's crossover region.** Between 1.5 and 3.5 kHz ours compresses up to 0.1 dB more (sweep at −6 dBFS:
+  −45 dB). That is where the mid band's steep edge and the high band meet.
 - **Side-chain EXT.** Audio fed to the reference's side-chain bus had no effect in our test host. Ours is implemented
   as described (the side-chain drives the band detectors) but could not be compared.
 - **Meters.** The I/O RMS and LUFS readouts and the limiter's dash meter (step size estimated) are not measured yet.
