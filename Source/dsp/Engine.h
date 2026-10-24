@@ -88,6 +88,15 @@ private:
     ChunkGain inGain, outGain;
     double gainTau = 480;
     bool first = true, eqOn = true, lastCharBypass = false, lastLimBypass = false;
+    // the EQ and character switches as the oversampled section sees them: with host blocks under ctlLen samples the
+    // reference takes them over only once a whole control chunk has gathered (Engine.cpp)
+    struct Switch
+    {
+        bool value = false, target = false; long wait = 0;
+        void jump (bool v) { value = target = v; wait = 0; }
+        void set (bool v, long delay) { if (v != target) { target = v; wait = delay; if (delay <= 0) value = v; } }
+        void advance (int n) { if (wait > 0 && (wait -= n) <= 0) value = target; }
+    } charSwitch, eqSwitch;
     FracDelay core, bypassDelay;
     Character character;
     Limiter limiter;

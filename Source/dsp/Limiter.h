@@ -31,33 +31,48 @@ public:
             if (std::abs (fs - pr.rate) < 1.0) { w = pr.window * t.limWindow / 21.0; rel = pr.release * t.limReleaseSteps / 22.0; }
         if (t.limWindowAt > 0) w = t.limWindowAt;
         if (t.limReleaseAt > 0) rel = t.limReleaseAt;
-        window = std::clamp ((int) std::lround (w), 1, lookahead - kTaps / 2 - 1);
+        window = std::clamp ((int) std::lround (w), 1, lookahead - std::clamp ((int) t.limTaps / 2 * 2, 4, kTaps) / 2 - 1);
         releaseSteps = std::max (1, (int) std::lround (rel));
         slowAtt = 1.0 - std::exp (-1.0 / (t.limSlowAttackMs * 1.0e-3 * fs));
         slowRel = std::exp (-1.0 / (t.limSlowReleaseMs * 1.0e-3 * fs));
         trim = std::pow (10.0, t.limTrimDb / 20.0);
-        // interpolation for the inter-sample level: Kaiser-windowed sinc, kTaps taps per phase
-        for (int ph = 0; ph < kSub; ++ph)
+        // interpolation for the inter-sample level: Kaiser-windowed sinc, nTaps taps per phase
+        nSub = std::clamp ((int) t.limSub, 1, kSub);
+        nTaps = std::clamp ((int) t.limTaps / 2 * 2, 4, kTaps);
+        beta = t.limBeta;
+        for (int ph = 0; ph < nSub; ++ph)
         {
-            const double frac = ph / (double) kSub;
+            const double frac = ph / (double) nSub;
             double sum = 0;
-            for (int i = 0; i < kTaps; ++i)
+            for (int i = 0; i < nTaps; ++i)
             {
-                const double x = (i - (kTaps / 2 - 1)) - frac;
+                const double x = (i - (nTaps / 2 - 1)) - frac;
                 const double sinc = std::abs (x) < 1e-12 ? 1.0 : std::sin (kPiL * x) / (kPiL * x);
-                const double r = x / (kTaps / 2.0), w = std::abs (r) >= 1 ? 0.0 : besselI0 (6.0 * std::sqrt (1 - r * r)) / besselI0 (6.0);
+                const double r = x / (nTaps / 2.0), w = std::abs (r) >= 1 ? 0.0 : besselI0 (beta * std::sqrt (1 - r * r)) / besselI0 (beta);
                 interp[ph][i] = sinc * w; sum += interp[ph][i];
             }
-            for (auto& c : interp[ph]) c /= sum;
+            for (int i = 0; i < nTaps; ++i) interp[ph][i] /= sum;
         }
         size = lookahead + 4;
         level.assign ((size_t) size, 1.0);
+        partial.assign ((size_t) size, 1.0);
+        {
+            // how far a release looks for a level to fall toward (per rate as the window; 22.67 at 48 kHz)
+            const double reach = std::min ((double) (lookahead - nTaps / 2 - 1), t.limReach * window / 21.0);
+            reachWhole = (int) std::floor (reach);
+            reachPhases = (int) std::floor ((reach - reachWhole) * nSub);
+            if (t.limReach <= 0) reachWhole = 0;
+        }
+        sampleAbs.assign ((size_t) size, 0.0);
+        peakTest = (int) t.limPeakTest;
         for (auto& d : delay) d.assign ((size_t) size, 0.0);
         reset();
     }
     void reset()
     {
         std::fill (level.begin(), level.end(), 1.0);
+        std::fill (partial.begin(), partial.end(), 1.0);
+        std::fill (sampleAbs.begin(), sampleAbs.end(), 0.0);
         for (auto& d : delay) std::fill (d.begin(), d.end(), 0.0);
         for (auto& h : hist) std::fill (std::begin (h), std::end (h), 0.0);
         pos = hpos = 0; slow = 1.0; grMax = 0.0;
@@ -68,20 +83,24 @@ public:
     // one stereo sample in place (the input already carries the limiter's input gain)
     inline void process (double& l, double& r)
     {
-        // the inter-sample level of the sample kTaps / 2 back (the interpolator's delay, taken from the look-ahead)
+        // the inter-sample level of the sample nTaps / 2 back (the interpolator's delay, taken from the look-ahead)
         hist[0][hpos] = l; hist[1][hpos] = r;
-        hpos = (hpos + 1) % kTaps;
-        double m = 0;
+        hpos = (hpos + 1) % nTaps;
+        double m = 0, mPart = 0;
         for (int c = 0; c < 2; ++c)
-            for (int ph = 0; ph < kSub; ++ph)
+            for (int ph = 0; ph < nSub; ++ph)
             {
                 double acc = 0;
-                for (int i = 0; i < kTaps; ++i) acc += interp[ph][i] * hist[c][(hpos + i) % kTaps];
+                for (int i = 0; i < nTaps; ++i) acc += interp[ph][i] * hist[c][(hpos + i) % nTaps];
                 m = std::max (m, std::abs (acc));
+                if (ph == reachPhases) mPart = std::max (mPart, std::abs (acc));
             }
-        level[(size_t) wrap (pos - kTaps / 2)] = std::max (1.0, m);
+        const int lv = wrap (pos - nTaps / 2);
+        level[(size_t) lv] = std::max (1.0, m);
+        partial[(size_t) lv] = std::max (1.0, mPart);      // the level at one point inside the sample interval
         level[(size_t) pos] = 1.0;
         delay[0][(size_t) pos] = l; delay[1][(size_t) pos] = r;
+        sampleAbs[(size_t) lv] = std::max (std::abs (delay[0][(size_t) lv]), std::abs (delay[1][(size_t) lv]));
 
         const int out = wrap (pos - lookahead);
         const double now = level[(size_t) out];
@@ -113,7 +132,9 @@ public:
     }
 
 private:
-    static constexpr int kTaps = 16, kSub = 16;
+    static constexpr int kTaps = 32, kSub = 32;
+    int nSub = 16, nTaps = 16;
+    double beta = 6.0;
     static constexpr double kPiL = 3.14159265358979323846;
     static double besselI0 (double x) { double s = 1, t = 1; for (int k = 1; k < 30; ++k) { t *= (x / (2 * k)) * (x / (2 * k)); s += t; } return s; }
     inline int wrap (int i) const { return i < 0 ? i + size : (i >= size ? i - size : i); }
@@ -122,6 +143,14 @@ private:
     inline double peakAt (int out, int k) const
     {
         const double v = level[(size_t) wrap (out + k)];
+        if (peakTest == 1)          // a local maximum of the sample magnitudes
+        {
+            const double sv = sampleAbs[(size_t) wrap (out + k)];
+            return sv >= sampleAbs[(size_t) wrap (out + k - 1)] && sv >= sampleAbs[(size_t) wrap (out + k + 1)] ? v : 1.0;
+        }
+        if (peakTest == 2)          // a local maximum over two neighbours each side
+            return v >= level[(size_t) wrap (out + k - 1)] && v >= level[(size_t) wrap (out + k + 1)]
+                   && v >= level[(size_t) wrap (out + k - 2)] && v >= level[(size_t) wrap (out + k + 2)] ? v : 1.0;
         return v >= level[(size_t) wrap (out + k - 1)] && v >= level[(size_t) wrap (out + k + 1)] ? v : 1.0;
     }
 
@@ -148,9 +177,13 @@ private:
             const double v = peakAt (out, k);
             if (v > 1.0) { planSlope = (v - state) / k; planLeft = k; planTarget = v; planRelease = false; return; }
         }
+        // a release over releaseSteps: right after a peak toward the level `reach` samples ahead (the flank of a peak
+        // still beyond the window; 1 when there is none there), else toward 1. An idle limiter stays idle
+        const bool afterPeak = ! planRelease;
         planRelease = true;
-        if (state <= std::max (1.0, slow) + 1.0e-9) { planLeft = 0; planSlope = 0.0; planTarget = state; }   // idle
-        else { planSlope = (1.0 - state) / releaseSteps; planLeft = releaseSteps; planTarget = 1.0; }
+        if (state <= std::max (1.0, slow) + 1.0e-9) { planLeft = 0; planSlope = 0.0; planTarget = state; return; }   // idle
+        const double to = afterPeak && reachWhole > 0 ? partial[(size_t) wrap (out + reachWhole)] : 1.0;
+        planSlope = (to - state) / releaseSteps; planLeft = releaseSteps; planTarget = to;
     }
 
     double fs = 48000.0, slowAtt = 0, slowRel = 0, trim = 1, slow = 1, grMax = 0;
@@ -158,6 +191,8 @@ private:
     bool planRelease = false;
     int lookahead = 38, window = 21, releaseSteps = 22, size = 64, pos = 0, hpos = 0, planLeft = 0;
     double interp[kSub][kTaps] {}, hist[2][kTaps] {};
-    std::vector<double> level, delay[2];
+    std::vector<double> level, partial, sampleAbs, delay[2];
+    int reachWhole = 0, reachPhases = 0;
+    int peakTest = 0;
 };
 }

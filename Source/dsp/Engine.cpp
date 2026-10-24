@@ -96,19 +96,27 @@ void Engine::process (float* l, float* r, const float* scL, const float* scR, in
         updateEq (g0);
         character.setAmount (p.amount);
         lastCharBypass = p.characterBypass; lastLimBypass = p.limiterBypass;
+        charSwitch.jump (p.characterBypass); eqSwitch.jump (p.eqBypass);
         first = false;
     }
+    // with host blocks shorter than a control chunk the switches of the oversampled section (EQ, character) take
+    // effect once ctlLen samples have gathered: 128 - n rounded up to whole blocks later (measured at 32 / 64 / 96)
+    const long switchDelay = n < ctlLen ? (long) ((ctlLen - n + n - 1) / n) * n : 0;
+    charSwitch.set (p.characterBypass, switchDelay);
+    eqSwitch.set (p.eqBypass, switchDelay);
     // the character section and the limiter do not run while bypassed and start afresh when switched back on (the
     // reference's do: its toggles null at -59 dB this way, -31 dB with the stages kept running)
-    if (lastCharBypass && ! p.characterBypass) character.reset();
     if (lastLimBypass && ! p.limiterBypass) limiter.reset();
-    lastCharBypass = p.characterBypass; lastLimBypass = p.limiterBypass;
+    lastLimBypass = p.limiterBypass;
     const bool useSc = p.sidechainExternal && scL != nullptr && scR != nullptr;
 
     // control rate: chunks of up to ctlLen samples from the block's start
     for (int c0 = 0; c0 < n; c0 += ctlLen)
     {
         const int len = std::min (ctlLen, n - c0);
+        if (lastCharBypass && ! charSwitch.value) character.reset();
+        lastCharBypass = charSwitch.value;
+        const bool charBypass = charSwitch.value;
         inParam.set (p.inputGainDb);
         inGain.chunk (std::pow (10.0, inParam.advance (len) / 20.0), len, gainTau);
         outGain.chunk (std::pow (10.0, p.outputGainDb / 20.0), len, gainTau);
@@ -116,7 +124,7 @@ void Engine::process (float* l, float* r, const float* scL, const float* scR, in
         amountParam.set (p.amount); amount.set (amountParam.advance (len));
         // the EQ switch follows its ramp as read at the previous chunk's end
         eqOn = eqOnParam.value >= 0.5;
-        eqOnParam.set (p.eqBypass ? 0.0 : 1.0); eqOnParam.advance (len);
+        eqOnParam.set (eqSwitch.value ? 0.0 : 1.0); eqOnParam.advance (len);
         limGain.set (limTarget);
 
         for (int start = c0; start < c0 + len; start += kSub)
@@ -164,7 +172,7 @@ void Engine::process (float* l, float* r, const float* scL, const float* scR, in
                 if (eqOn) { a = ea; b = eb; }
                 double da = a, db = b;         // the fixed-delay path runs all the time (the switch to it is instant)
                 core.process (da, db);
-                if (p.characterBypass) { a = da; b = db; }
+                if (charBypass) { a = da; b = db; }
                 else if (useSc) character.process (a, b, &sc[0][i], &sc[1][i]);
                 else character.process (a, b);
                 u[0][i] = a; u[1][i] = b;
@@ -185,6 +193,8 @@ void Engine::process (float* l, float* r, const float* scL, const float* scR, in
                 l[start + i] = (float) a; r[start + i] = (float) b;
             }
         }
+        charSwitch.advance (len);
+        eqSwitch.advance (len);
     }
 }
 }

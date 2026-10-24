@@ -10,7 +10,7 @@ from scipy.optimize import least_squares
 import tgp, nulltest as N, stress as S, ident_signals as IS, charmodel as M, fit_bandlaw as F
 
 D = os.path.join(tgp.ROOT, 'measurements', 'character')
-OUT = os.path.join(D, 'bandlaw_music_tp.json' if '--truepeak' in sys.argv else 'bandlaw_music.json')
+OUT = os.path.join(D, ('bandlaw_music_tp' if '--truepeak' in sys.argv else 'bandlaw_music') + ('_rel' if '--relative' in sys.argv else '') + '.json')
 KEYS = ['k', 'mix', 'thresh', 'knee', 'ratio', 'attack', 'release', 'shapeDry']
 LO = [1e-3, 0.0, -60, 0.0, 1.0, 0.005, 0.5, 0.0]
 HI = [10, 1.0, 0, 80, 20, 3000, 5000, 0.99]
@@ -58,13 +58,21 @@ if __name__ == '__main__':
         fixed = sum(M.band(xb[b], sb[b], laws[M.NAMES[b]], M.I.GAINS16[b][k17], M.WIDTH[M.NAMES[b]][k17]) for b in range(3) if b != bi)
         tgt = (r - fixed)[:, N.PRE:]
         data.append((xb[bi][:, N.PRE:], sb[bi][:, N.PRE:], tgt, np.sqrt(np.sum(r[:, N.PRE:] ** 2))))
+    RELATIVE = '--relative' in sys.argv       # objective: mean of the per-signal residuals in dB (no signal traded away)
     peak = 0 if band != 'high' else (2 if '--truepeak' in sys.argv else 1)
     if band == 'high':        # the high band also has a slow second detector (the broadband fit's structure)
         KEYS = KEYS + ['attack2', 'release2', 'slowOffset']; LO = LO + [1.0, 1.0, -60.0]; HI = HI + [20000.0, 20000.0, 20.0]
+    wts = np.ones(len(data))                 # --relative: each signal weighed by its starting residual (set per start)
+    def per_signal(q):
+        law = dict(zip(KEYS, q), peak=peak)
+        return [np.sum(((M.band(xb, sb, law, M.I.GAINS16[bi][k17], M.WIDTH[band][k17]) - t) / nrm) ** 2) for xb, sb, t, nrm in data]
     def resid(q):
         law = dict(zip(KEYS, q), peak=peak)
-        return np.concatenate([((M.band(xb, sb, law, M.I.GAINS16[bi][k17], M.WIDTH[band][k17]) - t) / nrm)[:, ::4].ravel() for xb, sb, t, nrm in data])
-    def score(r): return 10 * np.log10(np.mean([np.sum(((M.band(xb, sb, dict(zip(KEYS, r), peak=peak), M.I.GAINS16[bi][k17], M.WIDTH[band][k17]) - t) / nrm) ** 2) for xb, sb, t, nrm in data]))
+        return np.concatenate([w * ((M.band(xb, sb, law, M.I.GAINS16[bi][k17], M.WIDTH[band][k17]) - t) / nrm)[:, ::4].ravel()
+                               for w, (xb, sb, t, nrm) in zip(wts, data)])
+    def score(r):
+        e = per_signal(r)
+        return float(np.mean(10 * np.log10(e))) if RELATIVE else 10 * np.log10(np.mean(e))
     best = None
     for sf in starts:
         if sf == 'broad':         # the broadband fit (fit_char.json)
@@ -75,9 +83,11 @@ if __name__ == '__main__':
             st = F.law_at(tb, band, node) if f'{band}|{node}' not in tb else tb[f'{band}|{node}']
         if not st: continue
         q0 = [min(max(st.get(k, 0.0 if k == 'shapeDry' else (LO[i] + HI[i]) / 2), LO[i]), HI[i]) for i, k in enumerate(KEYS)]
-        print(band, node, 'start', sf, 'mean residual %.2f dB' % score(q0), flush=True)
+        if RELATIVE: wts[:] = 1 / np.sqrt(np.array(per_signal(q0)))
+        print(band, node, 'start', sf, 'mean residual %.2f dB' % score(q0), 'per signal', ' '.join('%.1f' % (10 * np.log10(v)) for v in per_signal(q0)), flush=True)
         r = least_squares(resid, q0, bounds=(LO, HI), x_scale='jac', max_nfev=300)
         sc = score(r.x)
+        print('   per signal', ' '.join('%.1f' % (10 * np.log10(v)) for v in per_signal(r.x)), flush=True)
         print('   ->', '%.2f dB' % sc, {k: round(v, 4) for k, v in zip(KEYS, r.x)}, flush=True)
         if best is None or sc < best[0]: best = (sc, r.x)
     res = dict(zip(KEYS, [float(v) for v in best[1]]), peak=peak, residual_dB=float(best[0]))

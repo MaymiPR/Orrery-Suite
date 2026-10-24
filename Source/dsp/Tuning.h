@@ -58,6 +58,11 @@ struct Tuning
     // limiter (Limiter.h): window ahead and release (samples at 48 kHz), slow envelope, output trim
     double limWindow = 21, limReleaseSteps = 22;
     double limWindowAt = 0, limReleaseAt = 0;   // > 0: window / release in samples at the current rate (fitting)
+    double limPeakTest = 0;               // which samples count as peaks (Limiter::peakAt; experiments)
+    double limReach = 22.9;               // samples (48 kHz) a release right after a peak looks ahead for a level to fall
+                                          // toward (0: always toward 1)
+    double limSub = 16;                   // phases of the inter-sample level (experiments; up to 32)
+    double limTaps = 16, limBeta = 6.0;   // its interpolator: Kaiser-windowed sinc, taps (up to 32) and window beta
     double limSlowAttackMs = 24.47, limSlowReleaseMs = 377.8;
     double limTrimDb = -0.1;              // after the 0 dBFS ceiling: the output's ceiling and small-signal gain
 
@@ -95,7 +100,7 @@ struct Tuning
         const S scalars[] { { "coreDelayMs", &coreDelayMs }, { "coreDelaySamples", &coreDelaySamples },
                             { "eqLowHz", &eqLowHz }, { "eqLowQ", &eqLowQ }, { "eqMidHz", &eqMidHz }, { "eqMidQ", &eqMidQ },
                             { "eqHighHz", &eqHighHz }, { "eqHighQ", &eqHighQ }, { "fc1", &fc1 }, { "fc2", &fc2 },
-                            { "limWindow", &limWindow }, { "limWindowAt", &limWindowAt }, { "limReleaseAt", &limReleaseAt }, { "limReleaseSteps", &limReleaseSteps }, { "limSlowAttackMs", &limSlowAttackMs },
+                            { "limWindow", &limWindow }, { "limWindowAt", &limWindowAt }, { "limPeakTest", &limPeakTest }, { "limReach", &limReach }, { "limSub", &limSub }, { "limTaps", &limTaps }, { "limBeta", &limBeta }, { "limReleaseAt", &limReleaseAt }, { "limReleaseSteps", &limReleaseSteps }, { "limSlowAttackMs", &limSlowAttackMs },
                             { "limSlowReleaseMs", &limSlowReleaseMs }, { "limTrimDb", &limTrimDb }, { "ctlChunk", &ctlChunk }, { "paramRampMs", &paramRampMs }, { "gainTauMs", &gainTauMs },
                             { "glideMs", &glideMs }, { "limRampMs", &limRampMs }, { "eqForm", &eqForm }, { "eqPerSample", &eqPerSample }, { "eqGlideDomain", &eqGlideDomain }, { "charZeroRest", &charZeroRest },
                             { "oversampling", &forceOversampling } };
