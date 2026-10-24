@@ -314,8 +314,8 @@ noise and the probes at once. The whole section is modelled in Python (`charmode
 Between the nodes the laws interpolate well: 37.5 % nulls at −71 dB that way, against −34 dB with laws fitted
 directly at the half nodes. On music the character section now nulls to −70 dB from 12.5 to 162.5 %.
 
-The same approach did not work for the high band. Its music-fitted laws null music as well, but drums 5 dB worse.
-Its detector reacts to peaks (3.13) in a way our gain computer does not capture, so it keeps the broadband fit.
+The same approach did not work for the high band at first: its music-fitted laws nulled music as well, but drums
+5 dB worse. The reason was its shaper, which no fit had right (3.14).
 
 ### 3.12 Other sample rates (Phase 4, `nulltest/ident_rate.py`)
 
@@ -343,6 +343,56 @@ A sine, two tones and band noise, all at the same RMS, through each band:
 So the high band's detector reacts to peaks. A single tone cannot tell the two kinds apart, which is why the laws
 fitted to an 8 kHz tone missed on broadband material. The broadband fit has a fast peak detector (about 1.2 ms /
 175 ms) and a slow one about 19 dB down. It gets this pattern right but compresses 3–4 % too little.
+
+It reads the **sample peaks**, not the true peak (`nulltest/staticn.py`, read through the measured shaper of 3.14). A
+steady 12 kHz tone is 4 samples per cycle, so its sampled peak depends on its phase while its true peak does not. At
+−9 dBFS the reference reduces it by 1.41 dB at one phase and 1.63 dB at the other (0.89 and 0.93 of the amplitude
+sampled); ours, with a sample-peak detector, by 1.34 and 1.55 dB.
+
+### 3.14 The shapers read directly (Phase 4, `nulltest/shapeside.py`, `h3cmp.py`, `shapemid.py`)
+
+A tone with left and right in anti-phase is not compressed (the detectors hear the mid only, 3.10), so a band's side
+output is its shaper alone: plotted sample by sample against the band signal, it is the shaper's curve. The tones
+sit where our own plug-in reads back its own settings exactly: 9 kHz (high band), 800 Hz (mid), 25 Hz (low).
+
+| | Pure sine, sin(k·u)/k | With a dry share, d·u + (1 − d)·sin(k·u)/k |
+|---|---|---|
+| High band, reference (fit residual) | −46 … −57 dB | **−92 … −124 dB** at every amount |
+
+- **High band.** k rises linearly with the amount: 1.40 at 12.5 %, 1.865 at 100 %, then more slowly to 2.34 at 200 %.
+  d falls smoothly from 0.89 at 12.5 % to −0.037 at 100 % and stays near −0.04 above. The fitted laws had d = 0 and
+  k off by up to 8 %, which the compressor fits had been compensating.
+- **Mid and low bands.** Below 100 % the music-fitted laws already match (k within 1–2 %, d within 0.01). Above 100 %
+  the reference's mid k reads 3–4 % lower than ours, with d = −0.01. Refitting the mid band with those values made
+  music at 200 % worse (−62.3 → −61.2 dB), so the mid and low bands keep their fitted laws.
+
+**Mid and side are shaped differently.** Below the threshold, a high-band tone in phase has a 3rd harmonic 1.53 %
+stronger than the same tone in anti-phase (100 %), at every level from −30 to −15 dBFS, with the same fundamental.
+So the gain is the same and the shaper is not. A tone in the left channel only splits the difference exactly: the mid
+part of its harmonic is the in-phase strength, the side part the anti-phase one. So the shaper's distortion,
+(1 − d)·(sin(k·u)/k − u), reaches the output's mid 1 + γ times as strong as its side. γ grows by 0.0019 per 12.5 %
+step up to 0.0153 at 100 %, peaks at 0.0177 at 137.5 % and is 0.0142 at 200 %. In the mid band the reference's
+in/anti ratio matches ours to 0.1–0.4 %. Ours now does the same (BandParam `shapeMid`, from `shapemid.py`).
+
+With both, treble-heavy material below the threshold ("bright −8") nulls at −110.8 dB, against −76 dB before.
+
+**The high band's compressor, refitted around the measured shaper** (`fit_music.py --shaper --loud`). With the
+shaper fixed, only the gain computer is fitted, and the program set now includes loud material where the high band
+works hardest (drums peaking at −1 dBFS, pink noise at −6 dBFS RMS, music at 0 dBFS, bright −8). The trace of the
+band's gain on loud drums (`hightrace2.py`) had shown the old law starting to compress late and holding about 0.6 dB
+too little through every hit. At 100 % the law fitted with each signal weighed equally in dB (`--relative`) keeps
+pink −6 and bright −8 best; at the other amounts the plain energy objective is better.
+
+| Case (stress suite) | Before | After |
+|---|---|---|
+| Full chain, drums peaking at −1 dBFS | −34.7 dB | −44.7 dB |
+| Character only, pink −10, 25 / 62.5 / 150 / 200 % | −48.2 / −43.5 / −42.3 / −34.8 | −58.7 / −53.5 / −45.6 / −42.7 |
+| EQ + character, 200 %, pink −10 | −38.2 | −42.2 |
+| Bright −8, defaults | −76.1 | −110.8 |
+
+The gain law itself, read through the shaper on steady tones (`staticn.py`), still differs a little: the reference
+has a sharper knee and compresses 0.08–0.24 dB more above it (at the same sampled peak), which our parallel soft-knee
+form cannot follow (it fits the reference's curve to 0.027 dB rms, ours to 0.001).
 
 ## 4. Limiter (`measure_limiter.py`)
 
@@ -378,6 +428,8 @@ env is the largest of three things:
   - When a plan ends, the next one heads for the nearest peak within 21 samples ahead (at 48 kHz) and reaches it
     exactly on arrival. A farther, higher peak does not steepen the line.
   - With no peak ahead, the plan falls toward 1 over 22 samples. It stops at the slow envelope if it meets it.
+    Right after a peak it falls instead toward the level 22.9 samples ahead (interpolated at that point; the flank of
+    a peak still beyond the window), so it meets the next rise instead of overshooting below it.
   - A running plan toward a peak changes only when a level within its span rises above its line. It then re-plans
     to the steepest such point.
   - A release watches the whole 21-sample window, with its line continued at 1 past its end. So a second peak 24 to
@@ -406,6 +458,21 @@ attack from idle.
 At 96 kHz one recurring event in a drum loop nulls to only −35 dB. There, a 1e-4 DC pilot changes the reference's
 output by orders of magnitude more than its size, so its peak planning sits on a tie. Matching such ties would need
 the reference's inter-sample interpolator bit-exact.
+
+**The level estimate, read off isolated pulses** (`nulltest/limpulse.py`, `limident.py`, `limpy.py`). An isolated
+pulse above the ceiling is planned to exactly its level, so at its loudest point output / input = trim / level. With
+4096 random pulses:
+- On the samples themselves the reference reads 1.00014 times the sample (the fitted phase-0 filter is a pure delay
+  with that gain): an effective ceiling 0.0012 dB lower. Ours now does the same (`limLevelScale`). The music limiter
+  null went from −60.8 to −62.3 dB.
+- Between the samples, a free 16 × 16 table fitted to band-limited pulses reads them to 5e-5 (ours: 7e-4) and takes
+  the drum null to −66.9 dB. But it does not carry over to content near Nyquist: pink noise gets worse (−47.5 →
+  −44.6 dB), and on short raw noise bursts the reference's readings differ from any 16- or 32-tap linear table by up
+  to 2–3 %. So the interpolator stays the Kaiser sinc.
+- The plan rule itself is right: in a Python copy of the limiter that matches the plug-in exactly, every variant
+  (peaks of the sample magnitudes, peaks over two neighbours, a minimum prominence, the steepest reachable peak) was
+  far worse (pink noise −21 … −29 dB against −47.5). The pink-noise events that differ are near-ties: a local maximum
+  0.001 above its neighbour that the reference does not see as one.
 
 ## 5. Parameter smoothing (`measure_smoothing.py`)
 
@@ -458,8 +525,10 @@ and their gain glides in linear amplitude, not in dB.
   left the bypass toggles at −31 dB; this way they null at −60 dB.
 - At amount 0 the character section's detectors keep running. A jump from 0 % settles as fast as one from 100 %.
 
-**Not matched: host blocks shorter than 128 samples.** There the reference switches the character section later
-than we do: 96 samples later at 32-sample blocks, 64 at 64, 96 at 96.
+**Host blocks shorter than 128 samples.** There the switches of the oversampled section (EQ and character on/off)
+take effect once a control chunk's worth has gathered: 128 − n rounded up to whole blocks later (96 samples at
+32-sample blocks, 64 at 64, 96 at 96). Ours does the same; the bypass toggles at 64-sample blocks went from −33 to
+−57.8 dB, and every stress case at 64, 333 and 4096-sample blocks now nulls as at 512.
 
 ## 6. Meters (`measure_meters.py`, RefCapture film of `reference/gr_meter_test.f32`)
 
@@ -527,21 +596,24 @@ How closely the result matches is in [NULLTESTS.md](NULLTESTS.md).
 
 **Settled in Phase 4:**
 - the crossover: FIR, identified exactly (3.1)
-- the shaper: a sine, sin(k·u) / k, after the parallel mix (3.9)
+- the shaper: a sine, sin(k·u) / k, after the parallel mix (3.9), blended with the dry band (3.11b, 3.14)
 - the stereo behaviour: mid-only detectors, per-channel shaping, a side gain per band after the shaper (3.10)
 - the limiter's algorithm (4.1)
 - the 8x setting: it behaves exactly like 4x, two samples later. Its output equals the 4x output to −82 dB below 16 kHz.
 - the oversampled path: matched within 0.002 dB (7)
 
+Also settled since: the shapers' exact form, a dry share and a mid/side difference (3.14); the high band's sample-peak
+detector (3.13); host blocks under 128 samples (5.1: the switches wait for a full control chunk; 64-sample blocks
+null like 512); the limiter's on-sample level (4.1).
+
 **Still open:**
-- **The high band's detector.** It reacts to peaks (3.13). Neither a sample-peak nor a true-peak detector, with or
-  without a slow second stage, fits tones, two tones and band noise at once (−31 … −42 dB). Every refit of its
-  parameters traded drums for pink noise. This leaves loud dense material as the weakest case: pink noise at
-  −6 dBFS RMS −40 dB, drums peaking at −1 dBFS −35 dB, the character at 200 % on pink noise −35 dB.
+- **The high band's gain law.** Its knee is sharper and its slope steeper than our parallel soft-knee form allows
+  (3.14), and its probes (tones up to +4 dBFS, band noise) still null only to −25 … −45 dB at 100 % and above. Loud
+  dense material is the weakest case: pink noise at −6 dBFS RMS −40.6 dB, drums peaking at −1 dBFS −44.7 dB, and at
+  44.1 kHz −38.6 / −39.5 dB (the laws are fitted at 48 kHz).
 - **Limiter.** Dense, continuous limiting (pink noise driven 5 dB into it) nulls to −47.5 dB; isolated peaks and
-  drum hits match to −62 dB. At 96 kHz one drum event sits on a tie in its peak planning (4.1).
-- **Host blocks under 128 samples.** The reference switches the character section later there (5.1). A 64-sample
-  host block leaves the bypass toggles at −33 dB; static settings are unaffected.
+  drum hits match to −62 dB. The differences are near-ties in the inter-sample level; the reference's interpolator
+  is not a linear 16- or 32-tap table near Nyquist (4.1). At 96 kHz one drum event sits on such a tie.
 - **The sweep's crossover region.** Between 1.5 and 3.5 kHz ours compresses up to 0.1 dB more (sweep at −6 dBFS:
   −45 dB). That is where the mid band's steep edge and the high band meet.
 - **Side-chain EXT.** Audio fed to the reference's side-chain bus had no effect in our test host. Ours is implemented

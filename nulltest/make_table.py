@@ -5,10 +5,15 @@
 The make-up gains are the measured small-signal band gains (BandFilters.h). The detector type (mean-square or peak) is
 per band: the one most of the band's usable nodes were fitted with; nodes fitted with the other fall back to fit_char.json.
 
-    python make_table.py [--min-db -40] [--broad high] [--law bandlaw.json]     band-law fits worse than this residual are not used;
+    python make_table.py [--min-db -40] [--broad high] [--law bandlaw.json] [--shaper high]
+                                                         band-law fits worse than this residual are not used;
                                                          --broad: bands kept entirely on fit_char.json
-The high band is kept on fit_char.json: its laws fitted to an 8 kHz tone fit the tone to -50 dB but miss loud
-broadband signals badly (pink noise at -6 dBFS RMS: -28 dB against -43 dB with the broadband fit)."""
+                                                         --shaper: the band's k and dry share at every row as read
+                                                         with anti-phase tones (shapeside.py, shaper_<band>.txt);
+                                                         band:row applies it from that row up only
+The plug-in's table: python make_table.py --min-db 0 --law bandlaw_final_v2.json --shaper high
+(low and mid: bandlaw_final.json; high: fit_music.py --shaper --loud at every node, --relative at 100 %, merged with
+mergelaws.py; its shaper k, dry share and mid gain as measured, shapeside.py / shapemid.py)."""
 import json, os, sys
 import tgp, ident as I
 
@@ -16,12 +21,25 @@ DIR = os.path.join(tgp.ROOT, 'measurements', 'character')
 HEADER = os.path.join(tgp.ROOT, 'Source', 'dsp', 'CharacterTable.h')
 NL_HEADER = os.path.join(tgp.ROOT, 'Source', 'dsp', 'NlBandFilters.h')
 NAMES = ['makeup', 'mix', 'cubic', 'thresh', 'ratio', 'knee', 'attack', 'release', 'side', 'gainAttack', 'gainRelease',
-         'attack2', 'release2', 'slowOffset', 'width', 'mixDb', 'shapeDry']
+         'attack2', 'release2', 'slowOffset', 'width', 'mixDb', 'shapeDry', 'shapeMid']
 BANDS = ['low', 'mid', 'high']
 BROAD_PEAK = {'low': 0, 'mid': 0, 'high': 1}     # the detectors fit_char.json was fitted with
 
 
-def build(min_db=-40.0, broad_bands=(), law_file='bandlaw.json'):
+def measured_shaper(band):
+    """{row: (k, d)} from shapeside.py's lines 'SHAPER band amount k d ...' (amount 0 .. 1 = rows 0 .. 16)"""
+    rows = [l.split() for l in open(os.path.join(DIR, f'shaper_{band}.txt')) if l.startswith('SHAPER')]
+    return {int(round(float(r[2]) * 16)): (float(r[3]), float(r[4])) for r in rows}
+
+
+def measured_shape_mid(band):
+    """{row: gamma - 1} from shapemid.py's lines 'SHAPEMID row gamma' ({} without a file)"""
+    p = os.path.join(DIR, f'shapemid_{band}.txt')
+    if not os.path.exists(p): return {}
+    return {int(l.split()[1]): float(l.split()[2]) - 1 for l in open(p) if l.startswith('SHAPEMID')}
+
+
+def build(min_db=-40.0, broad_bands=(), law_file='bandlaw.json', shaper_bands=()):
     """the 17 rows (amount 0, 12.5, ..., 200 %) per band: a fitted law where there is one (law_file, keys
     'band|node' with node 0 .. 8 in steps of 0.5), else the broadband fit at the 25 % nodes, else the mean of the
     neighbours; make-up gain and width measured at every row"""
@@ -55,6 +73,11 @@ def build(min_db=-40.0, broad_bands=(), law_file='bandlaw.json'):
             if rows[k] is None:
                 lo, hi = rows[k - 1], rows[k + 1]
                 rows[k] = {n: 0.5 * (lo.get(n, 0.0) + hi.get(n, 0.0)) for n in NAMES}; src[k] = 'mean'
+        from_row = {sb.split(':')[0]: int(sb.split(':')[1]) if ':' in sb else 0 for sb in shaper_bands}
+        if b in from_row:
+            for k, (kk, dd) in measured_shaper(b).items():
+                if k >= from_row[b]: rows[k] = dict(rows[k], cubic=kk * kk / 6, shapeDry=dd, shapeMid=measured_shape_mid(b).get(k, 0.0)); src[k] += '*'
+            if from_row[b] == 0: rows[0] = dict(rows[0], shapeDry=1.0)
         for k in range(17):
             rows[k]['side'] = 0.0      # the detector hears the mid signal only (anti-phase tones are not compressed)
             rows[k]['makeup'] = I.GAINS16[bi][k]
@@ -99,7 +122,8 @@ if __name__ == '__main__':
     min_db = float(sys.argv[sys.argv.index('--min-db') + 1]) if '--min-db' in sys.argv else -40.0
     broad = [sys.argv[i + 1] for i, a in enumerate(sys.argv) if a == '--broad']
     law_file = sys.argv[sys.argv.index('--law') + 1] if '--law' in sys.argv else 'bandlaw.json'
-    table, peak, source = build(min_db, broad, law_file)
+    shaper = [sys.argv[i + 1] for i, a in enumerate(sys.argv) if a == '--shaper']
+    table, peak, source = build(min_db, broad, law_file, shaper)
     write(table, peak)
     write_nl_filters()
     print('detector peak', peak)

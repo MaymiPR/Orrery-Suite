@@ -33,11 +33,13 @@ enum BandParam
     bpSlowOffset, // dB added to the slow detector's level before the larger of the two is taken
     bpWidth,      // dB, gain of the band output's side signal relative to its mid (after the shaper)
     bpMixDb,      // 1: the mix scales the reduction in dB (n = g^mix, mix may exceed 1); 0: dry / wet blend
-    bpShapeDry,   // 0 .. 1, share of the band that bypasses the shaper: y = d u + (1 - d) sin (k u) / k
+    bpShapeDry,   // -1 .. 1, share of the band that bypasses the shaper: y = d u + (1 - d) sin (k u) / k
+    bpShapeMid,   // the shaper's distortion, (1 - d) (sin (k u) / k - u), reaches the output's mid 1 + this times as strong
+                  // as its side (the high band: up to 1.8 %, nulltest/shapemid.py)
     kBandParams
 };
 inline constexpr const char* bandParamNames[kBandParams] { "makeup", "mix", "cubic", "thresh", "ratio", "knee", "attack", "release", "side",
-                                                          "gainAttack", "gainRelease", "attack2", "release2", "slowOffset", "width", "mixDb", "shapeDry" };
+                                                          "gainAttack", "gainRelease", "attack2", "release2", "slowOffset", "width", "mixDb", "shapeDry", "shapeMid" };
 inline constexpr const char* bandNames[3] { "low", "mid", "high" };
 
 struct Tuning
@@ -63,6 +65,8 @@ struct Tuning
                                           // toward (0: always toward 1)
     double limSub = 16;                   // phases of the inter-sample level (experiments; up to 32)
     double limTaps = 16, limBeta = 6.0;   // its interpolator: Kaiser-windowed sinc, taps (up to 32) and window beta
+    double limLevelScale = 1.00014;       // the reference reads every level this much higher (a 0.0012 dB lower ceiling;
+                                          // isolated pulses, nulltest/limident.py)
     double limSlowAttackMs = 24.47, limSlowReleaseMs = 377.8;
     double limTrimDb = -0.1;              // after the 0 dBFS ceiling: the output's ceiling and small-signal gain
 
@@ -100,7 +104,7 @@ struct Tuning
         const S scalars[] { { "coreDelayMs", &coreDelayMs }, { "coreDelaySamples", &coreDelaySamples },
                             { "eqLowHz", &eqLowHz }, { "eqLowQ", &eqLowQ }, { "eqMidHz", &eqMidHz }, { "eqMidQ", &eqMidQ },
                             { "eqHighHz", &eqHighHz }, { "eqHighQ", &eqHighQ }, { "fc1", &fc1 }, { "fc2", &fc2 },
-                            { "limWindow", &limWindow }, { "limWindowAt", &limWindowAt }, { "limPeakTest", &limPeakTest }, { "limReach", &limReach }, { "limSub", &limSub }, { "limTaps", &limTaps }, { "limBeta", &limBeta }, { "limReleaseAt", &limReleaseAt }, { "limReleaseSteps", &limReleaseSteps }, { "limSlowAttackMs", &limSlowAttackMs },
+                            { "limWindow", &limWindow }, { "limWindowAt", &limWindowAt }, { "limPeakTest", &limPeakTest }, { "limReach", &limReach }, { "limSub", &limSub }, { "limTaps", &limTaps }, { "limBeta", &limBeta }, { "limLevelScale", &limLevelScale }, { "limReleaseAt", &limReleaseAt }, { "limReleaseSteps", &limReleaseSteps }, { "limSlowAttackMs", &limSlowAttackMs },
                             { "limSlowReleaseMs", &limSlowReleaseMs }, { "limTrimDb", &limTrimDb }, { "ctlChunk", &ctlChunk }, { "paramRampMs", &paramRampMs }, { "gainTauMs", &gainTauMs },
                             { "glideMs", &glideMs }, { "limRampMs", &limRampMs }, { "eqForm", &eqForm }, { "eqPerSample", &eqPerSample }, { "eqGlideDomain", &eqGlideDomain }, { "charZeroRest", &charZeroRest },
                             { "oversampling", &forceOversampling } };

@@ -8,7 +8,7 @@ _lib = ctypes.CDLL(os.path.join(tgp.ROOT, 'build', 'charsim', 'Release', 'charsi
 _D = ctypes.POINTER(ctypes.c_double)
 _lib.band_gain.argtypes = [_D, _D, ctypes.c_int, ctypes.c_double, _D, ctypes.c_int, ctypes.c_int, _D, _D]
 NAMES = ['makeup', 'mix', 'cubic', 'thresh', 'ratio', 'knee', 'attack', 'release', 'side', 'gainAttack', 'gainRelease',
-         'attack2', 'release2', 'slowOffset', 'width', 'mixDb', 'shapeDry']
+         'attack2', 'release2', 'slowOffset', 'width', 'mixDb', 'shapeDry', 'shapeMid']
 
 
 def band_gain(mid, params, side=None, fs=tgp.FS, peak=False, feedback=False, want_gr=False):

@@ -51,7 +51,7 @@ public:
                 const double r = x / (nTaps / 2.0), w = std::abs (r) >= 1 ? 0.0 : besselI0 (beta * std::sqrt (1 - r * r)) / besselI0 (beta);
                 interp[ph][i] = sinc * w; sum += interp[ph][i];
             }
-            for (int i = 0; i < nTaps; ++i) interp[ph][i] /= sum;
+            for (int i = 0; i < nTaps; ++i) interp[ph][i] *= t.limLevelScale / sum;
         }
         size = lookahead + 4;
         level.assign ((size_t) size, 1.0);

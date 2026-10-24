@@ -20,12 +20,13 @@ def prep(x):
 
 def band(xb, sb, law, makeup_db, width_db):
     """one band's stereo output"""
-    p = {k: v for k, v in law.items() if k not in ('k', 'residual_dB', 'median_abs_err', 'peak')}
+    p = {k: v for k, v in law.items() if k not in ('k', 'residual_dB', 'median_abs_err', 'peak', 'shapeMid')}
     g = C.band_gain(0.5 * (sb[0] + sb[1]), p, side=0.5 * (sb[0] - sb[1]), peak=int(law.get('peak', 0)))
     d = law.get('shapeDry', 0.0); k = law['k']
-    y = xb - sb + d * g * sb + (1 - d) * np.sin(k * g * sb) / k
+    u = g * sb; e = (1 - d) * (np.sin(k * u) / k - u)      # the shaper's distortion
+    y = xb - sb + u + e
     M = 10 ** (makeup_db / 20); W = 10 ** (width_db / 20)
-    m, s = 0.5 * (y[0] + y[1]) * M, 0.5 * (y[0] - y[1]) * M * W
+    m, s = (0.5 * (y[0] + y[1]) + 0.5 * law.get('shapeMid', 0.0) * (e[0] + e[1])) * M, 0.5 * (y[0] - y[1]) * M * W
     return np.stack([m + s, m - s])
 
 
