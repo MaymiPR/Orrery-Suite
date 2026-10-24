@@ -23,23 +23,31 @@ public:
     {
         fs = rate;
         lookahead = limiterLookahead (fs);
-        // window and release are set per rate, not scaled from 48 kHz (single and paired peaks probed at each rate)
-        struct PerRate { double rate; int window, release; };
-        constexpr PerRate perRate[] { { 44100, 19, 20 }, { 48000, 21, 22 }, { 88200, 39, 40 }, { 96000, 43, 44 }, { 192000, 86, 87 } };
+        // window and release are set per rate, not scaled from 48 kHz (single and paired peaks probed at each rate), and
+        // so is the inter-sample interpolator: a Kaiser-windowed sinc whose taps and window were fitted on program
+        // material at each rate (nulltest/limrate.py). Its effective width is not constant (about a Gaussian of
+        // sigma 4.4 samples at 44.1 kHz, 3.5 at 48, 1.3 - 1.8 above), so it is no fixed-length kernel scaled with the rate.
+        struct PerRate { double rate; int window, release, taps; double beta; };
+        constexpr PerRate perRate[] { { 44100, 19, 20, 28, 10.0 }, { 48000, 21, 22, 24, 12.0 }, { 88200, 39, 40, 12, 11.0 },
+                                      { 96000, 43, 44, 14, 20.0 }, { 192000, 86, 87, 10, 16.0 } };
         double w = t.limWindow * fs / 48000.0, rel = t.limReleaseSteps * fs / 48000.0;
+        const PerRate* nearest = &perRate[1];
         for (const auto& pr : perRate)
+        {
             if (std::abs (fs - pr.rate) < 1.0) { w = pr.window * t.limWindow / 21.0; rel = pr.release * t.limReleaseSteps / 22.0; }
+            if (std::abs (fs - pr.rate) < std::abs (fs - nearest->rate)) nearest = &pr;
+        }
         if (t.limWindowAt > 0) w = t.limWindowAt;
         if (t.limReleaseAt > 0) rel = t.limReleaseAt;
-        window = std::clamp ((int) std::lround (w), 1, lookahead - std::clamp ((int) t.limTaps / 2 * 2, 4, kTaps) / 2 - 1);
+        nTaps = std::clamp ((t.limTaps > 0 ? (int) t.limTaps : nearest->taps) / 2 * 2, 4, kTaps);
+        beta = t.limBeta > 0 ? t.limBeta : nearest->beta;
+        window = std::clamp ((int) std::lround (w), 1, lookahead - nTaps / 2 - 1);
         releaseSteps = std::max (1, (int) std::lround (rel));
         slowAtt = 1.0 - std::exp (-1.0 / (t.limSlowAttackMs * 1.0e-3 * fs));
         slowRel = std::exp (-1.0 / (t.limSlowReleaseMs * 1.0e-3 * fs));
         trim = std::pow (10.0, t.limTrimDb / 20.0);
         // interpolation for the inter-sample level: Kaiser-windowed sinc, nTaps taps per phase
         nSub = std::clamp ((int) t.limSub, 1, kSub);
-        nTaps = std::clamp ((int) t.limTaps / 2 * 2, 4, kTaps);
-        beta = t.limBeta;
         for (int ph = 0; ph < nSub; ++ph)
         {
             const double frac = ph / (double) nSub;
@@ -47,8 +55,11 @@ public:
             for (int i = 0; i < nTaps; ++i)
             {
                 const double x = (i - (nTaps / 2 - 1)) - frac;
-                const double sinc = std::abs (x) < 1e-12 ? 1.0 : std::sin (kPiL * x) / (kPiL * x);
-                const double r = x / (nTaps / 2.0), w = std::abs (r) >= 1 ? 0.0 : besselI0 (beta * std::sqrt (1 - r * r)) / besselI0 (beta);
+                const double cx = t.limCut * x;
+                const double sinc = std::abs (cx) < 1e-12 ? 1.0 : std::sin (kPiL * cx) / (kPiL * cx);
+                const double r = x / (nTaps / 2.0);
+                const double w = t.limGauss > 0 ? std::exp (-0.5 * x * x / (t.limGauss * t.limGauss))
+                                                : std::abs (r) >= 1 ? 0.0 : besselI0 (beta * std::sqrt (1 - r * r)) / besselI0 (beta);
                 interp[ph][i] = sinc * w; sum += interp[ph][i];
             }
             for (int i = 0; i < nTaps; ++i) interp[ph][i] *= t.limLevelScale / sum;

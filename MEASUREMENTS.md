@@ -497,6 +497,28 @@ pulse above the ceiling is planned to exactly its level, so at its loudest point
   the drum null to −66.9 dB. But it does not carry over to content near Nyquist: pink noise gets worse (−47.5 →
   −44.6 dB), and on short raw noise bursts the reference's readings differ from any 16- or 32-tap linear table by up
   to 2–3 %. So the interpolator stays the Kaiser sinc.
+
+**The interpolator is set per rate** (`nulltest/limrate.py`). At 44.1 kHz the limiter alone nulled the demo track to
+only −45.8 dB (48 kHz: −50.7) and pink noise driven 5 dB into it to −39.7 (48 kHz: −47.5). None of its time constants
+(window, release, reach, slow envelope) helped when changed. The interpolator did. Over a grid of Kaiser taps and
+window β, scored on five signals (drums peaking at −1 dBFS, pink −6, a track excerpt, drums at 12 dB input gain,
+music −2), the good settings lie on a narrow ridge. Along it the window's Gaussian core, σ = (taps / 2) / √β, stays
+the same: 4.4 samples at 44.1 kHz, 3.5 at 48 kHz, 1.3 – 1.8 at 88.2 kHz and above. So the reference's kernel is
+neither one fixed length in samples nor one scaled with the rate. A pure Gaussian window of that σ is worse than the
+Kaiser points on the ridge, and a sinc cut off below Nyquist is worse still.
+
+| Rate | Taps, β (was 16, 6) | Five-signal mean before | After |
+|---|---|---|---|
+| 44.1 kHz | 28, 10 | −44.9 dB | −68.2 dB |
+| 48 kHz | 24, 12 | −53.6 | −69.2 |
+| 88.2 kHz | 12, 11 | −39.2 | −52.1 |
+| 96 kHz | 14, 20 | −37.5 | −52.0 |
+| 192 kHz | 10, 16 | −35.6 | −55.4 |
+
+Signals outside the fit: the whole track, limiter only at 44.1 kHz, −46.3 → −60.8 dB; at 48 kHz pink −6 (5 dB in)
+−47.5 → −54.8, drums −6 at 12 dB gain −62.7 → −78.4, music −2 −62.3 → −77.7; stress, limiter 7.5 dB on drums −6
+−41.1 → −62.6. The high-rate surfaces are spiky on drums (single events on near-ties), so they were chosen by the
+mean.
 - The plan rule itself is right: in a Python copy of the limiter that matches the plug-in exactly, every variant
   (peaks of the sample magnitudes, peaks over two neighbours, a minimum prominence, the steepest reachable peak) was
   far worse (pink noise −21 … −29 dB against −47.5). The pink-noise events that differ are near-ties: a local maximum
@@ -675,12 +697,16 @@ null like 512); the limiter's on-sample level (4.1).
   −25 … −45 dB at 100 % and above. Loud dense material is the weakest case: a mastered track −43.0 dB, pink noise at
   −6 dBFS RMS −40.4 dB, drums peaking at −1 dBFS −56.5 dB. At 44.1 kHz drums −1 drop to −41.4 dB and pink −6 to
   −38.4 (the laws are fitted at 48 kHz; the track is about the same at both rates).
-- **The limiter at 44.1 kHz** nulls the track to −46.3 dB on its own, against −52.9 dB at 48 kHz.
-- **Limiter.** Dense, continuous limiting (pink noise driven 5 dB into it) nulls to −47.5 dB; isolated peaks and
-  drum hits match to −62 dB. The differences are near-ties in the inter-sample level; the reference's interpolator
+- **The synthetic drums at 44.1 kHz** (−39.7 dB with the defaults, −50.2 dB character only, against −56.5 / −56.2
+  at 48 kHz). The signals are the same sample arrays at every rate, so at 44.1 kHz they play 8 % slower and lower:
+  a different signal from the one in the fit set. The track and pink noise null the same at both rates.
+- **Limiter.** Dense, continuous limiting (pink noise driven 5 dB into it) nulls to −54.8 dB (−47.5 before the
+  per-rate interpolator, 4.1); isolated peaks and
+  drum hits match to −78 dB. The differences are near-ties in the inter-sample level; the reference's interpolator
   is not a linear 16- or 32-tap table near Nyquist (4.1). At 96 kHz one drum event sits on such a tie.
   At the maximum input gain (12 dB, `limmax.py`) the limiter alone nulls music at −2 dBFS to −55.8 dB, drums to
-  −62.7 and music at −10 dBFS to −88.6. 94 % of the residual sits in 5 % of the time: single plan decisions (a plan
+  −78.4 (−62.7 before the per-rate interpolator), pink −10 to −58.7 and music at −10 dBFS to −96.8; the full chain
+  music −10 −61.2, music −2 −53.1, drums −6 −51.9, pink −10 −43.2. 94 % of the residual sits in 5 % of the time: single plan decisions (a plan
   that starts a few samples later, a release restarted from a slowly falling level). The slow envelope's times are
   sharply optimal there, and letting the state rest below the slow envelope or be lifted by the level made every case
   worse. Through the whole chain at 12 dB the character section's small differences are amplified by the limiting

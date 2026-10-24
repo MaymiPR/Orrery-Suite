@@ -3,7 +3,7 @@ plan rules on whole signals: env(x) gives the envelope of every outgoing sample;
 Rule variants are switched by keyword arguments (default: the plug-in's rule)."""
 import numpy as np
 
-LOOK, WINDOW, RELEASE, TAPS, SUB, BETA, REACH = 38, 21, 22, 16, 16, 6.0, 22.9
+LOOK, WINDOW, RELEASE, TAPS, SUB, BETA, REACH = 38, 21, 22, 24, 16, 12.0, 22.9      # 48 kHz (Limiter.h perRate)
 SLOW_ATT = 1 - np.exp(-1 / (24.47e-3 * 48000)); SLOW_REL = np.exp(-1 / (377.8e-3 * 48000))
 
 

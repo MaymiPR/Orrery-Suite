@@ -64,7 +64,10 @@ struct Tuning
     double limReach = 22.9;               // samples (48 kHz) a release right after a peak looks ahead for a level to fall
                                           // toward (0: always toward 1)
     double limSub = 16;                   // phases of the inter-sample level (experiments; up to 32)
-    double limTaps = 16, limBeta = 6.0;   // its interpolator: Kaiser-windowed sinc, taps (up to 32) and window beta
+    double limTaps = 0, limBeta = 0;      // its interpolator: Kaiser-windowed sinc, taps (up to 32) and window beta
+                                          // (0: the per-rate values in Limiter.h; > 0 overrides, for fitting)
+    double limCut = 1.0;                  // the sinc's cutoff, a fraction of Nyquist (experiments)
+    double limGauss = 0;                  // > 0: a Gaussian window of this width (samples) instead of the Kaiser one
     double limLevelScale = 1.00014;       // the reference reads every level this much higher (a 0.0012 dB lower ceiling;
                                           // isolated pulses, nulltest/limident.py)
     double limSlowAttackMs = 24.47, limSlowReleaseMs = 377.8;
@@ -104,7 +107,7 @@ struct Tuning
         const S scalars[] { { "coreDelayMs", &coreDelayMs }, { "coreDelaySamples", &coreDelaySamples },
                             { "eqLowHz", &eqLowHz }, { "eqLowQ", &eqLowQ }, { "eqMidHz", &eqMidHz }, { "eqMidQ", &eqMidQ },
                             { "eqHighHz", &eqHighHz }, { "eqHighQ", &eqHighQ }, { "fc1", &fc1 }, { "fc2", &fc2 },
-                            { "limWindow", &limWindow }, { "limWindowAt", &limWindowAt }, { "limPeakTest", &limPeakTest }, { "limReach", &limReach }, { "limSub", &limSub }, { "limTaps", &limTaps }, { "limBeta", &limBeta }, { "limLevelScale", &limLevelScale }, { "limReleaseAt", &limReleaseAt }, { "limReleaseSteps", &limReleaseSteps }, { "limSlowAttackMs", &limSlowAttackMs },
+                            { "limWindow", &limWindow }, { "limWindowAt", &limWindowAt }, { "limPeakTest", &limPeakTest }, { "limReach", &limReach }, { "limSub", &limSub }, { "limTaps", &limTaps }, { "limCut", &limCut }, { "limGauss", &limGauss }, { "limBeta", &limBeta }, { "limLevelScale", &limLevelScale }, { "limReleaseAt", &limReleaseAt }, { "limReleaseSteps", &limReleaseSteps }, { "limSlowAttackMs", &limSlowAttackMs },
                             { "limSlowReleaseMs", &limSlowReleaseMs }, { "limTrimDb", &limTrimDb }, { "ctlChunk", &ctlChunk }, { "paramRampMs", &paramRampMs }, { "gainTauMs", &gainTauMs },
                             { "glideMs", &glideMs }, { "limRampMs", &limRampMs }, { "eqForm", &eqForm }, { "eqPerSample", &eqPerSample }, { "eqGlideDomain", &eqGlideDomain }, { "charZeroRest", &charZeroRest },
                             { "oversampling", &forceOversampling } };
