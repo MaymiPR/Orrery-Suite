@@ -58,6 +58,7 @@ public:
     // host-only state (not part of presets, as in the reference): side-chain source and the editor's zoom
     std::atomic<bool> sidechainExternal { false };
     std::atomic<float> uiScale { 1.0f };
+    std::atomic<bool> ioLink { false };      // the editor's input / output link (ours), saved with the session
 
     // meters: input / output L R, multiband gain reduction (high, mid, low) and limiter L R, positive dB
     ap::LevelTap inL, inR, outL, outR;

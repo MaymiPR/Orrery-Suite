@@ -166,6 +166,7 @@ void AntiparticleProcessor::getStateInformation (MemoryBlock& dest)
     auto state = apvts.copyState();
     state.setProperty ("sidechain", sidechainExternal.load() ? 1 : 0, nullptr);
     state.setProperty ("uiScale", uiScale.load(), nullptr);
+    state.setProperty ("ioLink", ioLink.load() ? 1 : 0, nullptr);
     state.setProperty ("preset", presets.currentName(), nullptr);
     if (auto xml = state.createXml()) copyXmlToBinary (*xml, dest);
 }
@@ -178,6 +179,7 @@ void AntiparticleProcessor::setStateInformation (const void* data, int size)
             auto tree = ValueTree::fromXml (*xml);
             sidechainExternal = (int) tree.getProperty ("sidechain", 0) != 0;
             uiScale = (float) tree.getProperty ("uiScale", 1.0f);
+            ioLink = (int) tree.getProperty ("ioLink", 0) != 0;
             presets.setCurrentName (tree.getProperty ("preset", "default").toString());
             apvts.replaceState (tree);
         }

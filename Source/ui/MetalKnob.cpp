@@ -20,24 +20,73 @@ MetalKnob::MetalKnob (Kind k) : model (modelFor (k)), kind (k)
     setPopupMenuEnabled (false);
 }
 
+float MetalKnob::designY (const MouseEvent& e) const
+{
+    return e.position.y * std::abs (getTransform().mat00);    // the knob's own placement transform undone
+}
+
 void MetalKnob::mouseDown (const MouseEvent& e)
 {
     Slider::mouseDown (e);                       // begins the host gesture; rotary drag modes do not jump on click
-    lastY = e.position.y;
+    lastY = anchorY = designY (e);
+    anchorValue = valueToProportionOfLength (getValue());
+    downScreen = e.getScreenPosition().toFloat();
+    velocity = false;
     if (e.mods.isAltDown()) setValue (defaultValue, sendNotificationSync);
 }
 
 void MetalKnob::mouseDrag (const MouseEvent& e)
 {
     if (e.mods.isAltDown()) return;
-    // incremental, so pressing / releasing Shift mid-drag does not jump; distances in the editor's design pixels
-    // (the knob's own placement transform is undone)
-    const float unit = std::abs (getTransform().mat00);    // uniform scale, no rotation
-    const float dy = (e.position.y - lastY) * unit;
-    lastY = e.position.y;
-    const double perPixel = e.mods.isShiftDown() ? 0.01 / 30.0 : 0.01;
-    const double p = jlimit (0.0, 1.0, valueToProportionOfLength (getValue()) - dy * perPixel);
-    setValue (proportionOfLengthToValue (p), sendNotificationSync);
+    const float y = designY (e);
+    if (velocityKeys (e.mods))
+    {
+        const float diff = y - lastY;
+        const double speed = jlimit (0.0, 200.0, (double) std::abs (diff));
+        if (speed > 0.0)
+        {
+            double step = 0.2 * (1.0 + std::sin (MathConstants<double>::pi * (1.5 + jmin (0.5, jmax (0.0, speed - 1.0) / 200.0))));
+            if (diff > 0.0f) step = -step;                  // up raises the value
+            setValue (proportionOfLengthToValue (jlimit (0.0, 1.0, valueToProportionOfLength (getValue()) + step)), sendNotificationSync);
+            e.source.enableUnboundedMouseMovement (true, false);
+            velocity = true;
+        }
+    }
+    else
+    {
+        if (velocity) { restoreMouse(); lastY = anchorY; return; }
+        setValue (proportionOfLengthToValue (jlimit (0.0, 1.0, anchorValue + (anchorY - y) * 0.01)), sendNotificationSync);
+    }
+    lastY = y;
+}
+
+void MetalKnob::mouseUp (const MouseEvent& e)
+{
+    if (velocity) restoreMouse();
+    Slider::mouseUp (e);
+}
+
+void MetalKnob::modifierKeysChanged (const ModifierKeys& m)
+{
+    if (velocity && isMouseButtonDown() && ! velocityKeys (m)) restoreMouse();
+    Slider::modifierKeysChanged (m);
+}
+
+// as JUCE's slider: the cursor reappears where an absolute drag from the press point would have put it for the
+// current value, kept inside the knob, and the drag continues absolutely from there
+void MetalKnob::restoreMouse()
+{
+    velocity = false;
+    auto src = Desktop::getInstance().getMainMouseSource();
+    src.enableUnboundedMouseMovement (false);
+    const double now = valueToProportionOfLength (getValue());
+    const float screenPerDesign = getScreenBounds().toFloat().getHeight() / ((float) getHeight() * std::abs (getTransform().mat00));
+    auto pos = downScreen.translated (0.0f, (float) ((anchorValue - now) * 100.0) * screenPerDesign);
+    pos = getScreenBounds().reduced (4).toFloat().getConstrainedPoint (pos);
+    src.setScreenPosition (pos);
+    anchorY = getLocalPoint (nullptr, pos).y * std::abs (getTransform().mat00);
+    anchorValue = now;
+    downScreen = pos;
 }
 
 static float interp (const float* table, int n, float x0, float x1, float x)

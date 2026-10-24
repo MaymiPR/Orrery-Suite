@@ -24,6 +24,18 @@ public:
     std::function<void()> onClick;
 };
 
+// Chain-link toggle beside the input and output captions (ours, not on the reference): linked, turning one of the
+// two knobs turns the other the opposite way. Mint while linked, the plate's label grey while not.
+class LinkButton : public juce::Component
+{
+public:
+    LinkButton() { noFocus (*this); setRepaintsOnMouseActivity (true); }
+    void paint (juce::Graphics&) override;
+    void mouseUp (const juce::MouseEvent& e) override { if (contains (e.getPosition()) && onClick) onClick(); }
+    bool active = false;
+    std::function<void()> onClick;
+};
+
 // Boxed icon button of the top bar: previous / next preset, save.
 class IconButton : public juce::Component
 {

@@ -104,7 +104,15 @@ public:
 };
 
 // grabs the component's screen area (also native child windows, e.g. a Waves editor) into a PNG
+static Image grabImage (Component& c);
 static void grabPng (Component& c, const File& f)
+{
+    auto img = grabImage (c);
+    f.deleteFile();
+    if (auto st = f.createOutputStream()) PNGImageFormat().writeImageToStream (img, *st);
+}
+
+static Image grabImage (Component& c)
 {
     juce::Rectangle<int> r; double scale = 1.0;
     {
@@ -132,14 +140,16 @@ static void grabPng (Component& c, const File& f)
             }
     }
     SelectObject (mem, old); DeleteObject (bmp); DeleteDC (mem); ReleaseDC (nullptr, screen);
-    f.deleteFile();
-    FileOutputStream os (f);
-    PNGImageFormat().writeImageToStream (img, os);
+    return img;
 }
 
-// Drag script (drag=x,y,dx,dy[,ctrl|shift|alt] in the editor's design pixels, design=<design width>): moves the real
+// Drag script (drag=x,y,dx,dy[,mod[,steps]] in the editor's design pixels, design=<design width>): moves the real
 // mouse over the editor, prints every parameter before and after each drag, and whether the cursor stayed visible
 // in the middle of the drag. Used to measure how far a control moves per pixel of mouse movement.
+// mod: ctrl | shift | alt, optionally joined with '+' to: rel (relative mouse moves through SendInput, as a real mouse
+// makes them: a control that hides and re-centres the cursor sees them too), mid (the key goes down after the first
+// step, i.e. during the drag), back (then half the way back in the same press). mod enter / leave: the cursor moves onto / off the control, and a burst of screen grabs
+// follows (written afterwards as <out>_<n>_<ms>ms.png, the time since the move).
 class DragScript : public Thread
 {
 public:
@@ -172,8 +182,31 @@ public:
                 start = { roundToInt ((pos.x + x * s) * scale), roundToInt ((pos.y + y * s) * scale) };
                 stepScale = s * (float) scale;
             }
-            const WORD vk = mod == "ctrl" ? VK_CONTROL : mod == "shift" ? VK_SHIFT : mod == "alt" ? VK_MENU : 0;
+            const WORD vk = mod.contains ("ctrl") ? VK_CONTROL : mod.contains ("shift") ? VK_SHIFT : mod.contains ("alt") ? VK_MENU : 0;
+            const bool relative = mod.contains ("rel"), keyMid = mod.contains ("mid");
             SetCursorPos (start.x, start.y); sleep (150);
+            if (mod == "enter" || mod == "leave")                 // timing of what hovering shows
+            {
+                const Point<int> away { start.x + 400, start.y + 300 };
+                SetCursorPos (mod == "enter" ? away.x : start.x, mod == "enter" ? away.y : start.y); sleep (800);
+                const double t0 = Time::getMillisecondCounterHiRes();
+                SetCursorPos (mod == "enter" ? start.x : away.x, mod == "enter" ? start.y : away.y);
+                std::vector<std::pair<double, Image>> burst;
+                for (double at : { 0.0, 10.0, 20.0, 35.0, 50.0, 75.0, 100.0, 150.0, 200.0, 300.0, 500.0, 800.0, 1200.0 })
+                {
+                    while (Time::getMillisecondCounterHiRes() - t0 < at) Thread::yield();
+                    const double t = Time::getMillisecondCounterHiRes() - t0;
+                    burst.emplace_back (t, grabImage (editor));
+                }
+                if (shots != File())
+                    for (auto& [t, img] : burst)
+                    {
+                        auto f = shots.getSiblingFile (shots.getFileNameWithoutExtension() + "_" + String (n) + "_" + String (roundToInt (t)) + "ms.png");
+                        f.deleteFile();
+                        if (auto st = f.createOutputStream()) PNGImageFormat().writeImageToStream (img, *st);
+                    }
+                std::printf ("%s burst\n", mod.toRawUTF8()); continue;
+            }
             if (mod == "hover")                                   // no click: what does hovering show?
             {
                 sleep (400); shot ("hover");
@@ -204,14 +237,24 @@ public:
                 sleep (500); shot ("after");
                 dump ("after"); continue;
             }
-            if (vk) { keybd_event ((BYTE) vk, 0, 0, 0); sleep (50); }
+            if (vk && ! keyMid) { keybd_event ((BYTE) vk, 0, 0, 0); sleep (50); }
             mouse_event (MOUSEEVENTF_LEFTDOWN, 0, 0, 0, 0); sleep (80);
             shot ("down");
             bool hidden = false;
+            Point<int> sent;
             for (int i = 1; i <= steps; ++i)
             {
-                SetCursorPos (start.x + roundToInt (dx * stepScale * (float) i / steps), start.y + roundToInt (dy * stepScale * (float) i / steps));
+                const Point<int> to { roundToInt (dx * stepScale * (float) i / steps), roundToInt (dy * stepScale * (float) i / steps) };
+                if (relative)
+                {
+                    INPUT in {}; in.type = INPUT_MOUSE; in.mi.dwFlags = MOUSEEVENTF_MOVE;
+                    in.mi.dx = to.x - sent.x; in.mi.dy = to.y - sent.y; sent = to;
+                    SendInput (1, &in, sizeof (INPUT));
+                }
+                else
+                    SetCursorPos (start.x + to.x, start.y + to.y);
                 sleep (12);
+                if (i == 1 && vk && keyMid) { keybd_event ((BYTE) vk, 0, 0, 0); sleep (50); }
                 if (i == steps / 2)
                 {
                     shot ("mid");
@@ -220,6 +263,13 @@ public:
                     hidden = (ci.flags & CURSOR_SHOWING) == 0 || ci.hCursor == nullptr;
                 }
             }
+            if (mod.contains ("back"))
+                for (int i = 1; i <= steps / 2; ++i)
+                {
+                    const float f = 1.0f - 0.5f * (float) i / (float) (steps / 2);
+                    SetCursorPos (start.x + roundToInt (dx * stepScale * f), start.y + roundToInt (dy * stepScale * f));
+                    sleep (12);
+                }
             sleep (80);
             mouse_event (MOUSEEVENTF_LEFTUP, 0, 0, 0, 0); sleep (50);
             if (vk) keybd_event ((BYTE) vk, 0, KEYEVENTF_KEYUP, 0);

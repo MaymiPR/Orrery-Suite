@@ -27,6 +27,11 @@ String grText (float gr)
     return String (std::abs (v) < 0.05f ? 0.0f : v, 1);
 }
 
+// the cells over which a knob's caption shows its value (hovered on the reference): the knob's column, 87 px wide
+// centred on the knob; on the plate its full height, for the EQ knobs 20.5 px above the knob centre to 45 below
+Rectangle<float> plateCell (float cx) { return { cx - 43.5f, 266.5f, 87.0f, 92.25f }; }
+Rectangle<float> eqCell (float cy) { return { 133.375f - 43.5f, cy - 20.5f, 87.0f, 65.5f }; }
+
 String dbText (float db)
 {
     if (db <= -100.0f) return "-inf";
@@ -46,8 +51,9 @@ AntiparticleEditor::AntiparticleEditor (AntiparticleProcessor& p) : AudioProcess
 
     for (auto* c : std::initializer_list<Component*> { &logo, &presetBox, &prevButton, &nextButton, &saveButton, &sidechain, &scaleBox, &gear,
                                                        &visualizer, &amountText, &eqPower, &eqHigh, &eqMid, &eqLow, &amount, &amountPower, &limiterPower,
-                                                       &inputKnob, &limiterKnob, &outputKnob })
+                                                       &inputKnob, &limiterKnob, &outputKnob, &linkIn, &linkOut })
         content.addAndMakeVisible (*c);
+    content.addMouseListener (&hoverTracker, true);
 
     logo.setBounds (8, 7, 14, 17);
     presetBox.setBounds (176, 3, 193, 25);
@@ -78,6 +84,9 @@ AntiparticleEditor::AntiparticleEditor (AntiparticleProcessor& p) : AudioProcess
     place (inputKnob, 45.755f, 313.11f, 25.06f);
     place (limiterKnob, 754.745f, 313.11f, 25.06f);
     place (outputKnob, 841.74f, 313.11f, 25.06f);
+    // link toggles beside the input and output captions (clear of the widest readout, "-12.0 dB")
+    linkIn.setBounds (72, 269, 14, 14);
+    linkOut.setBounds (798, 269, 14, 14);
     eqPower.setBounds (97, 40, 72, 25);
     amountPower.setBounds (364, 167, 72, 25);
     limiterPower.setBounds (719, 40, 72, 25);
@@ -96,6 +105,21 @@ AntiparticleEditor::AntiparticleEditor (AntiparticleProcessor& p) : AudioProcess
     attach (inputKnob, ap::id::inputGain);
     attach (limiterKnob, ap::id::limiterGain);
     attach (outputKnob, ap::id::outputGain);
+
+    for (auto* k : { &inputKnob, &outputKnob })
+    {
+        k->onDragStart = [this, k] { beginLink (*k); };
+        k->onValueChange = [this, k] { applyLink (*k); };
+        k->onDragEnd = [this, k] { endLink (*k); };
+    }
+    linkIn.active = linkOut.active = proc.ioLink.load();
+    for (auto* b : { &linkIn, &linkOut })
+        b->onClick = [this]
+        {
+            proc.ioLink = ! proc.ioLink.load();
+            linkIn.active = linkOut.active = proc.ioLink.load();
+            linkIn.repaint(); linkOut.repaint(); content.repaint();
+        };
 
     auto toggleParam = [&s] (const char* pid)
     {
@@ -131,6 +155,7 @@ AntiparticleEditor::AntiparticleEditor (AntiparticleProcessor& p) : AudioProcess
 
 AntiparticleEditor::~AntiparticleEditor()
 {
+    content.removeMouseListener (&hoverTracker);
     ap::Settings::get().removeChangeListener (this);
     for (auto* pid : { ap::id::eqBypass, ap::id::characterBypass, ap::id::limiterBypass, ap::id::character })
         proc.apvts.removeParameterListener (pid, this);
@@ -167,6 +192,76 @@ void AntiparticleEditor::updateFromParams()
 }
 
 void AntiparticleEditor::changeListenerCallback (ChangeBroadcaster*) { content.repaint(); }
+
+void AntiparticleEditor::updateReadout (const MouseEvent& e, bool released)
+{
+    const auto p = e.getEventRelativeTo (&content).position;
+    const ap::MetalKnob* t = nullptr;
+    const ap::MetalKnob* knobs[] { &inputKnob, &limiterKnob, &outputKnob, &eqHigh, &eqMid, &eqLow };
+    if (! released)
+        for (auto* k : knobs)
+            if (k->isMouseButtonDown()) t = k;          // a drag keeps its readout wherever the mouse goes
+    const bool inside = content.getLocalBounds().toFloat().contains (p) && dialog == nullptr && dropList == nullptr
+                        && ! (e.eventComponent == &content && ! content.isMouseOver (true));
+    const ap::LinkButton* link = nullptr;
+    if (t == nullptr && inside)
+    {
+        if (linkIn.getBounds().toFloat().contains (p)) link = &linkIn;
+        else if (linkOut.getBounds().toFloat().contains (p)) link = &linkOut;
+        else
+        {
+            const std::pair<const ap::MetalKnob*, Rectangle<float>> cells[] {
+                { &inputKnob, plateCell (45.755f) }, { &limiterKnob, plateCell (754.745f) }, { &outputKnob, plateCell (841.74f) },
+                { &eqHigh, eqCell (90.75f) }, { &eqMid, eqCell (155.75f) }, { &eqLow, eqCell (220.75f) } };
+            for (auto& [k, r] : cells)
+                if (r.contains (p)) t = k;
+        }
+    }
+    if (t != readoutKnob || link != hoverLink) { readoutKnob = t; hoverLink = link; content.repaint(); }
+}
+
+String AntiparticleEditor::captionText (const ap::MetalKnob& k, const char* name) const
+{
+    const bool linkedPartner = linkSource != nullptr && linkSource != &k && (&k == &inputKnob || &k == &outputKnob);
+    if (&k == readoutKnob || linkedPartner) return String::formatted ("%.1f dB", k.getValue());
+    // hovering a link toggle names it in the caption beside it
+    if ((hoverLink == &linkIn && &k == &inputKnob) || (hoverLink == &linkOut && &k == &outputKnob))
+        return proc.ioLink.load() ? "linked" : "link";
+    return name;
+}
+
+void AntiparticleEditor::beginLink (ap::MetalKnob& src)
+{
+    if (! proc.ioLink.load() || linkSource != nullptr) return;
+    auto& other = &src == &inputKnob ? outputKnob : inputKnob;
+    if (auto* prm = proc.apvts.getParameter (&other == &inputKnob ? ap::id::inputGain : ap::id::outputGain))
+    {
+        linkSource = &src;
+        linkSum = inputKnob.getValue() + outputKnob.getValue();
+        prm->beginChangeGesture();
+    }
+}
+
+void AntiparticleEditor::applyLink (ap::MetalKnob& src)
+{
+    if (linkSource != &src) return;
+    auto& other = &src == &inputKnob ? outputKnob : inputKnob;
+    if (auto* prm = dynamic_cast<RangedAudioParameter*> (proc.apvts.getParameter (&other == &inputKnob ? ap::id::inputGain : ap::id::outputGain)))
+    {
+        const auto r = prm->getNormalisableRange();
+        prm->setValueNotifyingHost (prm->convertTo0to1 (jlimit (r.start, r.end, (float) (linkSum - src.getValue()))));
+    }
+    content.repaint();
+}
+
+void AntiparticleEditor::endLink (ap::MetalKnob& src)
+{
+    if (linkSource != &src) return;
+    if (auto* prm = proc.apvts.getParameter (&src == &inputKnob ? ap::id::outputGain : ap::id::inputGain))
+        prm->endChangeGesture();
+    linkSource = nullptr;
+    content.repaint();
+}
 
 void AntiparticleEditor::updateMeter (Meter& m, ap::LevelTap& tap, float dt)
 {
@@ -296,8 +391,9 @@ void AntiparticleEditor::paintPanel (Graphics& g)
     g.setColour (eqOn ? theme::mint : theme::plateText);
     const float baselines[3] { 125.5f, 190.5f, 255.5f };
     const char* names[3] { "high", "mid", "low" };
+    const ap::MetalKnob* eqKnobs[3] { &eqHigh, &eqMid, &eqLow };
     for (int i = 0; i < 3; ++i)
-        g.drawText (names[i], Rectangle<float> (103.0f, baselines[i] - 12.0f, 61.5f, 16.0f), Justification::centredTop, false);
+        g.drawText (captionText (*eqKnobs[i], names[i]), Rectangle<float> (83.0f, baselines[i] - 12.0f, 101.5f, 16.0f), Justification::centredTop, false);
 
     paintGainReduction (g);
     paintLimiter (g);
@@ -527,7 +623,8 @@ void AntiparticleEditor::paintPlate (Graphics& g)
     // labels
     g.setColour (theme::plateText);
     g.setFont (theme::font (12.0f));
-    const std::pair<const char*, float> labels[] { { "input", 46.0f }, { "eq", 132.25f }, { "gain reduction", 636.75f }, { "limiter", 755.0f }, { "output", 841.75f } };
+    const std::pair<String, float> labels[] { { captionText (inputKnob, "input"), 46.0f }, { "eq", 132.25f }, { "gain reduction", 636.75f },
+                                              { captionText (limiterKnob, "limiter"), 755.0f }, { captionText (outputKnob, "output"), 841.75f } };
     for (auto& [t, x] : labels) theme::textAt (g, t, x, 280.0f, Justification::horizontallyCentred);
 
     // grille of embossed bars

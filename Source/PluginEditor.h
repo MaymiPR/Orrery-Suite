@@ -64,6 +64,30 @@ private:
     void paintLimiter (juce::Graphics&);
     void paintAmountText (juce::Graphics&);
 
+    // a knob's caption shows its value (as the reference: "%.1f dB") while the mouse is over the knob's cell or the
+    // knob is being dragged
+    struct HoverTracker : juce::MouseListener
+    {
+        explicit HoverTracker (AntiparticleEditor& e) : ed (e) {}
+        void mouseMove (const juce::MouseEvent& e) override { ed.updateReadout (e, false); }
+        void mouseEnter (const juce::MouseEvent& e) override { ed.updateReadout (e, false); }
+        void mouseExit (const juce::MouseEvent& e) override { ed.updateReadout (e, false); }
+        void mouseDrag (const juce::MouseEvent& e) override { ed.updateReadout (e, false); }
+        void mouseUp (const juce::MouseEvent& e) override { ed.updateReadout (e, true); }
+        AntiparticleEditor& ed;
+    } hoverTracker { *this };
+    void updateReadout (const juce::MouseEvent&, bool released);
+    juce::String captionText (const ap::MetalKnob&, const char* name) const;
+    const ap::MetalKnob* readoutKnob = nullptr;
+    const ap::LinkButton* hoverLink = nullptr;
+
+    // input / output link (ours): while linked, a gesture on one knob keeps input + output at its starting sum
+    void beginLink (ap::MetalKnob&);
+    void applyLink (ap::MetalKnob&);
+    void endLink (ap::MetalKnob&);
+    ap::MetalKnob* linkSource = nullptr;
+    double linkSum = 0.0;
+
     AntiparticleProcessor& proc;
     Content content { *this };
     float scale = 1.0f;
@@ -81,6 +105,7 @@ private:
     ap::MetalKnob inputKnob { ap::MetalKnob::Kind::plate }, limiterKnob { ap::MetalKnob::Kind::plate },
         outputKnob { ap::MetalKnob::Kind::plate };
     ap::Visualizer visualizer;
+    ap::LinkButton linkIn, linkOut;
     struct PaintOverlay : juce::Component
     {
         std::function<void (juce::Graphics&)> paintFn;
