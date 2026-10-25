@@ -21,7 +21,7 @@ public:
     int oversampling() const { return file->getIntValue ("oversampling", 1); }          // 1, 2, 4 or 8
     Meter meterMode() const { return file->getIntValue ("meterMode", 0) == 1 ? Meter::lufsPeak : Meter::rmsPeak; }
     bool animation() const { return file->getBoolValue ("animation", true); }
-    Particles particleStyle() const { return file->getIntValue ("particleStyle", 0) == 1 ? Particles::antiparticle : Particles::godParticle; }
+    Particles particleStyle() const { return file->getIntValue ("particleStyle", 1) == 1 ? Particles::antiparticle : Particles::godParticle; }   // ours by default
 
     void setOversampling (int r) { set ("oversampling", r); }
     void setMeterMode (Meter m) { set ("meterMode", m == Meter::lufsPeak ? 1 : 0); }

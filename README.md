@@ -43,7 +43,7 @@ Each release lists the files' SHA-256 checksums.
 ## The Antiparticle
 
 <p align="center">
-  <img src="docs/screenshots/the-antiparticle.png" alt="The Antiparticle" width="80%">
+  <img src="docs/screenshots/the-antiparticle@2x.png" alt="The Antiparticle" width="80%">
 </p>
 
 The God Particle's chain, rebuilt: input gain, a three-band EQ, the "character" section (a 3-band linear-phase split,

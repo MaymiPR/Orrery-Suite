@@ -4,8 +4,8 @@ Part of [Newton Suite](../../README.md). A recreation of Cradle's The God Partic
 sound, null-tested against the original.
 
 <p align="center">
-  <img src="../../docs/screenshots/the-antiparticle.png" alt="The Antiparticle, God particle style" width="49%">
-  <img src="../../docs/screenshots/the-antiparticle-antiparticle-style.png" alt="The Antiparticle, antiparticle style" width="49%">
+  <img src="../../docs/screenshots/the-antiparticle.png" alt="The Antiparticle, antiparticle particles (the default)" width="49%">
+  <img src="../../docs/screenshots/the-antiparticle-god-particle-style.png" alt="The Antiparticle, God particle style" width="49%">
 </p>
 
 - [RESEARCH.md](RESEARCH.md): what the original does, and the UI measurements.
@@ -35,7 +35,7 @@ input: the main signal or the side-chain bus.
 - **Presets:** the arrows step through them; the save button stores the EQ, character and limiter settings as an
   `.antp` file in `Documents/The Antiparticle/Presets`. Input, output and INT / EXT are left as they are.
 - **Settings** (gear): oversampling, meter mode, particle animation on / off and its style: "God particle" (the
-  original's sparks) or "Antiparticle" (ours: bubble-chamber pair creation and annihilation). The particles follow the
+  original's sparks) or "Antiparticle" (ours, the default: bubble-chamber pair creation and annihilation). The particles follow the
   input level and fade with quiet passages.
 - **Zoom:** 50 – 200 % (the box next to the gear). The logo opens the version and About.
 

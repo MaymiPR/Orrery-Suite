@@ -148,7 +148,9 @@ void Visualizer::advance (float inputPeakDb, float mix, bool animate, bool antip
     if (wasOn || level > 0.0f || glow > 0.0f) repaint();
 }
 
-// The glass: a measured field (resources/glass/*.png, tools/fit/fit_glass.py): x = station around the track (25 per
+// The glass: our vector drawing rendered as a field (resources/glass/*.png from tools/fit/draw_glass.py and its
+// glass_params.json: rim and sheen lines, the reflections as soft-edged shaded polygons, the sparks' light as our own
+// streaks; shaped to match the reference's look): x = station around the track (25 per
 // straight, 144 per curved end), y = radius 52 .. 114 in 0.5 px steps, RGB. Interpolated with Catmull-Rom in both
 // directions so the reflections' slanted edges stay smooth.
 struct GlassField
@@ -435,7 +437,7 @@ void Visualizer::paintGodly (Graphics& g)
 {
     const auto b = getBounds().toFloat();
     {
-        // the glass lit by the sparks (measured as the median of the reference's active frames); desaturated with
+        // the glass lit by the sparks (drawn to match the reference's active frames on average); desaturated with
         // the sparks' colour mix
         Graphics::ScopedSaveState s0 (g);
         g.setOpacity (glow * colourMix);
