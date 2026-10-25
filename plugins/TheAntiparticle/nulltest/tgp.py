@@ -14,7 +14,8 @@ plugin='model' renders through our processor with tools/ApRender: tune={'mid.mix
 import hashlib, os, subprocess, tempfile, uuid
 import numpy as np
 
-ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+PLUGIN = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))     # plugins/TheAntiparticle: sources and docs
+ROOT = os.path.dirname(os.path.dirname(PLUGIN))                          # the repository: build/, measurements/, reference/
 EXE = os.path.join(ROOT, 'build', 'RefRender_artefacts', 'Release', 'RefRender.exe')
 APEXE = os.path.join(ROOT, 'build', 'ApRender_artefacts', 'Release', 'ApRender.exe')   # our processor, tunable ('model')
 if os.environ.get('AP_RENDER') == 'dev':      # the second copy, for DSP changes while a fit runs on the first
@@ -23,8 +24,8 @@ PLUGINS = {
     'ref': (r'C:\Program Files\Common Files\VST3\Cradle The God Particle.vst3', 'The God Particle'),
     'ours': (os.path.join(ROOT, 'build', 'TheAntiparticle_artefacts', 'Release', 'VST3', 'The Antiparticle.vst3'), 'The Antiparticle'),
 }
-WORK = os.path.join(ROOT, 'nulltest', 'renders', 'tmp')
-CACHE = os.path.join(ROOT, 'nulltest', 'renders', 'cache')
+WORK = os.path.join(PLUGIN, 'nulltest', 'renders', 'tmp')
+CACHE = os.path.join(PLUGIN, 'nulltest', 'renders', 'cache')
 FS = 48000
 
 # isolate one stage of the chain (the others bypassed)

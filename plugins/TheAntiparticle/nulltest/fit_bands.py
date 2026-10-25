@@ -52,6 +52,6 @@ if __name__ == '__main__':
     lines += ['};', 'inline constexpr double bandGain48k[3][9] {']
     for b in range(3): lines.append('    { ' + ', '.join(f'{v:.6f}' for v in gains_db[b]) + ' },')
     lines += ['};', '}', '']
-    open(os.path.join(tgp.ROOT, 'Source', 'dsp', 'BandFilters.h'), 'w').write('\n'.join(lines))
+    open(os.path.join(tgp.PLUGIN, 'Source', 'dsp', 'BandFilters.h'), 'w').write('\n'.join(lines))
     json.dump(dict(taps=n, reconstruction_error=float(err), gains_dB=gains_db.round(4).tolist(),
                    singular_values=(s / s[0]).tolist()), open(os.path.join(tgp.ROOT, 'measurements', 'character', 'bands.json'), 'w'), indent=1)

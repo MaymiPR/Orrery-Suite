@@ -1,13 +1,13 @@
-# Builds The Antiparticle on Windows (VST3 + CLAP + standalone), macOS (universal AU + VST3 + CLAP) and Linux (VST3 +
-# CLAP), runs the unit tests, validates the plug-ins with pluginval at the strictest level (and auval on macOS) and makes
-# one installer per operating system:
-#   Windows  TheAntiparticle-<version>-Windows-Setup.exe   (Inno Setup, packaging/TheAntiparticle.iss)
-#   macOS    TheAntiparticle-<version>-macOS.pkg           (productbuild, packaging/distribution.xml)
-#   Linux    TheAntiparticle-<version>-Linux.tar.gz        (with packaging/install-linux.sh)
+# Builds every Newton Suite plug-in (listed in packaging/plugins.txt) on Windows (VST3 + CLAP + standalone), macOS
+# (universal AU + VST3 + CLAP) and Linux (VST3 + CLAP), runs the unit tests, validates the plug-ins with pluginval at
+# the strictest level (and auval on macOS) and makes ONE installer per operating system holding all of them:
+#   Windows  NewtonSuite-<version>-Windows-Setup.exe   (Inno Setup, packaging/NewtonSuite.iss)
+#   macOS    NewtonSuite-<version>-macOS.pkg           (productbuild, packaging/distribution.xml)
+#   Linux    NewtonSuite-<version>-Linux.tar.gz        (with packaging/install-linux.sh)
 # Runs only when a version tag is pushed (git tag v0.1.0 && git push origin v0.1.0), which also publishes the installers
 # as a GitHub Release with that version's notes from CHANGELOG.md and their SHA-256 checksums, or when started by hand
 # (Actions tab > Run workflow; the installers come out as downloadable artifacts). Ordinary pushes do not run it, to save
-# Actions minutes on this private repository: build, test and validate locally first.
+# Actions minutes: build, test and validate locally first.
 name: Build and release
 
 on:
@@ -27,36 +27,43 @@ jobs:
       - name: Configure
         run: cmake -B build -A x64 -DAP_TOOLS=OFF
 
-      - name: Build (plug-ins, standalone and tests)
-        run: cmake --build build --config Release --parallel --target TheAntiparticle_VST3 TheAntiparticle_CLAP TheAntiparticle_Standalone AntiparticleTests
+      - name: Build (every plug-in, format and test)
+        run: cmake --build build --config Release --parallel
 
       - name: Unit tests
         run: ctest --test-dir build -C Release --output-on-failure
 
-      - name: Validate the VST3 (pluginval, strictness 10)
+      - name: Validate every VST3 (pluginval, strictness 10)
         shell: pwsh
         run: |
           Invoke-WebRequest https://github.com/Tracktion/pluginval/releases/latest/download/pluginval_Windows.zip -OutFile pluginval.zip
           Expand-Archive pluginval.zip -DestinationPath pluginval
-          $plug = Resolve-Path "build/TheAntiparticle_artefacts/Release/VST3/The Antiparticle.vst3"
-          # pluginval is a GUI-subsystem program: wait for it and read its real exit code
-          $r = Start-Process -FilePath "pluginval/pluginval.exe" -NoNewWindow -Wait -PassThru `
-                 -ArgumentList @("--strictness-level", "10", "--skip-gui-tests", "--timeout-ms", "900000", "--validate", "`"$plug`"")
-          Write-Host "pluginval exit code: $($r.ExitCode)"
-          if ($r.ExitCode -ne 0) { exit 1 }
+          $failed = 0
+          foreach ($line in Get-Content packaging/plugins.txt) {
+            if (-not $line.Trim() -or $line.StartsWith('#')) { continue }
+            $t, $p, $code, $mfr = $line.Split([char]0x7C)
+            $plug = Resolve-Path "build/${t}_artefacts/Release/VST3/$p.vst3"
+            # pluginval is a GUI-subsystem program: wait for it and read its real exit code
+            $r = Start-Process -FilePath "pluginval/pluginval.exe" -NoNewWindow -Wait -PassThru `
+                   -ArgumentList @("--strictness-level", "10", "--skip-gui-tests", "--timeout-ms", "900000", "--validate", "`"$plug`"")
+            Write-Host "pluginval $p exit code: $($r.ExitCode)"
+            if ($r.ExitCode -ne 0) { $failed++ }
+          }
+          if ($failed -ne 0) { exit 1 }
 
-      - name: Installer (Inno Setup)
+      - name: Installer (Inno Setup, every plug-in)
         shell: pwsh
         run: |
-          $version = (Select-String -Path CMakeLists.txt -Pattern 'project\(TheAntiparticle VERSION ([0-9.]+)\)').Matches[0].Groups[1].Value
+          $version = (Select-String -Path CMakeLists.txt -Pattern 'project\(NewtonSuite VERSION ([0-9.]+)\)').Matches[0].Groups[1].Value
+          pwsh packaging/make_iss_include.ps1 build
           $iscc = "${env:ProgramFiles(x86)}\Inno Setup 6\ISCC.exe"
           if (-not (Test-Path $iscc)) { choco install innosetup -y --no-progress | Out-Null }
-          & $iscc "/DAppVersion=$version" "packaging\TheAntiparticle.iss"
+          & $iscc "/DAppVersion=$version" "packaging\NewtonSuite.iss"
           if ($LASTEXITCODE -ne 0) { exit 1 }
 
       - uses: actions/upload-artifact@v6
         with:
-          name: TheAntiparticle-Windows
+          name: NewtonSuite-Windows
           path: dist/*.exe
 
   macos:
@@ -67,8 +74,8 @@ jobs:
       - name: "Configure (universal: Apple Silicon + Intel)"
         run: cmake -B build -G Xcode -DAP_TOOLS=OFF -DCMAKE_OSX_ARCHITECTURES="arm64;x86_64" -DCMAKE_OSX_DEPLOYMENT_TARGET=10.13
 
-      - name: Build (plug-ins and tests)
-        run: cmake --build build --config Release --target TheAntiparticle_AU TheAntiparticle_VST3 TheAntiparticle_CLAP AntiparticleTests -- -quiet
+      - name: Build (every plug-in, format and test)
+        run: cmake --build build --config Release -- -quiet
 
       - name: Unit tests
         run: ctest --test-dir build -C Release --output-on-failure
@@ -76,33 +83,37 @@ jobs:
       - name: Collect, check universal binaries and sign (ad hoc)
         run: |
           set -e
-          A="build/TheAntiparticle_artefacts/Release"
           mkdir -p stage/au stage/vst3 stage/clap
-          for b in "$A/AU/The Antiparticle.component" "$A/VST3/The Antiparticle.vst3" "$A/CLAP/The Antiparticle.clap"; do
-            lipo -info "$b/Contents/MacOS/The Antiparticle"
-            codesign --force --deep --sign - "$b"
+          grep -v '^#' packaging/plugins.txt | grep -v '^\s*$' | while IFS='|' read -r t p code mfr; do
+            A="build/${t}_artefacts/Release"
+            for b in "$A/AU/$p.component" "$A/VST3/$p.vst3" "$A/CLAP/$p.clap"; do
+              lipo -info "$b/Contents/MacOS/$p"
+              codesign --force --deep --sign - "$b"
+            done
+            cp -R "$A/AU/$p.component" stage/au/
+            cp -R "$A/VST3/$p.vst3" stage/vst3/
+            cp -R "$A/CLAP/$p.clap" stage/clap/
           done
-          cp -R "$A/AU/The Antiparticle.component" stage/au/
-          cp -R "$A/VST3/The Antiparticle.vst3" stage/vst3/
-          cp -R "$A/CLAP/The Antiparticle.clap" stage/clap/
 
-      - name: Validate the AU (auval) and the VST3 / AU (pluginval, strictness 10)
+      - name: Validate every AU (auval) and VST3 / AU (pluginval, strictness 10)
         run: |
           set -e
           mkdir -p ~/Library/Audio/Plug-Ins/Components
-          cp -R "stage/au/The Antiparticle.component" ~/Library/Audio/Plug-Ins/Components/
+          cp -R stage/au/* ~/Library/Audio/Plug-Ins/Components/
           killall -9 AudioComponentRegistrar || true
-          auval -v aufx Atpl Antp
           curl -sL -o pluginval.zip https://github.com/Tracktion/pluginval/releases/latest/download/pluginval_macOS.zip
           unzip -q pluginval.zip
           P=pluginval.app/Contents/MacOS/pluginval
-          $P --strictness-level 10 --skip-gui-tests --timeout-ms 900000 --validate ~/Library/Audio/Plug-Ins/Components/"The Antiparticle.component"
-          $P --strictness-level 10 --skip-gui-tests --timeout-ms 900000 --validate "stage/vst3/The Antiparticle.vst3"
+          grep -v '^#' packaging/plugins.txt | grep -v '^\s*$' | while IFS='|' read -r t p code mfr; do
+            auval -v aufx "$code" "$mfr"
+            $P --strictness-level 10 --skip-gui-tests --timeout-ms 900000 --validate ~/Library/Audio/Plug-Ins/Components/"$p.component"
+            $P --strictness-level 10 --skip-gui-tests --timeout-ms 900000 --validate "stage/vst3/$p.vst3"
+          done
 
-      - name: Installer (.pkg)
+      - name: Installer (.pkg, every plug-in)
         run: |
           set -e
-          V=$(sed -n 's/^project(TheAntiparticle VERSION \([0-9.]*\)).*/\1/p' CMakeLists.txt)
+          V=$(sed -n 's/^project(NewtonSuite VERSION \([0-9.]*\)).*/\1/p' CMakeLists.txt)
           mkdir -p pkg/res dist
           # Install exactly where stated (pkgbuild would otherwise follow a copy of a bundle found elsewhere on the disk).
           for c in au vst3 clap; do
@@ -110,17 +121,17 @@ jobs:
             n=$(plutil -extract @count raw pkg/$c.plist 2>/dev/null || echo 1)
             for ((i = 0; i < n; i++)); do plutil -replace $i.BundleIsRelocatable -bool NO pkg/$c.plist; done
           done
-          pkgbuild --root stage/au   --component-plist pkg/au.plist   --install-location "/Library/Audio/Plug-Ins/Components" --identifier com.theantiparticle.au   --version "$V" pkg/TheAntiparticle-AU.pkg
-          pkgbuild --root stage/vst3 --component-plist pkg/vst3.plist --install-location "/Library/Audio/Plug-Ins/VST3"       --identifier com.theantiparticle.vst3 --version "$V" pkg/TheAntiparticle-VST3.pkg
-          pkgbuild --root stage/clap --component-plist pkg/clap.plist --install-location "/Library/Audio/Plug-Ins/CLAP"       --identifier com.theantiparticle.clap --version "$V" pkg/TheAntiparticle-CLAP.pkg
+          pkgbuild --root stage/au   --component-plist pkg/au.plist   --install-location "/Library/Audio/Plug-Ins/Components"         --identifier com.newtonsuite.au   --version "$V" pkg/NewtonSuite-AU.pkg
+          pkgbuild --root stage/vst3 --component-plist pkg/vst3.plist --install-location "/Library/Audio/Plug-Ins/VST3/Newton Suite" --identifier com.newtonsuite.vst3 --version "$V" pkg/NewtonSuite-VST3.pkg
+          pkgbuild --root stage/clap --component-plist pkg/clap.plist --install-location "/Library/Audio/Plug-Ins/CLAP/Newton Suite" --identifier com.newtonsuite.clap --version "$V" pkg/NewtonSuite-CLAP.pkg
           cp LICENSE pkg/res/LICENSE.txt
           sed "s/VERSION/$V/g" packaging/distribution.xml > pkg/distribution.xml
-          productbuild --distribution pkg/distribution.xml --package-path pkg --resources pkg/res "dist/TheAntiparticle-$V-macOS.pkg"
-          pkgutil --payload-files "dist/TheAntiparticle-$V-macOS.pkg" | head -20
+          productbuild --distribution pkg/distribution.xml --package-path pkg --resources pkg/res "dist/NewtonSuite-$V-macOS.pkg"
+          pkgutil --payload-files "dist/NewtonSuite-$V-macOS.pkg" | head -20
 
       - uses: actions/upload-artifact@v6
         with:
-          name: TheAntiparticle-macOS
+          name: NewtonSuite-macOS
           path: dist/*.pkg
 
   linux:
@@ -138,37 +149,41 @@ jobs:
       - name: Configure
         run: cmake -B build -G Ninja -DCMAKE_BUILD_TYPE=Release -DAP_TOOLS=OFF
 
-      - name: Build (plug-ins and tests)
-        run: cmake --build build --target TheAntiparticle_VST3 TheAntiparticle_CLAP AntiparticleTests
+      - name: Build (every plug-in, format and test)
+        run: cmake --build build
 
       - name: Unit tests
         run: xvfb-run -a ctest --test-dir build --output-on-failure
 
-      - name: Validate the VST3 (pluginval, strictness 10)
+      - name: Validate every VST3 (pluginval, strictness 10)
         run: |
           set -e
           curl -sL -o pluginval.zip https://github.com/Tracktion/pluginval/releases/latest/download/pluginval_Linux.zip
           unzip -q pluginval.zip
-          xvfb-run -a ./pluginval --strictness-level 10 --skip-gui-tests --timeout-ms 900000 --validate "build/TheAntiparticle_artefacts/Release/VST3/The Antiparticle.vst3"
+          grep -v '^#' packaging/plugins.txt | grep -v '^\s*$' | while IFS='|' read -r t p code mfr; do
+            xvfb-run -a ./pluginval --strictness-level 10 --skip-gui-tests --timeout-ms 900000 --validate "build/${t}_artefacts/Release/VST3/$p.vst3"
+          done
 
-      - name: Installer (tarball with install script)
+      - name: Installer (tarball with install script, every plug-in)
         run: |
           set -e
-          V=$(sed -n 's/^project(TheAntiparticle VERSION \([0-9.]*\)).*/\1/p' CMakeLists.txt)
-          D="TheAntiparticle-$V-Linux"
-          A="build/TheAntiparticle_artefacts/Release"
+          V=$(sed -n 's/^project(NewtonSuite VERSION \([0-9.]*\)).*/\1/p' CMakeLists.txt)
+          D="NewtonSuite-$V-Linux"
           mkdir -p "$D/VST3" "$D/CLAP" dist
-          cp -R "$A/VST3/The Antiparticle.vst3" "$D/VST3/"
-          cp "$A/CLAP/The Antiparticle.clap" "$D/CLAP/"
+          grep -v '^#' packaging/plugins.txt | grep -v '^\s*$' | while IFS='|' read -r t p code mfr; do
+            A="build/${t}_artefacts/Release"
+            cp -R "$A/VST3/$p.vst3" "$D/VST3/"
+            cp "$A/CLAP/$p.clap" "$D/CLAP/"
+          done
           cp packaging/install-linux.sh "$D/" && chmod +x "$D/install-linux.sh"
           cp packaging/INSTALL-Linux.txt "$D/INSTALL.txt"
           cp LICENSE "$D/LICENSE.txt"
-          cp resources/fonts/OFL-InstrumentSans.txt "$D/"
+          cp plugins/TheAntiparticle/resources/fonts/OFL-InstrumentSans.txt "$D/"
           tar -czf "dist/$D.tar.gz" "$D"
 
       - uses: actions/upload-artifact@v6
         with:
-          name: TheAntiparticle-Linux
+          name: NewtonSuite-Linux
           path: dist/*.tar.gz
 
   release:
@@ -188,7 +203,7 @@ jobs:
           VERSION="${GITHUB_REF_NAME#v}"
           # This version's section of CHANGELOG.md
           tr -d '\r' < CHANGELOG.md | awk -v v="## $VERSION" '$0 == v {on = 1; next} /^## / {on = 0} on' > notes.md
-          [ -s notes.md ] || echo "The Antiparticle $VERSION" > notes.md
+          [ -s notes.md ] || echo "Newton Suite $VERSION" > notes.md
           cat packaging/INSTALL-Windows.txt packaging/INSTALL-macOS.txt packaging/INSTALL-Linux.txt | sed 's/^/    /' > install.md
           printf '\n## Installing\n\n' >> notes.md; cat install.md >> notes.md
           FILES=$(find artifacts -type f \( -name '*.exe' -o -name '*.pkg' -o -name '*.tar.gz' \))
@@ -196,4 +211,4 @@ jobs:
           (cd artifacts && find . -type f \( -name '*.exe' -o -name '*.pkg' -o -name '*.tar.gz' \) -exec sha256sum {} + | sed 's|  .*/|  |') > SHA256SUMS.txt
           cat SHA256SUMS.txt
           gh release create "${GITHUB_REF_NAME}" $FILES SHA256SUMS.txt \
-            --repo "${GITHUB_REPOSITORY}" --title "The Antiparticle ${VERSION}" --notes-file notes.md
+            --repo "${GITHUB_REPOSITORY}" --title "Newton Suite ${VERSION}" --notes-file notes.md

@@ -6,8 +6,8 @@ straight right->left, 3..4 left end 180..360 deg; angles from up, clockwise) and
 in design px. Stations: 25 per straight (6 px apart) and 144 per end (1.25 deg); radius r0..r1 in 0.5 px steps (the
 pill on top is drawn separately). Fine enough that the reflections' slanted edges stay smooth.
 
-    python tools/fit/fit_glass.py reference/shots/bypassed.png resources/glass/glass_off.png
-    python tools/fit/fit_glass.py reference/shots/vis_on_median200.png resources/glass/glass_lit.png
+    python plugins/TheAntiparticle/tools/fit/fit_glass.py reference/shots/bypassed.png plugins/TheAntiparticle/resources/glass/glass_off.png
+    python plugins/TheAntiparticle/tools/fit/fit_glass.py reference/shots/vis_on_median200.png plugins/TheAntiparticle/resources/glass/glass_lit.png
 (vis_on_median200.png: per-pixel median of the active frames of a RefCapture film, which removes the sparks.)"""
 import sys
 import numpy as np

@@ -18,7 +18,7 @@ PRE = 2 * FS
 BANDS = {'low': 70.0, 'mid': 700.0, 'high': 8000.0}
 FREE = ['mix', 'cubic', 'thresh', 'ratio', 'knee', 'attack', 'release']   # make-up: the identified small-signal gain
 OUT_JSON = os.environ.get('FIT_CHAR_JSON', os.path.join(tgp.ROOT, 'measurements', 'character', 'fit_char.json'))
-HEADER = os.path.join(tgp.ROOT, 'Source', 'dsp', 'CharacterTable.h')
+HEADER = os.path.join(tgp.PLUGIN, 'Source', 'dsp', 'CharacterTable.h')
 DEFAULTS = {'low': dict(mix=0.7, cubic=0.9, thresh=-30, ratio=2.0, knee=20, attack=10, release=300, gainAttack=5, gainRelease=50, attack2=200, release2=3000, slowOffset=-3),
             'mid': dict(mix=0.79, cubic=0.87, thresh=-23, ratio=1.7, knee=35, attack=190, release=90, gainAttack=5, gainRelease=50, attack2=200, release2=3000, slowOffset=-3),
             'high': dict(mix=0.8, cubic=0.0, thresh=-13, ratio=1.8, knee=1, attack=1.5, release=170, gainAttack=5, gainRelease=50, attack2=200, release2=3000, slowOffset=-3)}

@@ -197,7 +197,7 @@ if __name__ == '__main__':
     ap.add_argument('--only'); ap.add_argument('--vst3', action='store_true'); ap.add_argument('--report', action='store_true')
     a = ap.parse_args()
     if a.report:
-        open(os.path.join(tgp.ROOT, 'NULLTESTS.md'), 'w').write('\n'.join(report()))
+        open(os.path.join(tgp.PLUGIN, 'NULLTESTS.md'), 'w').write('\n'.join(report()))
         raise SystemExit
     res = run(a.only, a.vst3)
     if a.only is None:

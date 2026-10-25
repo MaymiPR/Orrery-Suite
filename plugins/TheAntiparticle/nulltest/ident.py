@@ -11,7 +11,7 @@ D48 = 151.27917
 
 
 def band_firs():
-    src = open(os.path.join(tgp.ROOT, 'Source', 'dsp', 'BandFilters.h')).read()
+    src = open(os.path.join(tgp.PLUGIN, 'Source', 'dsp', 'BandFilters.h')).read()
     body = src[src.index('bandIr48k[3]'):src.index('bandGain48k')]
     groups = re.findall(r'\{([^{}]*)\}', body)
     irs = [np.array([float(v) for v in g.replace('\n', ' ').split(',') if v.strip()]) for g in groups[:3]]

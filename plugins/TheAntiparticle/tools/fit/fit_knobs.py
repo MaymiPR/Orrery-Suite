@@ -108,5 +108,5 @@ for name, m in out.items():
     lines.append(f'    {{ {arr(m["tint"])} }}, {{ {arr(m["pip"])} }}, {{ {arr(m["pipColour"])} }} }};')
 lines += ['}', '']
 import os
-os.makedirs('Source/ui', exist_ok=True)
-open('Source/ui/KnobModel.h', 'w', newline='\n').write('\n'.join(lines))
+os.makedirs('plugins/TheAntiparticle/Source/ui', exist_ok=True)
+open('plugins/TheAntiparticle/Source/ui/KnobModel.h', 'w', newline='\n').write('\n'.join(lines))

@@ -18,8 +18,8 @@ import json, os, sys
 import tgp, ident as I
 
 DIR = os.path.join(tgp.ROOT, 'measurements', 'character')
-HEADER = os.path.join(tgp.ROOT, 'Source', 'dsp', 'CharacterTable.h')
-NL_HEADER = os.path.join(tgp.ROOT, 'Source', 'dsp', 'NlBandFilters.h')
+HEADER = os.path.join(tgp.PLUGIN, 'Source', 'dsp', 'CharacterTable.h')
+NL_HEADER = os.path.join(tgp.PLUGIN, 'Source', 'dsp', 'NlBandFilters.h')
 NAMES = ['makeup', 'mix', 'cubic', 'thresh', 'ratio', 'knee', 'attack', 'release', 'side', 'gainAttack', 'gainRelease',
          'attack2', 'release2', 'slowOffset', 'width', 'mixDb', 'shapeDry', 'shapeMid']
 BANDS = ['low', 'mid', 'high']

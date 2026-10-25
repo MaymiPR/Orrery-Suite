@@ -37,7 +37,7 @@ def write(rates):
                 lines.append('};')
         sets.append(f'    {{ {fs}.0, {n}, {len(nl[0])}, {{ bandIr{fs}_0, bandIr{fs}_1, bandIr{fs}_2 }}, {{ bandNl{fs}_0, bandNl{fs}_1, bandNl{fs}_2 }} }},')
     lines += [f'inline constexpr BandFilterSet bandFilterSets[{len(sets)}] {{'] + sets + ['};', '}', '']
-    open(os.path.join(tgp.ROOT, 'Source', 'dsp', 'BandFiltersRates.h'), 'w').write('\n'.join(lines))
+    open(os.path.join(tgp.PLUGIN, 'Source', 'dsp', 'BandFiltersRates.h'), 'w').write('\n'.join(lines))
 
 
 if __name__ == '__main__':

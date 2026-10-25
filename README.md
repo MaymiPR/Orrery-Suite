@@ -1,61 +1,78 @@
-# The Antiparticle
+<p align="center">
+  <img src="docs/branding/newton-banner.svg" alt="Newton Suite" width="100%">
+</p>
 
-An open-source mix-bus processor (VST3 / AU / CLAP) for Windows, macOS and Linux that recreates the controls, look and
-sound of Cradle's The God Particle, null-tested against the original.
+<p align="center">
+  <a href="https://github.com/MaymiPR/NewtonSuite/releases/latest"><img alt="Latest release" src="https://img.shields.io/github/v/release/MaymiPR/NewtonSuite?color=b07cff&label=release"></a>
+  <img alt="Formats" src="https://img.shields.io/badge/formats-VST3%20%7C%20CLAP%20%7C%20AU-23293d">
+  <img alt="Platforms" src="https://img.shields.io/badge/platforms-Windows%20%7C%20macOS%20%7C%20Linux-23293d">
+  <a href="LICENSE"><img alt="License: AGPL v3" src="https://img.shields.io/badge/license-AGPL--3.0-3fb8ff"></a>
+</p>
 
-- [RESEARCH.md](RESEARCH.md): what the original does, and the UI measurements.
-- [MEASUREMENTS.md](MEASUREMENTS.md): how its audio behaves, measured black-box.
-- [NULLTESTS.md](NULLTESTS.md): how closely The Antiparticle matches it, in dB of residual.
-- [CHANGELOG.md](CHANGELOG.md): what changed in each release.
+# Newton Suite
 
-Independent project, not affiliated with or endorsed by Cradle or Jaycen Joshua. Product names belong to their owners
-and are used only to describe what this project is compatible with.
+Open-source mix-bus processors (**VST3**, **CLAP**, **AU**) for Windows, macOS and Linux, built with JUCE. Each Newton
+plug-in is an independent, from-scratch recreation of a well-known mixing tool: its controls and look studied, its sound
+measured black-box, and the result null-tested against the original, with the numbers published as they are.
 
-## Installing
+> Newton Suite is an independent project. It is not affiliated with, endorsed by or sponsored by Cradle or Jaycen
+> Joshua. Other companies' product names appear only to describe what a Newton plug-in is modelled on and belong to
+> their owners. No code of theirs is included: the sound and the look were measured from the outside.
 
-Download the installer for your system from the [Releases](https://github.com/MaymiPR/TheAntiparticle/releases) page.
+## Download
 
-| System | File | Installs |
+One installer per operating system installs every plug-in in the suite. Get it from
+[Releases](https://github.com/MaymiPR/NewtonSuite/releases):
+
+| System | File | Installs to |
 |---|---|---|
-| Windows 10 / 11 (64-bit) | `TheAntiparticle-<version>-Windows-Setup.exe` | VST3 and CLAP to `C:\Program Files\Common Files\VST3` / `CLAP`; the standalone app optionally |
-| macOS 10.13+ (Apple Silicon and Intel) | `TheAntiparticle-<version>-macOS.pkg` | AU, VST3 and CLAP to `/Library/Audio/Plug-Ins` |
-| Linux (x86-64, glibc 2.35+) | `TheAntiparticle-<version>-Linux.tar.gz` | VST3 and CLAP to `~/.vst3` / `~/.clap` (run `sh install-linux.sh`) |
+| Windows 10 / 11 (64-bit) | `NewtonSuite-<version>-Windows-Setup.exe` | `Common Files\VST3\Newton Suite`, `Common Files\CLAP\Newton Suite`; standalone apps optionally |
+| macOS 10.13+ (Apple Silicon and Intel) | `NewtonSuite-<version>-macOS.pkg` | `/Library/Audio/Plug-Ins/{Components, VST3/Newton Suite, CLAP/Newton Suite}` |
+| Linux x86-64 (glibc 2.35+) | `NewtonSuite-<version>-Linux.tar.gz` | `~/.vst3/Newton Suite`, `~/.clap/Newton Suite` (run `install-linux.sh`) |
 
-The installers are not code-signed: on Windows, SmartScreen may warn ("More info", then "Run anyway"); on macOS, open
-the .pkg once, then allow it in System Settings > Privacy & Security ("Open Anyway"). Each release lists the files'
-SHA-256 checksums. Details: [packaging/INSTALL-Windows.txt](packaging/INSTALL-Windows.txt),
-[INSTALL-macOS.txt](packaging/INSTALL-macOS.txt), [INSTALL-Linux.txt](packaging/INSTALL-Linux.txt).
+The installers are not code-signed or notarized; see [packaging/](packaging) for the first-run steps on each system.
+Each release lists the files' SHA-256 checksums.
 
-## What it does
+## Plug-ins
 
-Input gain feeds the signal chain below, which ends in output gain.
+| Newton plug-in | Modelled on | Status |
+|---|---|---|
+| **[The Antiparticle](plugins/TheAntiparticle)** | Cradle The God Particle: mix-bus EQ, multiband character and limiter | released: close, not a null on every material (see below) |
+| **Orion** (working title) | Cradle Orion | next |
 
-| Stage | What it is |
-|---|---|
-| EQ | Three RBJ filters: low shelf 180 Hz, bell 637 Hz, high shelf 10 kHz, ±6 dB each. |
-| Character, "amount" 0–200 % | A 3-band split by a linear-phase FIR crossover (157 Hz / 2.68 kHz). Each band runs a stereo-linked parallel compressor (it listens to the mid signal) and then a sine shaper (odd harmonics); the side is widened per band. |
-| Limiter | Look-ahead with a −0.1 dBFS sample-peak ceiling and a two-speed release; input gain 0 – 12 dB. |
+## The Antiparticle
 
-Each stage has its own power button. Oversampling (1 / 2 / 4 / 8x) and the I/O meter mode (RMS or LUFS readouts) are
-global settings (gear icon); as in the original, 8x sounds like 4x. INT / EXT picks the character section's detector
-input: the main signal or the side-chain bus.
+<p align="center">
+  <img src="docs/screenshots/the-antiparticle.png" alt="The Antiparticle" width="80%">
+</p>
 
-How close it is: on a mastered track at the default settings the difference to the original is about −44 dB (the
-limiter alone −61 dB); on synthetic music −62 to −74 dB. The weakest case is loud, dense, bright material through the
-character section's high band. [NULLTESTS.md](NULLTESTS.md) has every case.
+The God Particle's chain, rebuilt: input gain, a three-band EQ, the "character" section (a 3-band linear-phase split,
+each band a stereo-linked parallel compressor and a sine shaper, amount 0 – 200 %), a look-ahead limiter with a
+−0.1 dBFS ceiling, output gain. Oversampling 1 – 8x, an external side-chain for the character section's detectors, the
+original's editor, meters and particle visualiser. Two additions of ours: an **I/O LINK** switch (the output follows
+the input gain inverted, so driving the chain harder doesn't change the level) and an "antiparticle" particle style.
+More: [plugins/TheAntiparticle](plugins/TheAntiparticle).
 
-## Using it
+### Null test (honest numbers)
 
-- **Knobs:** drag up / down. Hold Shift or Ctrl (Cmd on macOS) for fine adjustment. While the mouse is over a knob, its
-  label shows the value.
-- **I/O LINK** (top bar, ours): the output gain follows the input gain inverted, so you can drive the chain harder
-  without the level changing.
-- **Presets:** the arrows step through them; the save button stores the EQ, character and limiter settings as an
-  `.antp` file in `Documents/The Antiparticle/Presets`. Input, output and INT / EXT are left as they are.
-- **Settings** (gear): oversampling, meter mode, particle animation on / off and its style: "God particle" (the
-  original's sparks) or "Antiparticle" (ours: bubble-chamber pair creation and annihilation). The particles follow the
-  input level and fade with quiet passages.
-- **Zoom:** 50 – 200 % (the box next to the gear). The logo opens the version and About.
+Residual of The Antiparticle against the original, in dB re the original's output (lower is better; −60 dB is
+inaudible in practice):
+
+- **A mastered track** (future house, about −10 dBFS RMS) at the default settings: **−44.3 dB**; the limiter alone
+  −60.8 dB, the character section alone −46.1 dB. Character at 125 / 150 / 175 / 200 %: −44.0 / −42.5 / −40.9 / −39.4 dB.
+- **Synthetic music** −62 to −74 dB at the defaults; the path, EQ and crossover −79 to −87 dB; amount 0 % −135 dB.
+- **Stress suite:** 163 cases over the settings, levels, signals, automation, sample rates and block sizes: **median
+  −63.3 dB**, worst −40.4 dB.
+- **Weakest:** loud, dense, bright material through the character section's high band (pink noise at −6 dBFS RMS
+  −40 dB). Its steady gain curve matches to 0.02 dB; what is left is how fast its detector moves.
+- **How:** the crossover filters were identified exactly from the original's impulse responses; the limiter's
+  look-ahead planning was identified with probe signals (its inter-sample interpolator fitted per sample rate); the
+  character section's laws were fitted against the original on program material and probes. The meters, knobs and
+  particles were filmed from the original's editor and matched frame by frame.
+
+Every case: [NULLTESTS.md](plugins/TheAntiparticle/NULLTESTS.md). How it was measured:
+[MEASUREMENTS.md](plugins/TheAntiparticle/MEASUREMENTS.md). The editor and controls:
+[RESEARCH.md](plugins/TheAntiparticle/RESEARCH.md).
 
 ## Building
 
@@ -63,26 +80,33 @@ CMake 3.22+ and a C++17 compiler. JUCE 8 and clap-juce-extensions are fetched by
 
 ```bash
 cmake -B build -DAP_TOOLS=OFF
-cmake --build build --config Release --target TheAntiparticle_VST3 TheAntiparticle_CLAP AntiparticleTests
+cmake --build build --config Release
 ctest --test-dir build -C Release --output-on-failure
 ```
 
-On macOS add `TheAntiparticle_AU`, on Windows `TheAntiparticle_Standalone` for the app. Without `-DAP_TOOLS=OFF` the
-measurement tools are built too (hosts for the reference plug-in). The Windows installer is made with Inno Setup 6:
-`iscc /DAppVersion=0.1.0 packaging\TheAntiparticle.iss` after a Release build (writes `dist\`).
+That builds every plug-in in every format for the platform (VST3, CLAP and standalone; AU on macOS) and the unit tests.
+Without `-DAP_TOOLS=OFF` the measurement tools are built too: hosts for the reference plug-ins (`tools/`) and each
+plug-in's fitting helpers. The Windows installer is made with Inno Setup 6:
 
-## Tests and releases
+```bash
+pwsh packaging/make_iss_include.ps1 build
+iscc /DAppVersion=0.1.0 packaging/NewtonSuite.iss
+```
 
-- `AntiparticleTests`: unit tests of the DSP and the processor, including filters, the FIR crossover, latency, bypass,
-  limiter ceiling, state and extreme input.
-- `nulltest/`: the null tests against an installed copy of the original (Windows; not in CI). `nulltest.py` and
-  `stress.py` use synthetic signals; `track.py` takes a music file of your own.
-- `.github/workflows/release.yml` builds every format on all three platforms, runs the unit tests, validates the
-  plug-ins with pluginval at strictness 10 (and auval on macOS) and makes the installers. It runs when a version tag is
-  pushed (`git tag v0.1.0 && git push origin v0.1.0`), which publishes a GitHub Release with the notes from
-  CHANGELOG.md, or by hand from the Actions tab.
+## Repository layout
+
+| Path | What it holds |
+|---|---|
+| `plugins/<Name>/` | one plug-in: `Source/`, `resources/`, `tests/`, its null-test harness (`nulltest/`, Python, needs the original installed), its fitting tools and its documents |
+| `tools/` | hosts for reference plug-ins shared by the suite: offline renders (RefRender), editor films and screenshots (RefCapture), parameter lists (ParamDump) |
+| `packaging/` | the installers; `plugins.txt` lists the plug-ins they hold |
+| `docs/` | branding and screenshots |
+| `.github/workflows/release.yml` | builds, tests and validates every plug-in on all three systems (pluginval at strictness 10, auval on macOS), makes the installers and, on a `v*` tag, publishes a release with the notes from [CHANGELOG.md](CHANGELOG.md) |
+
+Reference renders, measurement data and anything taken from the original plug-ins stay out of the repository (see
+`.gitignore`); only the write-ups are published.
 
 ## License
 
-[AGPL-3.0](LICENSE). The interface font, Instrument Sans, is under the
-[SIL Open Font License 1.1](resources/fonts/OFL-InstrumentSans.txt).
+[AGPL-3.0](LICENSE). The Antiparticle's interface font, Instrument Sans, is under the
+[SIL Open Font License 1.1](plugins/TheAntiparticle/resources/fonts/OFL-InstrumentSans.txt).
