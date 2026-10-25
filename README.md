@@ -55,7 +55,7 @@ check that a download is the published one.
 | Orrery plug-in | Modelled on | Status |
 |---|---|---|
 | **[The Antiparticle](plugins/TheAntiparticle)** | Cradle The God Particle: mix-bus EQ, multiband character and limiter | released: close, not a null on every material (see below) |
-| **Orion** (working title) | Cradle Orion | next |
+| **[Scorpius](plugins/Scorpius)** | Cradle Orion: drum-bus drive, harmonics, compression, lift, harmonic EQ and parallels | in progress: research ([RESEARCH.md](plugins/Scorpius/RESEARCH.md)) |
 
 ## The Antiparticle
 
@@ -125,7 +125,7 @@ Reference renders, measurement data and anything taken from the original plug-in
 
 ## Versions
 
-1.0.0 is the first release, with The Antiparticle. Each new plug-in raises the middle number (Orion will be 1.1.0, the
+1.0.0 is the first release, with The Antiparticle. Each new plug-in raises the middle number (Scorpius will be 1.1.0, the
 next one 1.2.0), and fixes and small updates in between raise the last (1.1.1, 1.1.2 ...). Every plug-in carries the
 suite's version; [CHANGELOG.md](CHANGELOG.md) lists what changed in each.
 
