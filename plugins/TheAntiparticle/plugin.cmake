@@ -39,7 +39,8 @@ juce_add_plugin(TheAntiparticle
     AU_MAIN_TYPE kAudioUnitType_Effect
     BUNDLE_ID com.orrerysuite.theantiparticle)
 # MSBuild cannot handle the apostrophe of the product name in the shared-code library's file name
-set_target_properties(TheAntiparticle PROPERTIES OUTPUT_NAME "TheAntiparticle_SharedCode")
+# (both names: Xcode builds the library under XCODE_ATTRIBUTE_PRODUCT_NAME, the link lines use OUTPUT_NAME)
+set_target_properties(TheAntiparticle PROPERTIES OUTPUT_NAME "TheAntiparticle_SharedCode" XCODE_ATTRIBUTE_PRODUCT_NAME "TheAntiparticle_SharedCode")
 target_sources(TheAntiparticle PRIVATE ${AP_SOURCES})
 target_include_directories(TheAntiparticle PRIVATE ${AP_DIR}/Source)
 target_compile_definitions(TheAntiparticle PUBLIC ${AP_DEFS})

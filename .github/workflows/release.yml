@@ -75,13 +75,7 @@ jobs:
         run: cmake -B build -G Xcode -DAP_TOOLS=OFF -DCMAKE_OSX_ARCHITECTURES="arm64;x86_64" -DCMAKE_OSX_DEPLOYMENT_TARGET=10.13
 
       - name: Build (every plug-in, format and test)
-        run: |
-          set -e
-          # each plug-in's shared code first: Xcode may otherwise link the CLAP wrapper before that library exists
-          grep -v '^#' packaging/plugins.txt | grep -v '^\s*$' | while IFS='|' read -r t p code mfr; do
-            cmake --build build --config Release --target "$t" -- -quiet
-          done
-          cmake --build build --config Release -- -quiet
+        run: cmake --build build --config Release -- -quiet
 
       - name: Unit tests
         run: ctest --test-dir build -C Release --output-on-failure
