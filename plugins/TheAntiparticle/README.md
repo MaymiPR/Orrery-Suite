@@ -37,7 +37,8 @@ input: the main signal or the side-chain bus.
 - **Settings** (gear): oversampling, meter mode, particle animation on / off and its style: "God particle" (the
   original's sparks) or "Antiparticle" (ours, the default: bubble-chamber pair creation and annihilation). The particles follow the
   input level and fade with quiet passages.
-- **Zoom:** 50 – 200 % (the box next to the gear). The logo opens the version and About.
+- **Zoom:** 50 – 200 % from the box next to the gear, or drag the bottom-right corner to any size in between (the
+  proportions stay). The logo opens the version and About.
 
 ## Tests
 

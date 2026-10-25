@@ -14,7 +14,7 @@ Windows; VST3 and CLAP on Linux; AU, VST3 and CLAP on macOS (universal).
   levels, rates, block sizes and automation) has a median of −63 dB. See plugins/TheAntiparticle/NULLTESTS.md.
 - **Editor:** the original's layout, knobs, glass visualiser and meters, measured from it: the value readout on a knob,
   Shift or Ctrl for fine adjustment, the I/O meters' colours and the gain-reduction LEDs, and particles that follow
-  the input level. Zoom 50 – 200 %.
+  the input level. Zoom 50 – 200 %, from the menu or by dragging the bottom-right corner.
 - **Additions of ours:** an I/O LINK switch (the output follows the input gain inverted, so level changes cancel) and an
   "antiparticle" particle style on the settings page.
 - **Presets:** the original's default as a factory preset, and user presets saved as .antp files in

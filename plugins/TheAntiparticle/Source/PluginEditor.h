@@ -6,7 +6,7 @@
 #include "ui/Widgets.h"
 
 // The editor is laid out in the reference's design pixels (888 x 359.5 at 100 %) and scaled as a whole by the
-// UI Scale menu (50 ... 200 %).
+// UI Scale menu (50 ... 200 %), or freely by dragging its bottom-right corner (ours; the proportions stay).
 class AntiparticleEditor : public juce::AudioProcessorEditor,
                              private juce::Timer,
                              private juce::ChangeListener,
@@ -90,6 +90,14 @@ private:
     AntiparticleProcessor& proc;
     Content content { *this };
     float scale = 1.0f;
+    // resizing from the bottom-right corner: proportions fixed, 50 ... 200 %; the grip is drawn as grooves in the plate
+    struct Grip : juce::ResizableCornerComponent
+    {
+        using juce::ResizableCornerComponent::ResizableCornerComponent;
+        void paint (juce::Graphics&) override;
+    };
+    juce::ComponentBoundsConstrainer constrainer;
+    std::unique_ptr<Grip> grip;
 
     ap::Logo logo;
     ap::DropBox presetBox, scaleBox;

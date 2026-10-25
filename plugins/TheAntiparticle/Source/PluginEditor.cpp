@@ -87,7 +87,7 @@ AntiparticleEditor::AntiparticleEditor (AntiparticleProcessor& p) : AudioProcess
     place (inputKnob, 45.755f, 313.11f, 25.06f);
     place (limiterKnob, 754.745f, 313.11f, 25.06f);
     place (outputKnob, 841.74f, 313.11f, 25.06f);
-    ioLinkButton.setBounds (655, 3, 64, 25);      // right of the side-chain switch, the gap before the save button
+    ioLinkButton.setBounds (664, 3, 64, 25);      // centred between the side-chain switch (ends 645) and "UI Scale" (747.5)
     eqPower.setBounds (97, 40, 72, 25);
     amountPower.setBounds (364, 167, 72, 25);
     limiterPower.setBounds (719, 40, 72, 25);
@@ -156,6 +156,15 @@ AntiparticleEditor::AntiparticleEditor (AntiparticleProcessor& p) : AudioProcess
 
     ap::Settings::get().addChangeListener (this);
     updateFromParams();
+    constrainer.setFixedAspectRatio (designW / designH);
+    constrainer.setSizeLimits ((int) (designW * scales[0]), (int) (designH * scales[0]),
+                               (int) (designW * scales[std::size (scales) - 1]), (int) (designH * scales[std::size (scales) - 1]));
+    setResizable (true, false);          // hosts may resize the window too; the corner below is our own
+    setConstrainer (&constrainer);
+    grip = std::make_unique<Grip> (this, &constrainer);
+    ap::noFocus (*grip);
+    addAndMakeVisible (*grip);
+    grip->setAlwaysOnTop (true);
     setUiScale (proc.uiScale.load());
     startTimerHz (30);
 }
@@ -177,7 +186,38 @@ void AntiparticleEditor::setUiScale (float s)
     setSize ((int) (designW * s), (int) (designH * s));      // truncated, as the reference (359 px at 100 %)
 }
 
-void AntiparticleEditor::resized() {}
+// a new size (the corner, the host, or setUiScale) sets the scale; sizes from setUiScale itself keep their exact scale
+// (they are truncated to whole pixels)
+void AntiparticleEditor::resized()
+{
+    if (std::abs (getWidth() - (int) (designW * scale)) > 1)
+    {
+        scale = jlimit (scales[0], scales[std::size (scales) - 1], (float) getWidth() / designW);
+        proc.uiScale = scale;
+        scaleBox.text = String (roundToInt (scale * 100.0f)) + "%";
+        scaleBox.repaint();
+        content.setTransform (AffineTransform::scale (scale));
+    }
+    if (grip != nullptr)
+    {
+        const int g = roundToInt (14.0f * scale);
+        grip->setBounds (getWidth() - g, getHeight() - g, g, g);
+    }
+}
+
+// three short grooves cut into the plate, like its engraving: a dark cut with a faint light edge below it
+void AntiparticleEditor::Grip::paint (Graphics& g)
+{
+    const float w = (float) getWidth(), u = w / 14.0f;
+    for (int i = 1; i <= 3; ++i)
+    {
+        const float d = (float) i * 3.6f * u;
+        g.setColour (Colours::black.withAlpha (0.42f));
+        g.drawLine (w - d, w - 1.5f * u, w - 1.5f * u, w - d, 1.0f * u);
+        g.setColour (Colours::white.withAlpha (0.10f));
+        g.drawLine (w - d + 0.8f * u, w - 1.5f * u, w - 1.5f * u, w - d + 0.8f * u, 0.7f * u);
+    }
+}
 
 void AntiparticleEditor::parameterChanged (const String& id, float)
 {
