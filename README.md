@@ -96,7 +96,7 @@ plug-in's fitting helpers. The Windows installer is made with Inno Setup 6:
 
 ```bash
 pwsh packaging/make_iss_include.ps1 build
-iscc /DAppVersion=0.1.0 packaging/OrrerySuite.iss
+iscc /DAppVersion=1.0.0 packaging/OrrerySuite.iss
 ```
 
 ## Repository layout
@@ -111,6 +111,12 @@ iscc /DAppVersion=0.1.0 packaging/OrrerySuite.iss
 
 Reference renders, measurement data and anything taken from the original plug-ins stay out of the repository (see
 `.gitignore`); only the write-ups are published.
+
+## Versions
+
+1.0.0 is the first release, with The Antiparticle. Each new plug-in raises the middle number (Orion will be 1.1.0, the
+next one 1.2.0), and fixes and small updates in between raise the last (1.1.1, 1.1.2 ...). Every plug-in carries the
+suite's version; [CHANGELOG.md](CHANGELOG.md) lists what changed in each.
 
 ## License
 

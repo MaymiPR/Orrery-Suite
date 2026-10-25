@@ -6,7 +6,7 @@
 ; (to check the packaging and the uninstaller without touching Program Files).
 
 #ifndef AppVersion
-  #define AppVersion "0.1.0"
+  #define AppVersion "1.0.0"
 #endif
 #ifdef TestRoot
   #define VstDir TestRoot + "\VST3\Orrery Suite"

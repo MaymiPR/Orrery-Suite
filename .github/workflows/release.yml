@@ -4,7 +4,7 @@
 #   Windows  OrrerySuite-<version>-Windows-Setup.exe   (Inno Setup, packaging/OrrerySuite.iss)
 #   macOS    OrrerySuite-<version>-macOS.pkg           (productbuild, packaging/distribution.xml)
 #   Linux    OrrerySuite-<version>-Linux.tar.gz        (with packaging/install-linux.sh)
-# Runs only when a version tag is pushed (git tag v0.1.0 && git push origin v0.1.0), which also publishes the installers
+# Runs only when a version tag is pushed (git tag v1.0.0 && git push origin v1.0.0), which also publishes the installers
 # as a GitHub Release with that version's notes from CHANGELOG.md and their SHA-256 checksums, or when started by hand
 # (Actions tab > Run workflow; the installers come out as downloadable artifacts). Ordinary pushes do not run it, to save
 # Actions minutes: build, test and validate locally first.
