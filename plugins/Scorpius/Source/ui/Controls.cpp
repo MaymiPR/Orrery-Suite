@@ -99,82 +99,6 @@ void TextToggle::paint (Graphics& g)
 }
 
 //==============================================================================
-Rectangle<float> CompareToggle::circle() const
-{
-    return Rectangle<float> (22.0f, 22.0f).withCentre (getLocalBounds().toFloat().withHeight (24.5f).getCentre());
-}
-
-void CompareToggle::paint (Graphics& g)
-{
-    const auto b = getLocalBounds().toFloat().withHeight (24.5f).reduced (0.5f);
-    const float half = b.getWidth() * 0.5f;
-    const int inactive = 1 - slot;
-    g.setColour (theme::boxFill);
-    g.fillRoundedRectangle (b, 4.0f);
-    {
-        Graphics::ScopedSaveState s (g);
-        Path clip;
-        clip.addRoundedRectangle (b, 4.0f);
-        g.reduceClipRegion (clip);
-        if (hover == inactive || pressedPart == inactive)
-        {
-            g.setColour (Colour (0xff252523));
-            g.fillRect (inactive == 0 ? b.withWidth (half) : b.withTrimmedLeft (half));
-        }
-        // the active half is white, or dark while held down
-        g.setColour (pressedPart == slot ? Colour (0xff252523) : theme::text);
-        g.fillRect (slot == 0 ? b.withWidth (half) : b.withTrimmedLeft (half));
-    }
-    g.setColour (theme::text);
-    g.drawRoundedRectangle (b, 4.0f, 1.0f);
-    g.setFont (theme::font (12.0f));
-    const Colour grey (0xff6e7375);
-    // the active letter: dark on white, grey under the mouse, white while held down
-    g.setColour (slot == 0 ? (pressedPart == 0 ? theme::text : hover == 0 ? grey : theme::boxFill) : theme::text);
-    g.drawText ("A", Rectangle<float> (0.0f, 0.0f, 26.0f, 24.5f).translated (0.5f, -0.5f), Justification::centred, false);
-    g.setColour (slot == 1 ? (pressedPart == 1 ? theme::text : hover == 1 ? grey : theme::boxFill) : theme::text);
-    g.drawText ("B", Rectangle<float> (b.getRight() - 26.0f, 0.0f, 26.0f, 24.5f).translated (0.0f, -0.5f), Justification::centred, false);
-
-    // the copy button: a black circle across the middle, ringed, with an arrow towards the other setting
-    const auto c = circle();
-    g.setColour (pressedPart == 2 ? Colour (0xff3a3a38) : Colour (0xff0b0b0b));
-    g.fillEllipse (c);
-    g.setColour (theme::text);
-    g.drawEllipse (c.reduced (0.5f), 1.0f);
-    // the arrow: grey under the mouse, white again while held down
-    g.setColour (hover == 2 && pressedPart != 2 ? Colour (0xff9a9fa1) : theme::text);
-    const float d = slot == 0 ? 1.0f : -1.0f;
-    const auto m = c.getCentre();
-    Path p;
-    p.startNewSubPath (m.x - 6.0f * d, m.y);
-    p.lineTo (m.x + 6.0f * d, m.y);
-    p.startNewSubPath (m.x + 1.0f * d, m.y - 5.0f);
-    p.lineTo (m.x + 6.0f * d, m.y);
-    p.lineTo (m.x + 1.0f * d, m.y + 5.0f);
-    g.strokePath (p, PathStrokeType (1.1f, PathStrokeType::mitered, PathStrokeType::rounded));
-}
-
-int CompareToggle::partAt (Point<float> p) const
-{
-    if (circle().contains (p)) return 2;
-    return p.x < (float) getWidth() * 0.5f ? 0 : 1;
-}
-
-// acts on release over the part that was pressed (measured: a press dragged off does nothing)
-void CompareToggle::mouseDown (const MouseEvent& e) { pressedPart = partAt (e.position); repaint(); }
-
-void CompareToggle::mouseUp (const MouseEvent& e)
-{
-    const int part = getLocalBounds().contains (e.getPosition()) ? partAt (e.position) : -1;
-    const int was = pressedPart;
-    pressedPart = -1;
-    repaint();
-    if (part != was) return;
-    if (part == 2) { if (onCopy) onCopy(); return; }
-    if (part >= 0 && part != slot && onSelect) onSelect (part);
-}
-
-//==============================================================================
 Fader::Fader()
 {
     noFocus (*this);
@@ -412,89 +336,127 @@ void GrReadout::paint (Graphics& g)
     theme::textAt (g, text, (float) getWidth() * 0.5f, 22.0f, Justification::horizontallyCentred);
 }
 
+
 //==============================================================================
-void Toast::show (const String& t)
+Blob::Blob (uint32 seed)
 {
-    text = t;
-    shownAt = nowMs();
-    setAlpha (1.0f);
-    setVisible (true);
-    toFront (false);
+    setInterceptsMouseClicks (false, false);
+    // the outline's deformation: lobes 2 ... 7 with their own sizes, phases and speeds, scaled to an rms of 1
+    Random r ((int64) seed);
+    float power = 0.0f;
+    for (int k = 0; k < 6; ++k)
+    {
+        amp[k] = 0.4f + 0.6f * r.nextFloat();
+        phase[k] = MathConstants<float>::twoPi * r.nextFloat();
+        rate[k] = (r.nextBool() ? 1.0f : -1.0f) * (0.6f + 1.6f * r.nextFloat());
+        power += amp[k] * amp[k] * 0.5f;
+    }
+    for (auto& a : amp) a /= std::sqrt (power);
+}
+
+static float blobTarget (float peak)
+{
+    if (peak < 0.00251f) return Blob::restRadius;                // (below -52 dBFS)
+    return jmin (Blob::maxRadius, 9.32f + 15.84f * (std::pow (peak, 0.4f) - 0.0832f));
+}
+
+void Blob::update (float peak, float dt)
+{
+    const float target = blobTarget (peak);
+    // (measured: up within ~20 ms; down at a steady ~62 px/s, landing softly)
+    if (target > radius) radius += (target - radius) * (1.0f - std::exp (-dt / 0.02f));
+    else radius -= jmin (62.0f * dt, (radius - target) * (1.0f - std::exp (-dt / 0.05f)));
+    if (target <= restRadius && radius - restRadius < 0.1f) radius = restRadius;
+    // the shape moves by as much as the level changes (a steady tone leaves it still)
+    const float db = 20.0f * std::log10 (jmax (peak, 1.0e-6f));
+    if (db > -60.0f || lastDb > -60.0f) time += 0.05f * jmin (12.0f, std::abs (db - jmax (lastDb, -60.0f)));
+    lastDb = db;
     repaint();
-    startTimerHz (60);
 }
 
-void Toast::timerCallback()
+void Blob::freeze (float peak)
 {
-    const double t = nowMs() - shownAt - holdMs;
-    if (t >= fadeMs) { stopTimer(); setVisible (false); setAlpha (1.0f); return; }
-    setAlpha (t <= 0.0 ? 1.0f : (float) (1.0 - t / fadeMs));
+    radius = blobTarget (peak);
+    time = 3.7f;
+    repaint();
 }
 
-void Toast::paint (Graphics& g)
-{
-    // (measured at 200 %: the box 200 x 60.5 with a 1 px edge #252523, filled #050607; the text as the labels, its
-    // baseline 34.25 below the box's top)
-    const auto b = getLocalBounds().toFloat();
-    g.setColour (Colour (0xff252523));
-    g.fillRect (b);
-    g.setColour (Colour (0xff050607));
-    g.fillRect (b.reduced (1.0f));
-    g.setColour (theme::text);
-    g.setFont (theme::font (12.0f));
-    theme::textAt (g, text, b.getCentreX() - 1.0f, 34.25f, Justification::horizontallyCentred);
-}
-
-//==============================================================================
 void Blob::paint (Graphics& g)
 {
     const auto c = getLocalBounds().toFloat().getCentre();
-    const float grow = on ? jlimit (0.0f, 1.0f, level) * amount : 0.0f;
-    const float r = restRadius + (maxRadius - restRadius) * grow;
+    // (measured: about 2 px of deformation (rms) at any size once it grows)
+    const float deform = 1.9f * jlimit (0.0f, 1.0f, (radius - restRadius) / 3.0f);
     Path p;
-    constexpr int n = 96;
+    constexpr int n = 120;
     for (int i = 0; i <= n; ++i)
     {
         const float a = MathConstants<float>::twoPi * (float) i / (float) n;
-        // a few slow lobes whose depth follows the level
-        const float wob = grow * (0.08f * std::sin (3.0f * a + phase * 1.3f) + 0.06f * std::sin (5.0f * a - phase * 0.9f)
-                                  + 0.04f * std::sin (7.0f * a + phase * 2.1f));
-        const float rr = r * (1.0f + wob);
+        float w = 0.0f;
+        for (int k = 0; k < 6; ++k) w += amp[k] * std::sin ((float) (k + 2) * a + phase[k] + rate[k] * time);
+        const float rr = radius + deform * w;
         const Point<float> q (c.x + rr * std::sin (a), c.y - rr * std::cos (a));
         if (i == 0) p.startNewSubPath (q); else p.lineTo (q);
     }
     p.closeSubPath();
-    g.setColour (on ? theme::mint : theme::dimLabel);
+    g.setColour (theme::mint);
     g.strokePath (p, PathStrokeType (1.0f));
 }
 
 //==============================================================================
 void EqCurve::paint (Graphics& g)
 {
-    // a log frequency axis over the component's width (40 Hz at the left edge ... 24 kHz: measured, 1 kHz falls at
-    // x 84.5) and the bands as bells on a baseline at the bottom; 6 dB is the component's height less a margin
-    const float w = (float) getWidth(), h = (float) getHeight();
-    const float base = h - 1.0f, top = 4.0f;
-    Path fill;
-    fill.startNewSubPath (0.0f, base);
-    for (int i = 0; i <= 200; ++i)
+    // Measured on the reference at 200 % (each band alone at 3 and 6 dB): not a response curve but one shape per band,
+    // evenly spaced, each filled with mint at 18 % and outlined at 37 % (overlaps add up); heights linear in dB over a
+    // baseline at y 124.75. The middle bands are bells exp (-(|x - c| / 15.64)^2.47) at x 478.98, 515.48, 551.49;
+    // 40 Hz and 10 kHz are shoulders falling off past x 457.97 / 575.05. Drawn over x 432.25 ... 600.75.
+    constexpr float originX = 432.0f, originY = 70.0f;            // (the component's place)
+    constexpr float baseline = 124.75f, bellPerDb = 51.2f / 6.0f, shoulderPerDb = 52.7f / 6.0f;
+    constexpr float bellX[3] { 478.98f, 515.48f, 551.49f };
+    const float left = 432.25f, right = 600.75f;
+    auto shape = [&] (int band, float x)
     {
-        const float x = w * (float) i / 200.0f;
-        const float f = 40.0f * std::pow (600.0f, x / w);
-        float db = 0.0f;
-        for (int b = 0; b < 5; ++b)
+        if (band == 0) return gains[0] * shoulderPerDb / (1.0f + std::exp ((x - 457.97f) / 6.40f));
+        if (band == 4) return gains[4] * shoulderPerDb / (1.0f + std::exp ((575.05f - x) / 6.35f));
+        return gains[band] * bellPerDb * std::exp (-std::pow (std::abs (x - bellX[band - 1]) / 15.64f, 2.47f));
+    };
+    g.addTransform (AffineTransform::translation (-originX, -originY));
+    for (int b = 0; b < 5; ++b)
+    {
+        if (gains[b] <= 0.0f) continue;
+        Path p;
+        p.startNewSubPath (left, baseline);
+        constexpr int steps = 168;
+        for (int i = 0; i <= steps; ++i)
         {
-            // a bell 1.4 octaves wide at half height, as drawn on the reference (the real shapes: Phase 3)
-            const float o = std::log2 (f / eqFreqs[b]);
-            db += gains[b] * std::exp (-o * o / (2.0f * 0.6f * 0.6f));
+            const float x = left + (right - left) * (float) i / (float) steps;
+            p.lineTo (x, baseline - shape (b, x));
         }
-        fill.lineTo (x, base - (base - top) * jlimit (0.0f, 1.0f, db / 6.0f));
+        p.lineTo (right, baseline);
+        p.closeSubPath();
+        g.setColour (theme::mint.withAlpha (0.183f));
+        g.fillPath (p);
+        // the outline where the shape stands above the baseline (the baseline is drawn once, below), down to the
+        // baseline where a shoulder meets the edge
+        Path edge;
+        bool open = false;
+        for (int i = 0; i <= steps; ++i)
+        {
+            const float x = left + (right - left) * (float) i / (float) steps, h = shape (b, x);
+            if (h < 0.2f) { open = false; continue; }
+            if (! open)
+            {
+                edge.startNewSubPath (x, i == 0 ? baseline : baseline - h);
+                if (i == 0) edge.lineTo (x, baseline - h);
+                open = true;
+            }
+            else
+                edge.lineTo (x, baseline - h);
+            if (i == steps) edge.lineTo (x, baseline);
+        }
+        g.setColour (theme::mint.withAlpha (0.375f));
+        g.strokePath (edge, PathStrokeType (0.5f));
     }
-    fill.lineTo (w, base);
-    fill.closeSubPath();
-    g.setColour (theme::mint.withAlpha (0.45f));
-    g.fillPath (fill);
-    g.setColour (theme::mint);
-    g.strokePath (fill, PathStrokeType (1.0f));
+    g.setColour (theme::mint.withAlpha (0.375f));
+    g.fillRect (left, baseline - 0.25f, right - left, 0.5f);
 }
 }

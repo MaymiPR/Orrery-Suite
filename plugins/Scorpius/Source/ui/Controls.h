@@ -46,27 +46,6 @@ private:
     juce::String text;
 };
 
-// Compare A -> B of the top bar: the active letter's half is white; the circle in the middle copies the active setting
-// to the other one, its arrow pointing that way. Under the mouse (measured): the inactive half lightens (#252523), the
-// active half's letter turns grey, the arrow turns grey.
-class CompareToggle : public juce::Component
-{
-public:
-    CompareToggle() { noFocus (*this); }
-    void paint (juce::Graphics&) override;
-    void mouseDown (const juce::MouseEvent&) override;
-    void mouseUp (const juce::MouseEvent&) override;
-    void mouseMove (const juce::MouseEvent& e) override { setHover (partAt (e.position)); }
-    void mouseExit (const juce::MouseEvent&) override { setHover (-1); }
-    int slot = 0;
-    std::function<void (int)> onSelect;
-    std::function<void()> onCopy;
-private:
-    juce::Rectangle<float> circle() const;
-    int partAt (juce::Point<float>) const;       // 0 A, 1 B, 2 the arrow
-    void setHover (int p) { if (p != hover) { hover = p; repaint(); } }
-    int hover = -1, pressedPart = -1;
-};
 
 // Vertical fader of the parallels: a grey track, mint below the cap while the path is on, and a metal cap.
 // Mouse (measured on the reference): a drag anywhere on the fader moves the level by 1/176 per design pixel, relative to
@@ -136,33 +115,28 @@ public:
     juce::String text { "0.0" };
 };
 
-// The message the reference shows over the plate when Compare's arrow copies one setting to the other ("A copied to
-// B."): a black box with a dark grey edge, there at once, held for 0.55 s, then fading out over 1.05 s (measured).
-class Toast : public juce::Component, private juce::Timer
-{
-public:
-    Toast() { setInterceptsMouseClicks (false, false); setVisible (false); }
-    void paint (juce::Graphics&) override;
-    void show (const juce::String&);
-    static constexpr double holdMs = 550.0, fadeMs = 1050.0;
-private:
-    void timerCallback() override;
-    juce::String text;
-    double shownAt = 0.0;
-};
 
-// The circles above harmonics and lift: a ring that wobbles and grows with the level the module works on.
+// The circles above harmonics and lift (measured on the reference with tones, steps and music, RESEARCH.md UI round 4):
+// at rest a circle of radius 6.43; once the level it follows (Visuals.h: the lows for harmonics, the mids for lift)
+// passes -52 dBFS, a ring of radius 9.32 + 15.84 (a^0.4 - 0.083), a the peak (9.6 at -50 dBFS, 18 at -10), growing
+// within ~20 ms and shrinking back over ~0.35 s. Its outline is irregular, and the shape moves only as the level
+// changes: a steady tone leaves it still, music keeps it moving.
 class Blob : public juce::Component
 {
 public:
-    explicit Blob (float r) : restRadius (r) { setInterceptsMouseClicks (false, false); }
+    explicit Blob (juce::uint32 seed);
     void paint (juce::Graphics&) override;
-    bool on = true;
-    float level = 0.0f, phase = 0.0f, amount = 1.0f;
-    float restRadius, maxRadius = 21.0f;
+    // a new peak (linear) for the time since the last call
+    void update (float peak, float seconds);
+    // the snapshot tool: the shape for a level, still
+    void freeze (float peak);
+    static constexpr float restRadius = 6.43f, maxRadius = 22.0f;
+private:
+    float radius = restRadius, time = 0.0f, lastDb = -200.0f;
+    float amp[6] {}, phase[6] {}, rate[6] {};
 };
 
-// The harmonic EQ's response, drawn above the knobs while the EQ is on: the boost of the five bands on a log axis.
+// The harmonic EQ's bands, drawn above the knobs while the EQ is on: one shape per band, as the reference draws them.
 class EqCurve : public juce::Component
 {
 public:

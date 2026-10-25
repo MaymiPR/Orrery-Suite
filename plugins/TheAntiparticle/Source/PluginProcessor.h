@@ -62,6 +62,13 @@ public:
     juce::AudioProcessorValueTreeState apvts;
     ap::PresetManager presets { apvts };
 
+    // Compare A -> B (ours, as Cradle's Orion has it): two complete settings in one instance. The active one lives in the
+    // parameters; the other is kept here. Switching stores the active one and loads the other; copy() copies the active
+    // one over the other. A setting never used yet starts as a copy of the one in use when it is first selected.
+    int compareSlot() const { return slot; }
+    void selectCompareSlot (int);
+    void copyCompareSlot();
+
     // host-only state (not part of presets, as in the reference): side-chain source and the editor's zoom
     std::atomic<bool> sidechainExternal { false };
     std::atomic<float> uiScale { 1.0f };
@@ -75,6 +82,11 @@ public:
 
 private:
     void changeListenerCallback (juce::ChangeBroadcaster*) override;   // the settings page's oversampling ratio
+    juce::ValueTree captureSlot() const;
+    void applySlot (const juce::ValueTree&);
+    juce::ValueTree slots[2];
+    bool slotUsed[2] { true, false };
+    int slot = 0;
 
     juce::AudioProcessorParameter* bypassParam = nullptr;
     std::atomic<float>* raw[11] {};       // every parameter's current value, in ap::id order

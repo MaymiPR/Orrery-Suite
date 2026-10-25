@@ -7,6 +7,7 @@ set(SC_SOURCES
     ${SC_DIR}/Source/Presets.cpp
     ${SC_DIR}/Source/ui/Controls.cpp
     ${SC_DIR}/Source/ui/Stripe.cpp
+    ${SC_DIR}/Source/ui/Sky.cpp
     ${SUITE_UI_SOURCES})
 
 set(SC_DEFS ${SUITE_DEFS} SUITE_REPOSITORY="${SUITE_REPOSITORY}")

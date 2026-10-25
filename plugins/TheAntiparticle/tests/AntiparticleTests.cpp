@@ -279,6 +279,43 @@ static void testStateRoundTrip()
     CHECK (b->sidechainExternal.load());
 }
 
+// A / B (as Orion's): the arrow copies the active setting over the other; an unused setting starts as a copy of the one
+// in use; switching keeps each setting's changes; the state keeps both and which one is active
+static float param (AntiparticleProcessor& p, const char* name)
+{
+    for (auto* q : p.getParameters())
+        if (q->getName (64) == name) return q->getText (q->getValue(), 32).getFloatValue();
+    CHECK (false);
+    return 0.0f;
+}
+
+static void testCompare()
+{
+    std::unique_ptr<AntiparticleProcessor> p (makeProcessor (48000.0, 512));
+    setParam (*p, "Character", 0.3f);
+    p->selectCompareSlot (1);                          // first use: B is a copy of A
+    CHECK_NEAR (param (*p, "Character"), 0.3, 1e-3);
+    setParam (*p, "Character", 0.9f);
+    setParam (*p, "Input Gain", 4.0f);
+    p->selectCompareSlot (0);
+    CHECK_NEAR (param (*p, "Character"), 0.3, 1e-3);
+    CHECK_NEAR (param (*p, "Input Gain"), 0.0, 1e-3);
+    p->selectCompareSlot (1);
+    CHECK_NEAR (param (*p, "Character"), 0.9, 1e-3);
+    juce::MemoryBlock mb;
+    p->getStateInformation (mb);
+    std::unique_ptr<AntiparticleProcessor> q (makeProcessor (48000.0, 512));
+    q->setStateInformation (mb.getData(), (int) mb.getSize());
+    CHECK (q->compareSlot() == 1);
+    CHECK_NEAR (param (*q, "Character"), 0.9, 1e-3);
+    q->selectCompareSlot (0);
+    CHECK_NEAR (param (*q, "Character"), 0.3, 1e-3);
+    q->copyCompareSlot();                              // A -> B
+    q->selectCompareSlot (1);
+    CHECK_NEAR (param (*q, "Character"), 0.3, 1e-3);
+    CHECK_NEAR (param (*q, "Input Gain"), 0.0, 1e-3);
+}
+
 static void testSilenceAndExtremes()
 {
     auto& t = tuning();
@@ -313,6 +350,7 @@ int main()
     testCharacterSmallSignal();
     testSidechain();
     testStateRoundTrip();
+    testCompare();
     testSilenceAndExtremes();
     std::printf ("%d checks, %d failed\n", checks, failures);
     return failures == 0 ? 0 : 1;

@@ -13,25 +13,26 @@ namespace
 // its particles read nearly white)
 struct Tint { float r, g, b, share; };
 constexpr Tint palette[] {
-    { 1.00f, 0.96f, 0.94f, 0.20f },     // white
-    { 1.00f, 0.90f, 0.78f, 0.12f },     // warm white
-    { 1.00f, 0.42f, 0.18f, 0.07f },     // red-orange (hue 15)
-    { 1.00f, 0.72f, 0.22f, 0.12f },     // amber (45)
-    { 0.95f, 1.00f, 0.32f, 0.02f },     // yellow (75)
-    { 0.20f, 0.85f, 1.00f, 0.12f },     // cyan (195)
-    { 0.28f, 0.58f, 1.00f, 0.06f },     // azure (225)
-    { 0.48f, 0.40f, 1.00f, 0.10f },     // blue-violet (255)
-    { 0.78f, 0.38f, 1.00f, 0.01f },     // violet (285)
-    { 1.00f, 0.30f, 0.48f, 0.05f } };   // pink-red (345)
+    { 1.00f, 0.96f, 0.94f, 0.18f },     // white
+    { 1.00f, 0.88f, 0.72f, 0.10f },     // warm white
+    { 1.00f, 0.28f, 0.06f, 0.09f },     // red-orange (hue 15)
+    { 1.00f, 0.60f, 0.08f, 0.19f },     // amber (45)
+    { 1.00f, 0.92f, 0.15f, 0.03f },     // yellow (75)
+    { 0.05f, 0.78f, 1.00f, 0.15f },     // cyan (195)
+    { 0.12f, 0.45f, 1.00f, 0.05f },     // azure (225)
+    { 0.38f, 0.28f, 1.00f, 0.07f },     // blue-violet (255)
+    { 0.72f, 0.25f, 1.00f, 0.01f },     // violet (285)
+    { 1.00f, 0.18f, 0.40f, 0.08f } };   // pink-red (345)
 constexpr Tint flareTints[] {
-    { 1.00f, 0.98f, 0.96f, 0.35f }, { 0.30f, 0.90f, 1.00f, 0.20f }, { 1.00f, 0.90f, 0.70f, 0.15f },
-    { 1.00f, 0.75f, 0.30f, 0.12f }, { 1.00f, 0.30f, 0.30f, 0.08f }, { 0.75f, 0.55f, 1.00f, 0.10f } };
+    { 1.00f, 0.95f, 0.80f, 0.25f }, { 1.00f, 0.90f, 0.35f, 0.25f }, { 0.25f, 0.88f, 1.00f, 0.20f },
+    { 1.00f, 0.60f, 0.15f, 0.12f }, { 1.00f, 0.25f, 0.25f, 0.08f }, { 0.70f, 0.50f, 1.00f, 0.10f } };
 constexpr int numParticles = 1700, numFlares = 10;
 constexpr float lanes[] { 289.1f, 291.6f, 294.25f, 302.5f };   // the rows the band's dashes keep to (the last one less)
 // where the reference's particles are (local maxima per frame, measured): along the stripe in bins of 18.5 design px
-// from x 0, and across it in bins of 2 design px from y 272.5
-constexpr float alongBins[48] { 0, 1, 3, 7, 12, 15, 18, 22, 26, 31, 36, 37, 39, 42, 43, 40, 42, 42, 47, 48, 50, 45, 49, 47,
-                                55, 55, 45, 52, 46, 43, 47, 44, 42, 47, 43, 38, 38, 35, 31, 26, 21, 17, 15, 11, 6, 2, 0, 0 };
+// from x 0 (thinned towards the ends, where ours stood out more: the reference has ~60 per frame in each end sixth),
+// and across it in bins of 2 design px from y 272.5
+constexpr float alongBins[48] { 0, 0.5f, 1.6f, 4.1f, 7.7f, 10.5f, 13.7f, 18, 22.9f, 29.1f, 36, 37, 39, 42, 43, 40, 42, 42, 47, 48, 50, 45, 49, 47,
+                                55, 55, 45, 52, 46, 43, 47, 44, 42, 47, 43, 38, 38, 35, 29.1f, 22.9f, 17.2f, 12.9f, 10.5f, 7, 3.5f, 1, 0, 0 };
 constexpr float acrossBins[17] { 31, 16, 21, 23, 28, 31, 47, 103, 240, 241, 209, 161, 124, 100, 88, 45, 15 };
 // the same for the dots and blobs alone (the band's dashes are added on top of them)
 constexpr float dotBins[17] { 3, 4, 6, 8, 10, 13, 22, 50, 90, 90, 85, 140, 90, 45, 25, 10, 3 };
@@ -88,12 +89,12 @@ void Stripe::spawn (Particle& p, double now, bool anyAge)
         const auto& t = pick (rng, flareTints);
         p.r = t.r; p.g = t.g; p.b = t.b;
         p.x = jlimit (40.0f, 840.0f, 455.0f + 190.0f * gauss (rng));
-        p.y = 290.5f + 5.0f * gauss (rng);
+        p.y = 287.0f + 4.0f * gauss (rng);              // (mostly a little above the band)
         p.vx = (rng.nextBool() ? 1.0f : -1.0f) * uniform (rng, 40.0f, 180.0f);
         p.vy = 0.0f;
-        p.w = uniform (rng, 2.0f, 3.5f);
-        p.h = uniform (rng, 3.5f, 14.0f);
-        p.level = uniform (rng, 1.1f, 1.7f);
+        p.w = uniform (rng, 2.4f, 4.0f);                  // (glowing ovals, as the reference's)
+        p.h = p.w + uniform (rng, 2.0f, 11.0f);
+        p.level = uniform (rng, 1.05f, 1.5f);
         p.life = uniform (rng, 0.10f, 0.22f);
         p.born = (float) (now + (anyAge ? uniform (rng, -0.2f, 0.3f) : uniform (rng, 0.0f, 0.15f)));
         p.flicker = 0.0f; p.rate = 0.0f;
@@ -140,30 +141,58 @@ void Stripe::setInput (float peakDb, bool running, bool anim)
 {
     if (frozen) return;
     animated = anim;
-    peak = animated && running ? peakDb : -200.0f;
-    if ((brightness (peak) > 0.0f || envelope > 0.0f) && ! isTimerRunning())
+    // the level the light follows takes the input's level only when it jumps (by 6 dB within ~66 ms, up or down) and
+    // when the sound stops (then the last level); smooth changes leave it where it was
+    const bool sounding = animated && running && peakDb > -90.0f;
+    if (sounding)
     {
-        lastTime = Time::getMillisecondCounterHiRes() * 0.001;
-        startTimerHz (60);
+        const float lo = jmin (recent[0], recent[1]), hi = jmax (recent[0], recent[1]);
+        if (! wasSounding || peakDb - lo > 6.0f || hi - peakDb > 6.0f)
+        {
+            if (peakDb > target) beat = true;
+            target = peakDb;
+        }
+        lastLevel = peakDb;
+    }
+    else if (wasSounding)
+    {
+        detector = lastLevel;                        // (fading from the last level, also after a ramp it ignored)
+        target = -200.0f;
+    }
+    recent[1] = recent[0];
+    recent[0] = sounding ? peakDb : -200.0f;
+    wasSounding = sounding;
+    // (moved on by the editor's clock, so the whole editor repaints once per frame)
+    const double now = Time::getMillisecondCounterHiRes() * 0.001;
+    if (envelope > 0.0f || brightness (target) > 0.0f || detector > -100.0f)
+    {
+        if (! moving) lastTime = now;
+        moving = true;
+        advance (now);
+        repaint();
+    }
+    else if (moving)
+    {
+        moving = false;
+        repaint();
     }
 }
 
 void Stripe::freeze (float b)
 {
     frozen = true;
-    stopTimer();
     envelope = b;
     // a moment well into the animation, so ages and flares are spread as while it runs
     for (int i = 0; i < 60; ++i) { clock += 1.0 / 60.0; for (auto& p : particles) if (clock - p.born > p.life) spawn (p, clock, false); }
+    for (int i = 0; i < 90; ++i) sky.advance (1.0f / 40.0f, b, i % 20 == 0);
     repaint();
 }
 
-void Stripe::timerCallback()
+void Stripe::setStyle (Style s)
 {
-    const double now = Time::getMillisecondCounterHiRes() * 0.001;
-    advance (now);
+    if (s == style) return;
+    style = s;
     repaint();
-    if (envelope <= 0.0f && brightness (peak) <= 0.0f) stopTimer();
 }
 
 void Stripe::advance (double now)
@@ -172,8 +201,10 @@ void Stripe::advance (double now)
     lastTime = now;
     clock += dt;
     // the level the light follows: up at once, down at a steady rate (in dB)
-    detector = peak >= detector ? peak : jmax (peak, detector - (float) (releaseDbPerSec * dt));
+    detector = target >= detector ? target : jmax (target, detector - (float) (releaseDbPerSec * dt));
     envelope = animated ? brightness (detector) : 0.0f;
+    sky.advance ((float) dt, envelope, beat);
+    beat = false;
     for (auto& p : particles)
     {
         if (clock - p.born > p.life) spawn (p, clock, false);
@@ -293,18 +324,26 @@ void Stripe::render (int w, int h, float s)
             }
     }
     light.resize (glow.size());
-    for (size_t k = 0; k < glow.size(); ++k) light[k] = glow[k] * envelope;
-    for (auto& p : particles)
+    if (style == Style::scorpius)
     {
-        const float age = (float) (clock - p.born);
-        if (age < 0.0f || age > p.life) continue;
-        float a = 1.0f;
-        if (p.kind != Kind::flare)
+        std::fill (light.begin(), light.end(), 0.0f);
+        sky.render (light, w, h, s, envelope);
+    }
+    else
+    {
+        for (size_t k = 0; k < glow.size(); ++k) light[k] = glow[k] * envelope;
+        for (auto& p : particles)
         {
-            a = jmin (1.0f, age / 0.015f) * jmin (1.0f, (p.life - age) / (0.3f * p.life));
-            a *= 0.8f + 0.2f * std::sin (p.flicker + p.rate * age);
+            const float age = (float) (clock - p.born);
+            if (age < 0.0f || age > p.life) continue;
+            float a = 1.0f;
+            if (p.kind != Kind::flare)
+            {
+                a = jmin (1.0f, age / 0.015f) * jmin (1.0f, (p.life - age) / (0.3f * p.life));
+                a *= 0.8f + 0.2f * std::sin (p.flicker + p.rate * age);
+            }
+            if (a * envelope > 0.005f) splat (p, p.level * a * envelope, s);
         }
-        if (a * envelope > 0.005f) splat (p, p.level * a * envelope, s);
     }
     Image::BitmapData bd (image, Image::BitmapData::writeOnly);
     for (int j = 0; j < h; ++j)

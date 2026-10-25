@@ -264,3 +264,36 @@ run on the reference and on ours, and compared.
   Ours (`Source/ui/Stripe.cpp`) draws the fitted glow and ~1600 particles sampled from these distributions, adds them
   as light per physical pixel and matches these statistics (mean light 47 vs 46 grey levels, particle-layer
   correlation 0.34 vs 0.35 at one frame, the brightness after every stop within ~0.1).
+
+## UI round 4: the circles, the EQ display, the GR readout, the stripe's level (RefCapture films at 200 %)
+
+- **Harmonic EQ display:** not a response curve. Each band is its own shape (filled with mint at 18 %, outlined at
+  37 %; overlaps add up), heights linear in dB (51 … 53 px at 6 dB) over a baseline at y 124.75. The bands are evenly
+  spaced across the section: 100 Hz, 1 kHz, 3 kHz are bells exp(−(|x − c| / 15.64)^2.47) at x 478.98, 515.48, 551.49;
+  40 Hz and 10 kHz are shoulders 1 / (1 + e^(±(x − c) / 6.4)) past x 457.97 and 575.05, drawn over x 432.25 … 600.75
+  (each band alone at 3 and 6 dB, fitted to its outline).
+- **Harmonics and lift circles:** at rest circles of radius 6.43. They follow a band's level: harmonics the lows (flat
+  to 80 Hz, −7 dB at 100 Hz, nothing by 150 Hz), lift the mids (−24 dB at 300 Hz, −15 at 500, most at 1 … 2 kHz,
+  −15 at 3 kHz, −31 at 6 … 8 kHz), measured with a sweep of sines at −12 dBFS. Neither the amounts nor the 50 / 80 Hz
+  switch nor anything but the input gain changes them. The level is a sum of spectrum magnitudes (a 4096-point FFT
+  fits: pink noise at −15 dBFS RMS reads 0.52 in the mids and 0.27 in the lows, where a sine of the same RMS reads its
+  amplitude), so noise and music grow them more than a tone. Radius 9.32 + 15.84 (a^0.4 − 0.083) above −52 dBFS
+  (9.6 at −50, 10.7 at −40, 18 at −10), up within ~20 ms, back down at ~62 px/s. The outline is irregular (about 2 px
+  rms at any size) and moves only as the level changes: a steady tone freezes it.
+- **Compression readout:** moves towards the gain reduction while there is some (−1.5 at −10 dBFS, −1.3 at −12 for
+  a 1 kHz tone, reached in ~0.4 s) and holds its last value while there is none, through silence too. Ours drives it
+  with a stand-in fitted to these tones until the compressor exists (Phase 4).
+- **The stripe's level, explained:** the level the light follows changes only when the input jumps (a step of 6 dB
+  or more, up or down) and when the sound stops (then it takes the last level and fades from it at 50 dB/s). Smooth
+  changes leave it where it was: a ramp up from −60 dBFS stays dim even after it levels off at −20 for 2 s; a ramp
+  down from −10 stays full; a steady tone keeps its brightness for as long as it lasts (6 s tested). Ours does the
+  same and follows the reference's brightness through all four probes (mean difference 0.03 … 0.04).
+- **Stripe colours:** in the middle the particles are mostly white where they overlap; along the stripe amber is the
+  commonest colour (13 … 22 %), then cyan (9 … 16 %) and red-orange; the ends carry ~60 particles per frame each.
+- **CPU:** the editor redrew the plate's ~400 shaded grille dots on every repaint (meters 30 times a second); now they
+  are drawn once per scale, and the stripe, circles and meters move on one 40 Hz clock (the reference draws ~37
+  frames a second). Playing at 200 %: 0.96 → 0.12 of a core (the reference: 1.36).
+
+Ours, not the reference's: a second particle style, **SCORPIUS** (settings page; Source/ui/Sky.cpp): the constellation
+from its star positions (east to the left), twinkling, Antares swelling on each beat, the tail in a band of the Milky
+Way, venom running like meteors from the head to the stinger.

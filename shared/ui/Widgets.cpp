@@ -307,4 +307,113 @@ void Dialog::mouseDown (const MouseEvent& e)
     if (closeArea().contains (p) || ! box.contains (p))
         if (onClose) onClose();
 }
+
+//==============================================================================
+Rectangle<float> CompareToggle::circle() const
+{
+    return Rectangle<float> (22.0f, 22.0f).withCentre (getLocalBounds().toFloat().withHeight (24.5f).getCentre());
+}
+
+void CompareToggle::paint (Graphics& g)
+{
+    const auto b = getLocalBounds().toFloat().withHeight (24.5f).reduced (0.5f);
+    const float half = b.getWidth() * 0.5f;
+    const int inactive = 1 - slot;
+    g.setColour (theme::boxFill);
+    g.fillRoundedRectangle (b, 4.0f);
+    {
+        Graphics::ScopedSaveState s (g);
+        Path clip;
+        clip.addRoundedRectangle (b, 4.0f);
+        g.reduceClipRegion (clip);
+        if (hover == inactive || pressedPart == inactive)
+        {
+            g.setColour (Colour (0xff252523));
+            g.fillRect (inactive == 0 ? b.withWidth (half) : b.withTrimmedLeft (half));
+        }
+        // the active half is white, or dark while held down
+        g.setColour (pressedPart == slot ? Colour (0xff252523) : theme::text);
+        g.fillRect (slot == 0 ? b.withWidth (half) : b.withTrimmedLeft (half));
+    }
+    g.setColour (theme::text);
+    g.drawRoundedRectangle (b, 4.0f, 1.0f);
+    g.setFont (theme::font (12.0f));
+    const Colour grey (0xff6e7375);
+    // the active letter: dark on white, grey under the mouse, white while held down
+    g.setColour (slot == 0 ? (pressedPart == 0 ? theme::text : hover == 0 ? grey : theme::boxFill) : theme::text);
+    g.drawText ("A", Rectangle<float> (0.0f, 0.0f, 26.0f, 24.5f).translated (0.5f, -0.5f), Justification::centred, false);
+    g.setColour (slot == 1 ? (pressedPart == 1 ? theme::text : hover == 1 ? grey : theme::boxFill) : theme::text);
+    g.drawText ("B", Rectangle<float> (b.getRight() - 26.0f, 0.0f, 26.0f, 24.5f).translated (0.0f, -0.5f), Justification::centred, false);
+
+    // the copy button: a black circle across the middle, ringed, with an arrow towards the other setting
+    const auto c = circle();
+    g.setColour (pressedPart == 2 ? Colour (0xff3a3a38) : Colour (0xff0b0b0b));
+    g.fillEllipse (c);
+    g.setColour (theme::text);
+    g.drawEllipse (c.reduced (0.5f), 1.0f);
+    // the arrow: grey under the mouse, white again while held down
+    g.setColour (hover == 2 && pressedPart != 2 ? Colour (0xff9a9fa1) : theme::text);
+    const float d = slot == 0 ? 1.0f : -1.0f;
+    const auto m = c.getCentre();
+    Path p;
+    p.startNewSubPath (m.x - 6.0f * d, m.y);
+    p.lineTo (m.x + 6.0f * d, m.y);
+    p.startNewSubPath (m.x + 1.0f * d, m.y - 5.0f);
+    p.lineTo (m.x + 6.0f * d, m.y);
+    p.lineTo (m.x + 1.0f * d, m.y + 5.0f);
+    g.strokePath (p, PathStrokeType (1.1f, PathStrokeType::mitered, PathStrokeType::rounded));
+}
+
+int CompareToggle::partAt (Point<float> p) const
+{
+    if (circle().contains (p)) return 2;
+    return p.x < (float) getWidth() * 0.5f ? 0 : 1;
+}
+
+// acts on release over the part that was pressed (measured: a press dragged off does nothing)
+void CompareToggle::mouseDown (const MouseEvent& e) { pressedPart = partAt (e.position); repaint(); }
+
+void CompareToggle::mouseUp (const MouseEvent& e)
+{
+    const int part = getLocalBounds().contains (e.getPosition()) ? partAt (e.position) : -1;
+    const int was = pressedPart;
+    pressedPart = -1;
+    repaint();
+    if (part != was) return;
+    if (part == 2) { if (onCopy) onCopy(); return; }
+    if (part >= 0 && part != slot && onSelect) onSelect (part);
+}
+
+//==============================================================================
+void Toast::show (const String& t)
+{
+    text = t;
+    shownAt = Time::getMillisecondCounterHiRes();
+    setAlpha (1.0f);
+    setVisible (true);
+    toFront (false);
+    repaint();
+    startTimerHz (60);
+}
+
+void Toast::timerCallback()
+{
+    const double t = Time::getMillisecondCounterHiRes() - shownAt - holdMs;
+    if (t >= fadeMs) { stopTimer(); setVisible (false); setAlpha (1.0f); return; }
+    setAlpha (t <= 0.0 ? 1.0f : (float) (1.0 - t / fadeMs));
+}
+
+void Toast::paint (Graphics& g)
+{
+    // (measured at 200 %: the box 200 x 60.5 with a 1 px edge #252523, filled #050607; the text as the labels, its
+    // baseline 34.25 below the box's top)
+    const auto b = getLocalBounds().toFloat();
+    g.setColour (Colour (0xff252523));
+    g.fillRect (b);
+    g.setColour (Colour (0xff050607));
+    g.fillRect (b.reduced (1.0f));
+    g.setColour (theme::text);
+    g.setFont (theme::font (12.0f));
+    theme::textAt (g, text, b.getCentreX() - 1.0f, 34.25f, Justification::horizontallyCentred);
+}
 }

@@ -210,7 +210,7 @@ ScorpiusEditor::ScorpiusEditor (ScorpiusProcessor& p) : AudioProcessorEditor (p)
     grip->setAlwaysOnTop (true);
     setUiScale (proc.uiScale.load());
     animateChanges = true;
-    startTimerHz (30);
+    startTimerHz (40);                   // (the animations' clock: the reference draws ~37 frames a second)
     readoutClock.startTimer (46);
 }
 
@@ -432,19 +432,22 @@ void ScorpiusEditor::timerCallback()
     inMeter[1].update (proc.inMeter.right);
     outMeter[0].update (proc.outMeter.left);
     outMeter[1].update (proc.outMeter.right);
-    compGrDb = proc.compGr.load();
+    const double now = Time::getMillisecondCounterHiRes() * 0.001;
+    const float dt = (float) jlimit (0.0, 0.2, now - lastTick);
+    lastTick = now;
+    // the compression readout (measured): moves towards the gain reduction while there is some (~0.15 s), and keeps
+    // its last value while there is none (in silence too)
+    const float gr = proc.compGr.load();
+    if (gr > 0.05f) compGrDb += (gr - compGrDb) * (1.0f - std::exp (-dt / 0.15f));
     if (grText (compGrDb) != grReadout.text) { grReadout.text = grText (compGrDb); grReadout.repaint(); }
     const int blocks = proc.blocksProcessed.load();
     const bool running = blocks != lastBlocks;
     lastBlocks = blocks;
-    // the animations follow the input level (peak, fast up, slower down), mapped from -60 ... 0 dBFS
     const float pk = running ? jmax (inMeter[0].rawPeakDb, inMeter[1].rawPeakDb) : -200.0f;
-    const float target = jlimit (0.0f, 1.0f, (pk + 60.0f) / 60.0f);
-    inLevel = target > inLevel ? target : inLevel + (target - inLevel) * 0.12f;
-    if (proc.animation.load()) phase += 1.0f / 30.0f;
-    harmBlob.level = inLevel; harmBlob.phase = phase; harmBlob.amount = (float) harmKnob.getValue();
-    liftBlob.level = inLevel * 0.15f; liftBlob.phase = phase * 1.4f; liftBlob.amount = (float) liftKnob.getValue();
-    harmBlob.repaint(); liftBlob.repaint();
+    // the circles follow the lows and the mids (Visuals.h)
+    harmBlob.update (running ? proc.visuals.takeLows() : 0.0f, dt);
+    liftBlob.update (running ? proc.visuals.takeMids() : 0.0f, dt);
+    stripe.setStyle (proc.particleStyle.load() == 0 ? sc::Stripe::Style::orion : sc::Stripe::Style::scorpius);
     stripe.setInput (pk, running, proc.animation.load());
     // only the meters change on this clock (the rest repaints when it changes)
     content.repaint (0, 36, (int) columnX[0], 236);
@@ -472,9 +475,9 @@ void ScorpiusEditor::setTestLevels (float inDb, float outDb, bool audio)
     updateFromParams();
     for (auto& m : inMeter) { m.barDb = inDb - 3.0f; m.fastDb = inDb; m.peakHoldDb = inDb; m.rmsDb = inDb - 1.5f; }
     for (auto& m : outMeter) { m.barDb = outDb - 3.0f; m.fastDb = outDb; m.peakHoldDb = outDb; m.rmsDb = outDb - 1.5f; }
-    inLevel = audio ? jlimit (0.0f, 1.0f, (inDb + 60.0f) / 60.0f) : 0.0f;
-    harmBlob.level = inLevel; liftBlob.level = inLevel * 0.15f;
-    harmBlob.amount = (float) harmKnob.getValue(); liftBlob.amount = (float) liftKnob.getValue();
+    harmBlob.freeze (audio ? Decibels::decibelsToGain (inDb - 3.0f) : 0.0f);
+    liftBlob.freeze (audio ? Decibels::decibelsToGain (inDb - 8.0f) : 0.0f);
+    stripe.setStyle (proc.particleStyle.load() == 0 ? sc::Stripe::Style::orion : sc::Stripe::Style::scorpius);
     if (audio && proc.animation.load()) stripe.freeze (jlimit (0.0f, 1.0f, (inDb + 67.5f) / 27.5f));
     content.repaint();
 }
@@ -483,9 +486,10 @@ void ScorpiusEditor::setTestLevels (float inDb, float outDb, bool audio)
 void ScorpiusEditor::Content::paint (Graphics& g)
 {
     g.fillAll (Colours::black);
-    ed.paintTopBar (g);
-    ed.paintPanel (g);
-    ed.paintPlate (g);
+    // (only what a repaint touches: the meters repaint 40 times a second)
+    if (g.clipRegionIntersects ({ 0, 0, (int) designW, 32 })) ed.paintTopBar (g);
+    if (g.clipRegionIntersects ({ 0, 30, (int) designW, 282 })) ed.paintPanel (g);
+    if (g.clipRegionIntersects ({ 0, 306, (int) designW, (int) designH - 305 })) ed.paintPlate (g);
 }
 
 void ScorpiusEditor::Content::mouseDown (const MouseEvent& e)
@@ -731,6 +735,27 @@ void ScorpiusEditor::paintPlate (Graphics& g)
                                               { "parallels", 705.0f }, { caption (outputKnob, "output"), 841.75f } };
     for (auto& [t, x] : labels) theme::textAt (g, t, x, 324.5f, Justification::horizontallyCentred);
 
+    // the grille and the lettering (static: drawn once per scale into an image; they are ~400 shaded dots)
+    {
+        const Rectangle<float> area (170.0f, 306.0f, 252.0f, designH - 306.0f);
+        if (g.clipRegionIntersects (area.getSmallestIntegerContainer()))
+        {
+            const float dpx = theme::pixelScale (g, content);
+            if (grilleImage.isNull() || (std::abs (dpx - grilleScale) > 0.001f && ! theme::liveResizing (content)))
+            {
+                grilleImage = Image (Image::ARGB, (int) std::ceil (area.getWidth() * dpx), (int) std::ceil (area.getHeight() * dpx), true);
+                Graphics gg (grilleImage);
+                gg.addTransform (AffineTransform::translation (-area.getX(), -area.getY()).scaled (dpx));
+                paintGrille (gg);
+                grilleScale = dpx;
+            }
+            g.drawImage (grilleImage, area);
+        }
+    }
+}
+
+void ScorpiusEditor::paintGrille (Graphics& g)
+{
     // grille: 19 staggered rows of embossed dots (21 / 20 per row; rows y 313.5 + 4.278 k, pitch 12.07 -> 11.34, x from
     // 179.3 -> 186.5), a halftone of an arch: the dots are largest along a circle about (300, 587.8) of radius 239.3
     // (area 0.043 + 0.932 exp (-((d - 239.3) / 26.3)^2) of the largest, fitted to every dot of the reference)
@@ -833,6 +858,7 @@ namespace
 class SettingsDialog : public orrery::Dialog
 {
 public:
+    // the reference's one row (particle animation) and ours (particle style: the reference's or Scorpius's own)
     explicit SettingsDialog (ScorpiusProcessor& p) : Dialog ("settings", { 234.0f, 73.0f, 420.0f, 254.0f }, false), proc (p) {}
     void paint (Graphics& g) override
     {
@@ -840,8 +866,20 @@ public:
         g.setColour (theme::text);
         g.setFont (theme::font (16.75f));
         theme::textAt (g, "particle animation", 258.5f, 140.0f);
-        const Rectangle<float> r (441.0f, 124.0f, 182.0f, 23.0f);
-        const bool on = proc.animation.load();
+        theme::textAt (g, "particle style", 258.5f, 191.0f);
+        segments (g, animationRow, "ON", "OFF", proc.animation.load());
+        segments (g, styleRow, "ORION", "SCORPIUS", proc.particleStyle.load() == 0);
+    }
+    void mouseDown (const MouseEvent& e) override
+    {
+        if (animationRow.contains (e.position)) { proc.animation = e.position.x < animationRow.getCentreX(); repaint(); return; }
+        if (styleRow.contains (e.position)) { proc.particleStyle = e.position.x < styleRow.getCentreX() ? 0 : 1; repaint(); return; }
+        Dialog::mouseDown (e);
+    }
+private:
+    // two segments, the chosen one white (as the reference's ON / OFF)
+    static void segments (Graphics& g, Rectangle<float> r, const char* left, const char* right, bool leftOn)
+    {
         const float w = r.getWidth() * 0.5f;
         g.setColour (theme::boxFill);
         g.fillRoundedRectangle (r, 4.0f);
@@ -850,23 +888,17 @@ public:
             Path clip; clip.addRoundedRectangle (r, 4.0f);
             g.reduceClipRegion (clip);
             g.setColour (theme::text);
-            g.fillRect (on ? r.withWidth (w) : r.withTrimmedLeft (w));
+            g.fillRect (leftOn ? r.withWidth (w) : r.withTrimmedLeft (w));
         }
         g.setColour (theme::text);
         g.drawRoundedRectangle (r.reduced (0.5f), 4.0f, 1.0f);
         g.setFont (theme::font (12.0f));
-        g.setColour (on ? theme::boxFill : theme::text);
-        g.drawText ("ON", r.withWidth (w), Justification::centred, false);
-        g.setColour (on ? theme::text : theme::boxFill);
-        g.drawText ("OFF", r.withTrimmedLeft (w), Justification::centred, false);
+        g.setColour (leftOn ? theme::boxFill : theme::text);
+        g.drawText (left, r.withWidth (w), Justification::centred, false);
+        g.setColour (leftOn ? theme::text : theme::boxFill);
+        g.drawText (right, r.withTrimmedLeft (w), Justification::centred, false);
     }
-    void mouseDown (const MouseEvent& e) override
-    {
-        const Rectangle<float> r (441.0f, 124.0f, 182.0f, 23.0f);
-        if (r.contains (e.position)) { proc.animation = e.position.x < r.getCentreX(); repaint(); return; }
-        Dialog::mouseDown (e);
-    }
-private:
+    const Rectangle<float> animationRow { 441.0f, 124.0f, 182.0f, 23.0f }, styleRow { 441.0f, 175.0f, 182.0f, 23.0f };
     ScorpiusProcessor& proc;
 };
 }

@@ -2,8 +2,11 @@
 
 ## Unreleased
 
-In **The Antiparticle**: fine adjustment of the knobs is Shift only, as on The God Particle (Ctrl now drags at the
-normal speed).
+In **The Antiparticle**:
+
+- **A / B compare** (ours, as Cradle's Orion has it): two complete settings in one instance, switched from the top bar;
+  the arrow copies the active one over the other.
+- Fine adjustment of the knobs is Shift only, as on The God Particle (Ctrl now drags at the normal speed).
 
 ## 1.0.1
 

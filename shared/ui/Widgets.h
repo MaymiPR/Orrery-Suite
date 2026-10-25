@@ -103,6 +103,43 @@ public:
 };
 
 
+// Compare A -> B of the top bar (Orion's; The Antiparticle has it too, ours): the active letter's half is white; the circle in the middle copies the active setting
+// to the other one, its arrow pointing that way. Under the mouse (measured): the inactive half lightens (#252523), the
+// active half's letter turns grey, the arrow turns grey.
+class CompareToggle : public juce::Component
+{
+public:
+    CompareToggle() { noFocus (*this); }
+    void paint (juce::Graphics&) override;
+    void mouseDown (const juce::MouseEvent&) override;
+    void mouseUp (const juce::MouseEvent&) override;
+    void mouseMove (const juce::MouseEvent& e) override { setHover (partAt (e.position)); }
+    void mouseExit (const juce::MouseEvent&) override { setHover (-1); }
+    int slot = 0;
+    std::function<void (int)> onSelect;
+    std::function<void()> onCopy;
+private:
+    juce::Rectangle<float> circle() const;
+    int partAt (juce::Point<float>) const;       // 0 A, 1 B, 2 the arrow
+    void setHover (int p) { if (p != hover) { hover = p; repaint(); } }
+    int hover = -1, pressedPart = -1;
+};
+
+// The message Orion shows over the plate when Compare's arrow copies one setting to the other ("A copied to
+// B."): a black box with a dark grey edge, there at once, held for 0.55 s, then fading out over 1.05 s (measured).
+class Toast : public juce::Component, private juce::Timer
+{
+public:
+    Toast() { setInterceptsMouseClicks (false, false); setVisible (false); }
+    void paint (juce::Graphics&) override;
+    void show (const juce::String&);
+    static constexpr double holdMs = 550.0, fadeMs = 1050.0;
+private:
+    void timerCallback() override;
+    juce::String text;
+    double shownAt = 0.0;
+};
+
 // List that drops below a DropBox (preset list with captions, UI scale list). Closes on a pick or a click outside.
 class DropList : public juce::Component
 {

@@ -65,6 +65,7 @@ ScorpiusProcessor::ScorpiusProcessor()
     bypassParam = apvts.getParameter (sc::id::bypass);
     inGainRaw = apvts.getRawParameterValue (sc::id::inputGain);
     outGainRaw = apvts.getRawParameterValue (sc::id::outputGain);
+    compAmountRaw = apvts.getRawParameterValue (sc::id::compAmount);
     slots[0] = slots[1] = captureSlot();
 }
 
@@ -79,6 +80,7 @@ void ScorpiusProcessor::prepareToPlay (double sampleRate, int block)
     meterBuf.setSize (2, jmax (1, block));
     inMeter.prepare (sampleRate);
     outMeter.prepare (sampleRate);
+    visuals.prepare (sampleRate);
     for (auto* s : { &inGain, &outGain }) s->reset (sampleRate, 0.01);
     inGain.setCurrentAndTargetValue (Decibels::decibelsToGain (inGainRaw->load()));
     outGain.setCurrentAndTargetValue (Decibels::decibelsToGain (outGainRaw->load()));
@@ -103,6 +105,7 @@ void ScorpiusProcessor::processBlock (AudioBuffer<float>& buffer, MidiBuffer&)
     }
     // the input meters read the signal after the input gain
     inMeter.measure (main);
+    visuals.process (main, compAmountRaw->load());
     // (the modules: Phase 4)
     for (int i = 0; i < n; ++i)
     {
@@ -111,7 +114,7 @@ void ScorpiusProcessor::processBlock (AudioBuffer<float>& buffer, MidiBuffer&)
         main.getWritePointer (1)[i] *= g;
     }
     outMeter.measure (main);
-    compGr = 0.0f;
+    compGr = visuals.grEstimate.load();        // (a stand-in until the compressor exists: dsp/Visuals.h)
     ++blocksProcessed;
 }
 
@@ -161,6 +164,7 @@ void ScorpiusProcessor::getStateInformation (MemoryBlock& dest)
     auto state = apvts.copyState();
     state.setProperty ("uiScale", uiScale.load(), nullptr);
     state.setProperty ("animation", animation.load() ? 1 : 0, nullptr);
+    state.setProperty ("particleStyle", particleStyle.load(), nullptr);
     state.setProperty ("preset", presets.currentName(), nullptr);
     state.setProperty ("compare", slot, nullptr);
     state.setProperty ("ioLink", ioLink.load() ? 1 : 0, nullptr);
@@ -178,6 +182,7 @@ void ScorpiusProcessor::setStateInformation (const void* data, int size)
             auto tree = ValueTree::fromXml (*xml);
             uiScale = (float) tree.getProperty ("uiScale", 1.0f);
             animation = (int) tree.getProperty ("animation", 1) != 0;
+            particleStyle = jlimit (0, 1, (int) tree.getProperty ("particleStyle", 1));
             presets.setCurrentName (tree.getProperty ("preset", sc::PresetManager::defaultName()).toString());
             slot = jlimit (0, 1, (int) tree.getProperty ("compare", 0));
             ioLink = (int) tree.getProperty ("ioLink", 0) != 0;

@@ -88,6 +88,11 @@ AntiparticleEditor::AntiparticleEditor (AntiparticleProcessor& p) : AudioProcess
     place (limiterKnob, 754.745f, 313.11f, 25.06f);
     place (outputKnob, 841.74f, 313.11f, 25.06f);
     ioLinkButton.setBounds (664, 3, 64, 25);      // centred between the side-chain switch (ends 645) and "UI Scale" (747.5)
+    // A / B (ours, Orion's switch and behaviour): in the free space between the logo and "Preset" (no caption: no room)
+    content.addAndMakeVisible (compare);
+    compare.setBounds (52, 3, 74, 25);
+    content.addChildComponent (toast);                // over everything else (shown by the switch's arrow)
+    toast.setBounds (344, 292, 200, 61);
     eqPower.setBounds (97, 40, 72, 25);
     amountPower.setBounds (364, 167, 72, 25);
     limiterPower.setBounds (719, 40, 72, 25);
@@ -153,6 +158,20 @@ AntiparticleEditor::AntiparticleEditor (AntiparticleProcessor& p) : AudioProcess
     gear.onClick = [this] { showSettings(); };
     logo.onClick = [this] { showAboutMenu(); };
     presetBox.text = proc.presets.currentName();
+    compare.slot = proc.compareSlot();
+    compare.onSelect = [this] (int slot)
+    {
+        proc.selectCompareSlot (slot);
+        compare.slot = proc.compareSlot();
+        presetBox.text = proc.presets.currentName();
+        compare.repaint(); presetBox.repaint();
+        updateFromParams();
+    };
+    compare.onCopy = [this]
+    {
+        proc.copyCompareSlot();
+        toast.show (proc.compareSlot() == 0 ? "A copied to B." : "B copied to A.");
+    };
 
     ap::Settings::get().addChangeListener (this);
     updateFromParams();

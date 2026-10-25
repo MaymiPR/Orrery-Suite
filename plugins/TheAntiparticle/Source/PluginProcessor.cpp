@@ -50,6 +50,8 @@ AntiparticleProcessor::AntiparticleProcessor()
                           ap::id::character, ap::id::characterBypass, ap::id::limiterGain, ap::id::limiterBypass, ap::id::bypass };
     for (int i = 0; i < 11; ++i) raw[i] = apvts.getRawParameterValue (ids[i]);
     ap::Settings::get().addChangeListener (this);
+    slots[0] = captureSlot();
+    slots[1] = slots[0].createCopy();
 }
 
 AntiparticleProcessor::~AntiparticleProcessor() { ap::Settings::get().removeChangeListener (this); }
@@ -172,6 +174,10 @@ void AntiparticleProcessor::getStateInformation (MemoryBlock& dest)
     state.setProperty ("uiScale", uiScale.load(), nullptr);
     state.setProperty ("ioLink", ioLink.load() ? 1 : 0, nullptr);
     state.setProperty ("preset", presets.currentName(), nullptr);
+    state.setProperty ("compare", slot, nullptr);
+    // the inactive compare slot (the active one is the parameters themselves), if it was ever used
+    state.removeChild (state.getChildWithName ("SLOT"), nullptr);
+    if (slotUsed[1 - slot]) state.appendChild (slots[1 - slot].createCopy(), nullptr);
     if (auto xml = state.createXml()) copyXmlToBinary (*xml, dest);
 }
 
@@ -185,8 +191,61 @@ void AntiparticleProcessor::setStateInformation (const void* data, int size)
             uiScale = (float) tree.getProperty ("uiScale", 1.0f);
             ioLink = (int) tree.getProperty ("ioLink", 0) != 0;
             presets.setCurrentName (tree.getProperty ("preset", "default").toString());
+            slot = jlimit (0, 1, (int) tree.getProperty ("compare", 0));
+            auto other = tree.getChildWithName ("SLOT");
+            tree.removeChild (other, nullptr);
             apvts.replaceState (tree);
+            slots[slot] = captureSlot();
+            slotUsed[slot] = true;
+            slotUsed[1 - slot] = other.isValid();
+            slots[1 - slot] = other.isValid() ? other.createCopy() : slots[slot].createCopy();
         }
+}
+
+//==============================================================================
+// the settings a compare slot holds: every parameter but the host's bypass, and the preset's name
+static const char* const slotParams[] { ap::id::inputGain, ap::id::outputGain, ap::id::eqLow, ap::id::eqMid, ap::id::eqHigh,
+                                        ap::id::eqBypass, ap::id::character, ap::id::characterBypass, ap::id::limiterGain,
+                                        ap::id::limiterBypass };
+
+ValueTree AntiparticleProcessor::captureSlot() const
+{
+    ValueTree t ("SLOT");
+    for (auto* pid : slotParams)
+        if (auto* p = apvts.getParameter (pid)) t.setProperty (pid, p->getValue(), nullptr);
+    t.setProperty ("preset", presets.currentName(), nullptr);
+    return t;
+}
+
+void AntiparticleProcessor::applySlot (const ValueTree& t)
+{
+    for (auto* pid : slotParams)
+        if (auto* p = apvts.getParameter (pid))
+            if (t.hasProperty (pid))
+            {
+                p->beginChangeGesture();
+                p->setValueNotifyingHost ((float) t.getProperty (pid));
+                p->endChangeGesture();
+            }
+    presets.setCurrentName (t.getProperty ("preset", presets.currentName()).toString());
+}
+
+void AntiparticleProcessor::selectCompareSlot (int s)
+{
+    s = jlimit (0, 1, s);
+    if (s == slot) return;
+    slots[slot] = captureSlot();
+    if (! slotUsed[s]) slots[s] = slots[slot].createCopy();
+    slotUsed[s] = true;
+    slot = s;
+    applySlot (slots[slot]);
+}
+
+void AntiparticleProcessor::copyCompareSlot()
+{
+    slots[slot] = captureSlot();
+    slots[1 - slot] = slots[slot].createCopy();
+    slotUsed[1 - slot] = true;
 }
 
 AudioProcessorEditor* AntiparticleProcessor::createEditor() { return new AntiparticleEditor (*this); }

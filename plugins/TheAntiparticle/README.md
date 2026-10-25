@@ -32,6 +32,9 @@ input: the main signal or the side-chain bus.
   a knob, its label shows the value.
 - **I/O LINK** (top bar, ours): the output gain follows the input gain inverted, so you can drive the chain harder
   without the level changing.
+- **A / B** (top bar, left of the preset menu, ours, as Cradle's Orion has it): two complete settings in one instance.
+  Click A or B to switch; a setting you have not used yet starts as a copy of the other. The arrow copies the active
+  setting over the other ("A copied to B."). Both are saved with the session.
 - **Presets:** the arrows step through them; the save button stores the EQ, character and limiter settings as an
   `.antp` file in `Documents/The Antiparticle/Presets`. Input, output and INT / EXT are left as they are.
 - **Settings** (gear): oversampling, meter mode, particle animation on / off and its style: "God particle" (the

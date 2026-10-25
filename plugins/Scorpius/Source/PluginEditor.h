@@ -53,6 +53,7 @@ private:
     void paintIoMeter (juce::Graphics&, bool output);
     void paintStripe (juce::Graphics&);
     void paintPlate (juce::Graphics&);
+    void paintGrille (juce::Graphics&);
 
     // the readouts update on the reference's own clock (shared/dsp/LevelMeter.h): every 46 ms the peaks, every fifth
     // time the RMS
@@ -108,7 +109,7 @@ private:
     orrery::DropBox presetBox, scaleBox;
     orrery::IconButton prevButton { orrery::IconButton::Icon::left }, nextButton { orrery::IconButton::Icon::right },
         saveButton { orrery::IconButton::Icon::save };
-    sc::CompareToggle compare;
+    orrery::CompareToggle compare;
     orrery::LinkButton ioLinkButton;
     orrery::GearButton gear;
 
@@ -119,7 +120,7 @@ private:
     sc::SegmentStack color { { "a", "b", "c" } };
     // harmonics, compression, lift
     orrery::PowerButton harmPower, compPower, liftPower;
-    sc::Blob harmBlob { 6.5f }, liftBlob { 6.5f };
+    sc::Blob harmBlob { 31 }, liftBlob { 47 };
     sc::GrReadout grReadout;
     sc::SegmentStack freq { { "50Hz", "80Hz" } }, mode { { "a", "b" } };
     orrery::MetalKnob harmKnob { orrery::MetalKnob::Kind::small }, compKnob { orrery::MetalKnob::Kind::small },
@@ -136,7 +137,7 @@ private:
     // plate
     orrery::MetalKnob inputKnob { orrery::MetalKnob::Kind::plate }, outputKnob { orrery::MetalKnob::Kind::plate };
     sc::Stripe stripe;
-    sc::Toast toast;
+    orrery::Toast toast;
     // module displays fade with their power buttons; changes animate once the editor is up (not while it opens)
     sc::Fades fades;
     bool animateChanges = false;
@@ -148,10 +149,10 @@ private:
     orrery::Readouts inMeter[2], outMeter[2];
     float compGrDb = 0.0f;
     bool frozen = false;
-    float phase = 0.0f, inLevel = 0.0f;        // animation time and the input level the animations follow (0 ... 1)
+    double lastTick = 0.0;
     int lastBlocks = 0;
-    juce::Image plateImage, knobShadow;
-    float plateScale = 0.0f, knobShadowScale = 0.0f;
+    juce::Image plateImage, knobShadow, grilleImage;
+    float plateScale = 0.0f, knobShadowScale = 0.0f, grilleScale = 0.0f;
 
     JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR (ScorpiusEditor)
 };

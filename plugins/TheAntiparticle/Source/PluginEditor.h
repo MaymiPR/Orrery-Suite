@@ -128,6 +128,8 @@ private:
         outputKnob { ap::MetalKnob::Kind::plate };
     ap::Visualizer visualizer;
     ap::LinkButton ioLinkButton;
+    ap::CompareToggle compare;         // ours (as Cradle's Orion): A / B settings, left of the preset menu
+    ap::Toast toast;                   // "A copied to B.", over the plate
     struct PaintOverlay : juce::Component
     {
         std::function<void (juce::Graphics&)> paintFn;
