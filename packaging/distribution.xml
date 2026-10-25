@@ -1,0 +1,25 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- macOS installer layout (productbuild); VERSION is filled in by the release workflow. -->
+<installer-gui-script minSpecVersion="2">
+    <title>The Antiparticle VERSION</title>
+    <license file="LICENSE.txt"/>
+    <options customize="allow" require-scripts="false" hostArchitectures="arm64,x86_64"/>
+    <domains enable_localSystem="true"/>
+    <choices-outline>
+        <line choice="au"/>
+        <line choice="vst3"/>
+        <line choice="clap"/>
+    </choices-outline>
+    <choice id="au" title="Audio Unit (AU)" description="For Logic Pro, GarageBand, Ableton Live and other AU hosts. Installs to /Library/Audio/Plug-Ins/Components.">
+        <pkg-ref id="com.theantiparticle.au"/>
+    </choice>
+    <choice id="vst3" title="VST3" description="For Ableton Live, FL Studio, Reaper, Cubase and other VST3 hosts. Installs to /Library/Audio/Plug-Ins/VST3.">
+        <pkg-ref id="com.theantiparticle.vst3"/>
+    </choice>
+    <choice id="clap" title="CLAP" description="For Bitwig, Reaper and other CLAP hosts. Installs to /Library/Audio/Plug-Ins/CLAP.">
+        <pkg-ref id="com.theantiparticle.clap"/>
+    </choice>
+    <pkg-ref id="com.theantiparticle.au" version="VERSION">TheAntiparticle-AU.pkg</pkg-ref>
+    <pkg-ref id="com.theantiparticle.vst3" version="VERSION">TheAntiparticle-VST3.pkg</pkg-ref>
+    <pkg-ref id="com.theantiparticle.clap" version="VERSION">TheAntiparticle-CLAP.pkg</pkg-ref>
+</installer-gui-script>

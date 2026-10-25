@@ -1,0 +1,10 @@
+The Antiparticle for Linux (64-bit x86, built on Ubuntu 22.04)
+==============================================================
+
+In this folder run:   sh install-linux.sh
+It copies the plug-in to ~/.vst3 and ~/.clap. Then rescan plug-ins in your DAW (Reaper, Bitwig,
+Ardour...). Remove it again with:  sh install-linux.sh --uninstall
+
+Needs glibc 2.35 or later, X11 (XWayland works), libasound2 and libfreetype6.
+To check the download, compare its SHA-256 with SHA256SUMS.txt on the Releases page:
+  sha256sum TheAntiparticle-<version>-Linux.tar.gz
