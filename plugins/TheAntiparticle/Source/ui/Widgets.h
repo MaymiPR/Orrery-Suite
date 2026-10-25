@@ -86,7 +86,8 @@ public:
     std::function<void()> onClick;
 };
 
-// Our logo (left of the top bar), in the place and grey of the reference's: a small pitchfork.
+// The Orrery Suite mark (left of the top bar), drawn as the reference draws its maker's mark there: a flat grey glyph
+// in the same place, size and grey.
 class Logo : public juce::Component
 {
 public:

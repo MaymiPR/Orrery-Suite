@@ -58,7 +58,7 @@ AntiparticleEditor::AntiparticleEditor (AntiparticleProcessor& p) : AudioProcess
         content.addAndMakeVisible (*c);
     content.addMouseListener (&hoverTracker, true);
 
-    logo.setBounds (8, 7, 14, 17);
+    logo.setBounds (6, 7, 17, 17);
     presetBox.setBounds (176, 3, 193, 25);
     prevButton.setBounds (375, 3, 24, 25);
     nextButton.setBounds (405, 3, 24, 25);

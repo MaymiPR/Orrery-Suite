@@ -148,7 +148,7 @@ pixel:
 
 The look (layout, sizes, colours, knob style) is recreated with our own drawing code. Cradle's and Jaycen Joshua's
 names, the Cradle logo, the "THE GOD PARTICLE" lettering and all shipped images and fonts are replaced by our own
-("THE ANTIPARTICLE" lettering: 16 characters, one per letter slot of the reference; own logo: a barred particle on its orbit, the physics notation for an antiparticle). The repo states clearly that it is an independent project, not affiliated
+("THE ANTIPARTICLE" lettering: 16 characters, one per letter slot of the reference; the maker's mark replaced by the Orrery Suite mark, a sun on its orbit with the orbit's lower arc lit as a crescent and a planet, drawn flat in the same place, size and grey). The repo states clearly that it is an independent project, not affiliated
 with Cradle.
 
 ## Open questions for Phase 3 (measurement)

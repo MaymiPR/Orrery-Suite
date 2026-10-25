@@ -164,17 +164,28 @@ void GearButton::paint (Graphics& g)
 void Logo::paint (Graphics& g)
 {
     if (isMouseOver()) { g.setColour (theme::text.withAlpha (0.06f)); g.fillRoundedRectangle (getLocalBounds().toFloat(), 2.0f); }
-    // an antiparticle: a particle on its orbit, with the over-bar physics writes over antiparticles (p-bar, e-bar);
-    // same footprint and grey as the reference's mark
-    const auto b = getLocalBounds().toFloat();
-    const auto c = Point<float> (b.getCentreX(), b.getY() + 10.5f);
+    // the Orrery Suite mark, flat like the reference's maker's mark (solid grey, no outline or shading): a sun with its
+    // orbit, the orbit lit along its lower arc as a crescent, a planet nearer in (at this size the inner orbit is left out)
+    const auto c = getLocalBounds().toFloat().getCentre();
+    const float ro = 7.2f;
     g.setColour (theme::boxLine);
-    g.fillRoundedRectangle (c.x - 5.5f, b.getY() + 0.6f, 11.0f, 1.8f, 0.9f);                 // the bar
-    Path orbit;
-    orbit.addEllipse (-6.5f, -2.6f, 13.0f, 5.2f);
-    g.strokePath (orbit, PathStrokeType (1.2f), AffineTransform::rotation (-0.55f).translated (c));
-    g.fillEllipse (Rectangle<float> (5.0f, 5.0f).withCentre (c));                            // the particle
-    g.fillEllipse (Rectangle<float> (2.2f, 2.2f).withCentre (c + Point<float> (5.2f, -3.2f)));  // its partner on the orbit
+    g.drawEllipse (Rectangle<float> (2 * ro, 2 * ro).withCentre (c), 1.0f);                     // the orbit
+    Path crescent;                                                                             // its lit lower arc
+    for (int i = 0; i <= 24; ++i)                                                              // outer edge, left to right
+    {
+        const float a = MathConstants<float>::pi * (0.7f + 0.6f * (float) i / 24.0f);
+        const Point<float> p (c.x - (ro + 0.5f) * std::sin (a), c.y - (ro + 0.5f) * std::cos (a));
+        if (i == 0) crescent.startNewSubPath (p); else crescent.lineTo (p);
+    }
+    for (int i = 24; i >= 0; --i)                                                              // inner edge back, higher up
+    {
+        const float a = MathConstants<float>::pi * (0.7f + 0.6f * (float) i / 24.0f);
+        crescent.lineTo (c.x - (ro + 0.5f) * std::sin (a), c.y - 1.2f - (ro - 1.6f) * std::cos (a));
+    }
+    crescent.closeSubPath();
+    g.fillPath (crescent);
+    g.fillEllipse (Rectangle<float> (5.2f, 5.2f).withCentre (c + Point<float> (0.0f, -0.6f)));   // the sun (the particle)
+    g.fillEllipse (Rectangle<float> (2.4f, 2.4f).withCentre (c + Point<float> (3.4f, -3.6f)));   // a planet nearer in
 }
 
 InfoDialog::InfoDialog (String t, std::vector<std::pair<String, String>> r)
