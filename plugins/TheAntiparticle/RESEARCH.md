@@ -175,7 +175,7 @@ with `AntiparticleSnapshot` + `tools/ui_compare.py` (mean absolute RGB differenc
 
 | Element | Measured |
 |---|---|
-| Window | 888 × 359.5 (heights truncate: 359 at 100 %, 719 at 200 %); UI Scale 50 / 75 / 85 / 100 / 125 / 150 / 200 %, saved per instance. Ours can also be resized freely by dragging its bottom-right corner (three grooves cut into the plate) or the host's window edge: proportions fixed, 50 … 200 %, the UI Scale box shows the result |
+| Window | 888 × 359.5 (heights truncate: 359 at 100 %, 719 at 200 %); UI Scale 50 / 75 / 85 / 100 / 125 / 150 / 200 %, saved per instance. Ours can also be resized freely by dragging its bottom-right corner (three light grooves cut into the plate, brighter under the mouse) or the host's window edge: proportions fixed, 50 … 200 %, the UI Scale box shows the result. While the size changes, the per-scale images (glass, plate, shadows, knob bodies) are drawn stretched and rendered sharp again once it settles (150 ms or on release): about 9 ms a frame instead of 107 (AntiparticleSnapshot --bench) |
 | Top bar | 0 … 30.5, #050607. Text #E7F1F4, 12 px. Preset box (176, 3, 193 × 24.5) fill #121211, 1 px #7F7E7A; ← → and save boxes 24 × 24.5 with a #E7F1F4 frame; INT/EXT (560, 3, 85 × 24.5), selected half filled #E7F1F4; UI Scale box (794, 3, 66 × 24.5); gear #7F7E7A |
 | Main panel | rounded outline r ≈ 15, 2 px #C0C0C0, black inside; column dividers at x 89 / 176 / 559 / 711 / 798, 1 px #3C3C3C |
 | Mint | #8EDBC4: readouts, labels, power buttons (72 × 24.5, filled = on, 1 px outline = bypassed) |

@@ -93,11 +93,14 @@ private:
     // resizing from the bottom-right corner: proportions fixed, 50 ... 200 %; the grip is drawn as grooves in the plate
     struct Grip : juce::ResizableCornerComponent
     {
-        using juce::ResizableCornerComponent::ResizableCornerComponent;
+        Grip (juce::Component* c, juce::ComponentBoundsConstrainer* k) : juce::ResizableCornerComponent (c, k) { setRepaintsOnMouseActivity (true); }
         void paint (juce::Graphics&) override;
+        void mouseUp (const juce::MouseEvent&) override;
     };
     juce::ComponentBoundsConstrainer constrainer;
     std::unique_ptr<Grip> grip;
+    juce::uint32 lastResizeMs = 0;
+    void endLiveResize();
 
     ap::Logo logo;
     ap::DropBox presetBox, scaleBox;

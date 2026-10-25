@@ -157,7 +157,7 @@ void MetalKnob::paint (Graphics& g)
     const auto b = getLocalBounds().toFloat();
     const float scale = theme::pixelScale (g, *this);
     const int px = jmax (4, roundToInt (b.getWidth() * scale));
-    if (px != bodyPx) renderBody (px);
+    if (body.isNull() || (px != bodyPx && ! theme::liveResizing (*this))) renderBody (px);
 
     g.setImageResamplingQuality (Graphics::highResamplingQuality);
     g.drawImage (body, b, RectanglePlacement::stretchToFit);

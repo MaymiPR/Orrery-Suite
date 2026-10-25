@@ -282,7 +282,7 @@ void Visualizer::renderFrame (float scale)
 void Visualizer::paint (Graphics& g)
 {
     const float scale = theme::pixelScale (g, *this);
-    if (std::abs (scale - framePx) > 0.001f || frame.isNull()) renderFrame (scale);
+    if (frame.isNull() || (std::abs (scale - framePx) > 0.001f && ! theme::liveResizing (*this))) renderFrame (scale);
     g.drawImage (frame, getLocalBounds().toFloat());
     if (level <= 0.0f && glow <= 0.0f) return;
     if (antiStyle) paintAntiparticle (g); else paintGodly (g);

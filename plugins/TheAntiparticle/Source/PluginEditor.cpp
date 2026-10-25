@@ -197,26 +197,43 @@ void AntiparticleEditor::resized()
         scaleBox.text = String (roundToInt (scale * 100.0f)) + "%";
         scaleBox.repaint();
         content.setTransform (AffineTransform::scale (scale));
+        getProperties().set ("liveResize", true);        // stretch the cached images until the size settles (timer)
+        lastResizeMs = Time::getMillisecondCounter();
     }
     if (grip != nullptr)
     {
-        const int g = roundToInt (14.0f * scale);
+        const int g = roundToInt (18.0f * scale);
         grip->setBounds (getWidth() - g, getHeight() - g, g, g);
     }
 }
 
-// three short grooves cut into the plate, like its engraving: a dark cut with a faint light edge below it
+// three grooves cut into the plate's corner, in the plate's light lettering grey (brighter under the mouse), each with
+// a dark cut beside it so they read as engraved
 void AntiparticleEditor::Grip::paint (Graphics& g)
 {
-    const float w = (float) getWidth(), u = w / 14.0f;
+    const float w = (float) getWidth(), u = w / 18.0f;
+    const auto light = theme::plateText.withAlpha (isMouseOverOrDragging() ? 0.95f : 0.6f);
     for (int i = 1; i <= 3; ++i)
     {
-        const float d = (float) i * 3.6f * u;
-        g.setColour (Colours::black.withAlpha (0.42f));
-        g.drawLine (w - d, w - 1.5f * u, w - 1.5f * u, w - d, 1.0f * u);
-        g.setColour (Colours::white.withAlpha (0.10f));
-        g.drawLine (w - d + 0.8f * u, w - 1.5f * u, w - 1.5f * u, w - d + 0.8f * u, 0.7f * u);
+        const float d = (float) i * 4.6f * u;
+        g.setColour (Colours::black.withAlpha (0.5f));
+        g.drawLine (w - d - 0.9f * u, w - 2.4f * u, w - 2.4f * u, w - d - 0.9f * u, 1.3f * u);
+        g.setColour (light);
+        g.drawLine (w - d, w - 2.4f * u, w - 2.4f * u, w - d, 1.3f * u);
     }
+}
+
+void AntiparticleEditor::Grip::mouseUp (const MouseEvent& e)
+{
+    ResizableCornerComponent::mouseUp (e);
+    if (auto* ed = findParentComponentOfClass<AntiparticleEditor>()) ed->endLiveResize();   // render sharp at once
+}
+
+void AntiparticleEditor::endLiveResize()
+{
+    if (! getProperties().getWithDefault ("liveResize", false)) return;
+    getProperties().set ("liveResize", false);
+    content.repaint();
 }
 
 void AntiparticleEditor::parameterChanged (const String& id, float)
@@ -322,6 +339,8 @@ void AntiparticleEditor::updateMeter (Meter& m, ap::LevelTap& tap)
 
 void AntiparticleEditor::timerCallback()
 {
+    // a resize has settled (no new size for 150 ms): render the per-scale images sharp at the final size
+    if (getProperties().getWithDefault ("liveResize", false) && Time::getMillisecondCounter() - lastResizeMs > 150) endLiveResize();
     if (frozen) return;
     updateMeter (inMeter[0], proc.inL);
     updateMeter (inMeter[1], proc.inR);
@@ -601,7 +620,7 @@ void AntiparticleEditor::paintPlate (Graphics& g)
     platePath.addRoundedRectangle (plate, 11.0f);
     {
         const float dpx = theme::pixelScale (g, content);
-        if (std::abs (dpx - plateScale) > 0.001f || plateImage.isNull())
+        if (plateImage.isNull() || (std::abs (dpx - plateScale) > 0.001f && ! theme::liveResizing (content)))
         {
             const int w = (int) std::ceil (plate.getWidth() * dpx), h = (int) std::ceil (plate.getHeight() * dpx);
             plateImage = Image (Image::RGB, w, h, false, SoftwareImageType());
@@ -634,7 +653,7 @@ void AntiparticleEditor::paintPlate (Graphics& g)
         // the measured shadow field (KnobShadow.h), rendered once per physical scale and drawn under each knob
         const float dpx = theme::pixelScale (g, content);
         constexpr float R = 25.06f, reach = 89.0f, half = R + reach;
-        if (std::abs (dpx - knobShadowScale) > 0.001f || knobShadow.isNull())
+        if (knobShadow.isNull() || (std::abs (dpx - knobShadowScale) > 0.001f && ! theme::liveResizing (content)))
         {
             const int px = (int) std::ceil (2.0f * half * dpx);
             knobShadow = Image (Image::ARGB, px, px, true, SoftwareImageType());

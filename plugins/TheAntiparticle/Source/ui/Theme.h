@@ -36,6 +36,15 @@ inline float pixelScale (juce::Graphics& g, const juce::Component& c)
     return juce::jmax (g.getInternalContext().getPhysicalPixelScaleFactor(), juce::Component::getApproximateScaleFactorForComponent (&c));
 }
 
+// true while the editor is being resized (its "liveResize" property): the per-scale images (glass, plate, shadows,
+// knob bodies) are then drawn stretched from the last size instead of rendered again, and re-rendered once it settles
+inline bool liveResizing (const juce::Component& c)
+{
+    for (auto* p = &c; p != nullptr; p = p->getParentComponent())
+        if (p->getProperties().getWithDefault ("liveResize", false)) return true;
+    return false;
+}
+
 // LED meters: LED k (0 at the bottom, 39 at the top) lights at -58.5 + 1.5 k dB (measured with a level ramp).
 inline constexpr int numLeds = 40;
 inline float ledThresholdDb (int k) { return -58.5f + 1.5f * (float) k; }

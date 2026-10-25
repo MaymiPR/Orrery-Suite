@@ -14,13 +14,14 @@ int main (int argc, char** argv)
     juce::ScopedJuceInitialiser_GUI init;
     auto proc = std::make_unique<AntiparticleProcessor>();
     float scale = 1.0f, inDb = -200.0f, outDb = -200.0f;
-    int sizeW = 0;
+    int sizeW = 0, benchSteps = 0;
     bool audio = false, anti = false, god = false;
     for (int i = 2; i < argc; ++i)
     {
         const juce::String a (argv[i]);
         if (a.startsWith ("--scale=")) { scale = a.fromFirstOccurrenceOf ("=", false, false).getFloatValue(); continue; }
         if (a.startsWith ("--size=")) { sizeW = a.fromFirstOccurrenceOf ("=", false, false).getIntValue(); continue; }
+        if (a.startsWith ("--bench=")) { benchSteps = a.fromFirstOccurrenceOf ("=", false, false).getIntValue(); continue; }
         if (a.startsWith ("--levels="))
         {
             inDb = a.fromFirstOccurrenceOf ("=", false, false).upToFirstOccurrenceOf (",", false, false).getFloatValue();
@@ -50,6 +51,26 @@ int main (int argc, char** argv)
         const juce::Rectangle<int> b (0, 0, sizeW, (int) (sizeW * AntiparticleEditor::designH / AntiparticleEditor::designW));
         ed->getConstrainer()->setBoundsForComponent (ed.get(), b, false, false, true, true);       // as the corner drags
         std::cout << "resized to " << ed->getWidth() << " x " << ed->getHeight() << ", ui scale " << proc->uiScale.load() << std::endl;
+    }
+    for (const bool live : { true, false })
+    {
+        if (! benchSteps) break;
+        // --bench: a corner drag of benchSteps sizes, each repainted in full; live = with the stretched images the
+        // editor uses while resizing, otherwise every step renders the per-scale images again (the old behaviour)
+        double total = 0, worst = 0;
+        for (int i = 0; i < benchSteps; ++i)
+        {
+            const int w = 900 + i * 400 / benchSteps;
+            const juce::Rectangle<int> b (0, 0, w, (int) (w * AntiparticleEditor::designH / AntiparticleEditor::designW));
+            ed->getConstrainer()->setBoundsForComponent (ed.get(), b, false, false, true, true);
+            if (! live) ed->getProperties().set ("liveResize", false);
+            const double t0 = juce::Time::getMillisecondCounterHiRes();
+            ed->createComponentSnapshot (ed->getLocalBounds(), true, 1.0f);
+            const double dt = juce::Time::getMillisecondCounterHiRes() - t0;
+            total += dt; worst = juce::jmax (worst, dt);
+        }
+        std::cout << (live ? "stretched while resizing: " : "re-rendered every step: ") << total / benchSteps << " ms per frame, worst "
+                  << worst << " ms" << std::endl;
     }
     auto img = ed->createComponentSnapshot (ed->getLocalBounds(), true, 1.0f);
     juce::File f (juce::File::getCurrentWorkingDirectory().getChildFile (argv[1]));
