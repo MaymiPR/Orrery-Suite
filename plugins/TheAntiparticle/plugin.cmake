@@ -1,8 +1,7 @@
 # The Antiparticle (recreation of Cradle's The God Particle). Included from the top-level CMakeLists.txt.
 set(AP_DIR ${CMAKE_CURRENT_LIST_DIR})
 
-juce_add_binary_data(AntiparticleData SOURCES ${AP_DIR}/resources/fonts/InstrumentSans-Regular.ttf
-    ${AP_DIR}/resources/glass/glass_off.png ${AP_DIR}/resources/glass/glass_lit.png)
+juce_add_binary_data(AntiparticleData SOURCES ${AP_DIR}/resources/glass/glass_off.png ${AP_DIR}/resources/glass/glass_lit.png)
 set_target_properties(AntiparticleData PROPERTIES POSITION_INDEPENDENT_CODE ON)
 
 set(AP_SOURCES
@@ -10,9 +9,8 @@ set(AP_SOURCES
     ${AP_DIR}/Source/PluginProcessor.cpp
     ${AP_DIR}/Source/PluginEditor.cpp
     ${AP_DIR}/Source/Presets.cpp
-    ${AP_DIR}/Source/ui/MetalKnob.cpp
     ${AP_DIR}/Source/ui/Visualizer.cpp
-    ${AP_DIR}/Source/ui/Widgets.cpp)
+    ${SUITE_UI_SOURCES})
 
 set(AP_DEFS ${SUITE_DEFS} SUITE_REPOSITORY="${SUITE_REPOSITORY}")
 # the snapshot / test executables compile the plug-in sources outside the plug-in wrapper
@@ -42,9 +40,9 @@ juce_add_plugin(TheAntiparticle
 # (both names: Xcode builds the library under XCODE_ATTRIBUTE_PRODUCT_NAME, the link lines use OUTPUT_NAME)
 set_target_properties(TheAntiparticle PROPERTIES OUTPUT_NAME "TheAntiparticle_SharedCode" XCODE_ATTRIBUTE_PRODUCT_NAME "TheAntiparticle_SharedCode")
 target_sources(TheAntiparticle PRIVATE ${AP_SOURCES})
-target_include_directories(TheAntiparticle PRIVATE ${AP_DIR}/Source)
+target_include_directories(TheAntiparticle PRIVATE ${AP_DIR}/Source ${CMAKE_SOURCE_DIR})
 target_compile_definitions(TheAntiparticle PUBLIC ${AP_DEFS})
-target_link_libraries(TheAntiparticle PRIVATE AntiparticleData juce::juce_audio_utils juce::juce_dsp
+target_link_libraries(TheAntiparticle PRIVATE AntiparticleData OrreryUiData juce::juce_audio_utils juce::juce_dsp
     juce::juce_recommended_config_flags juce::juce_recommended_lto_flags juce::juce_recommended_warning_flags)
 if(AP_CLAP)
     clap_juce_extensions_plugin(TARGET TheAntiparticle
@@ -54,9 +52,9 @@ endif()
 # Unit tests (DSP + processor):  cmake --build build --target AntiparticleTests, then ctest --test-dir build -C Release
 juce_add_console_app(AntiparticleTests PRODUCT_NAME "AntiparticleTests")
 target_sources(AntiparticleTests PRIVATE ${AP_DIR}/tests/AntiparticleTests.cpp ${AP_SOURCES})
-target_include_directories(AntiparticleTests PRIVATE ${AP_DIR}/Source)
+target_include_directories(AntiparticleTests PRIVATE ${AP_DIR}/Source ${CMAKE_SOURCE_DIR})
 target_compile_definitions(AntiparticleTests PRIVATE ${AP_APP_DEFS})
-target_link_libraries(AntiparticleTests PRIVATE AntiparticleData juce::juce_audio_utils juce::juce_dsp
+target_link_libraries(AntiparticleTests PRIVATE AntiparticleData OrreryUiData juce::juce_audio_utils juce::juce_dsp
     juce::juce_recommended_config_flags)
 add_test(NAME AntiparticleTests COMMAND AntiparticleTests)
 
@@ -64,9 +62,9 @@ if(AP_TOOLS)
     # Editor snapshot (PNG) for the visual comparison with the reference
     juce_add_console_app(AntiparticleSnapshot PRODUCT_NAME "AntiparticleSnapshot")
     target_sources(AntiparticleSnapshot PRIVATE ${AP_DIR}/tools/Snapshot.cpp ${AP_SOURCES})
-    target_include_directories(AntiparticleSnapshot PRIVATE ${AP_DIR}/Source)
+    target_include_directories(AntiparticleSnapshot PRIVATE ${AP_DIR}/Source ${CMAKE_SOURCE_DIR})
     target_compile_definitions(AntiparticleSnapshot PRIVATE ${AP_APP_DEFS})
-    target_link_libraries(AntiparticleSnapshot PRIVATE AntiparticleData juce::juce_audio_utils juce::juce_dsp
+    target_link_libraries(AntiparticleSnapshot PRIVATE AntiparticleData OrreryUiData juce::juce_audio_utils juce::juce_dsp
         juce::juce_recommended_config_flags)
 
     # Offline renders through our own processor with every DSP constant open to change (fitting, null tests), and a
@@ -74,9 +72,9 @@ if(AP_TOOLS)
     foreach(t ApRender ApRenderDev)
         juce_add_console_app(${t} PRODUCT_NAME "${t}")
         target_sources(${t} PRIVATE ${AP_DIR}/tools/ApRender.cpp ${AP_SOURCES})
-        target_include_directories(${t} PRIVATE ${AP_DIR}/Source)
+        target_include_directories(${t} PRIVATE ${AP_DIR}/Source ${CMAKE_SOURCE_DIR})
         target_compile_definitions(${t} PRIVATE ${AP_APP_DEFS})
-        target_link_libraries(${t} PRIVATE AntiparticleData juce::juce_audio_utils juce::juce_dsp
+        target_link_libraries(${t} PRIVATE AntiparticleData OrreryUiData juce::juce_audio_utils juce::juce_dsp
             juce::juce_recommended_config_flags)
     endforeach()
 

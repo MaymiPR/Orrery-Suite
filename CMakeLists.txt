@@ -37,6 +37,7 @@ enable_testing()
 
 # The plug-ins. Each is included (not added as a subdirectory), so its build output stays at
 # build/<Target>_artefacts. packaging/plugins.txt lists them for the installers and the release workflow.
+include(shared/shared.cmake)
 include(plugins/TheAntiparticle/plugin.cmake)
 
 if(AP_TOOLS)

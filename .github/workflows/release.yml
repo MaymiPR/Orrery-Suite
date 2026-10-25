@@ -178,7 +178,7 @@ jobs:
           cp packaging/install-linux.sh "$D/" && chmod +x "$D/install-linux.sh"
           cp packaging/INSTALL-Linux.txt "$D/INSTALL.txt"
           cp LICENSE "$D/LICENSE.txt"
-          cp plugins/TheAntiparticle/resources/fonts/OFL-InstrumentSans.txt "$D/"
+          cp shared/resources/fonts/OFL-InstrumentSans.txt "$D/"
           tar -czf "dist/$D.tar.gz" "$D"
 
       - uses: actions/upload-artifact@v6

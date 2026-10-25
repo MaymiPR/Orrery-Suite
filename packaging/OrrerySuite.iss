@@ -57,7 +57,7 @@ Name: "custom"; Description: "Choose plug-ins and formats"; Flags: iscustom
 
 [Files]
 Source: "..\LICENSE"; DestDir: "{app}"; DestName: "LICENSE.txt"; Flags: ignoreversion
-Source: "..\plugins\TheAntiparticle\resources\fonts\OFL-InstrumentSans.txt"; DestDir: "{app}"; Flags: ignoreversion
+Source: "..\shared\resources\fonts\OFL-InstrumentSans.txt"; DestDir: "{app}"; Flags: ignoreversion
 
 [Icons]
 Name: "{group}\Uninstall Orrery Suite"; Filename: "{uninstallexe}"

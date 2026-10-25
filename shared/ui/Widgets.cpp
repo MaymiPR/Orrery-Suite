@@ -1,14 +1,14 @@
 #include "Widgets.h"
-#include "BinaryData.h"
+#include "OrreryUiData.h"
 
 using namespace juce;
 
-namespace ap
+namespace orrery
 {
 Font theme::font (float emPx)
 {
-    static const auto face = Typeface::createSystemTypefaceFor (BinaryData::InstrumentSansRegular_ttf,
-                                                                BinaryData::InstrumentSansRegular_ttfSize);
+    static const auto face = Typeface::createSystemTypefaceFor (OrreryUiData::InstrumentSansRegular_ttf,
+                                                                OrreryUiData::InstrumentSansRegular_ttfSize);
     return Font (FontOptions (face).withPointHeight (emPx));
 }
 

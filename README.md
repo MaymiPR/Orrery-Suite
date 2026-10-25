@@ -132,4 +132,4 @@ suite's version; [CHANGELOG.md](CHANGELOG.md) lists what changed in each.
 ## License
 
 [AGPL-3.0](LICENSE). The Antiparticle's interface font, Instrument Sans, is under the
-[SIL Open Font License 1.1](plugins/TheAntiparticle/resources/fonts/OFL-InstrumentSans.txt).
+[SIL Open Font License 1.1](shared/resources/fonts/OFL-InstrumentSans.txt).
