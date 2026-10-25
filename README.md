@@ -55,7 +55,7 @@ check that a download is the published one.
 | Orrery plug-in | Modelled on | Status |
 |---|---|---|
 | **[The Antiparticle](plugins/TheAntiparticle)** | Cradle The God Particle: mix-bus EQ, multiband character and limiter | released: close, not a null on every material (see below) |
-| **[Scorpius](plugins/Scorpius)** | Cradle Orion: drum-bus drive, harmonics, compression, lift, harmonic EQ and parallels | in progress: research ([RESEARCH.md](plugins/Scorpius/RESEARCH.md)) |
+| **[Scorpius](plugins/Scorpius)** | Cradle Orion: drum-bus drive, harmonics, compression, lift, harmonic EQ and parallels | in progress: editor done, sound next ([RESEARCH.md](plugins/Scorpius/RESEARCH.md)) |
 
 ## The Antiparticle
 

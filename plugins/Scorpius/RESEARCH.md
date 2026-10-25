@@ -191,3 +191,34 @@ letters where the original spaces five). The repo states that it is an independe
 10. Meters and readouts (expected to match The God Particle's measured ones), the deforming circles and the
     visualiser's response to level.
 11. CPU use, as a target to beat.
+
+## Phase 2: GUI measurements (L5 + `tools/RefCapture`, 200 % screenshots)
+
+The editor was measured on 200 % captures of the reference (its state's `prefs.uiScaling` set to 2 with
+`nulltest/orionstate.py`, which edits any value of the state by its path) with `tools/measure_ui.py` (filled boxes,
+outlines, silver regions and their centres) and `tools/measure_text.py` (every word's box), then compared region by
+region with our own snapshots (`tools/compare_ui.py`, `ScorpiusSnapshot`). Findings:
+- The top bar is The God Particle's, with `Compare` and its A / B switch where that one has `Sidechain`; the window is
+  888 × 403.5 design px (403 at 100 %).
+- Columns divide at x 86, 175, 424, 608, 801. Power buttons are 72 × 23.5 (the parallels' 38 wide) at y 41.5; the
+  selectors are rows of 22.5 px stacked 0.5 apart, each outlined on its own; labels sit on baseline 263.5 (upper EQ row
+  192.5, freq / mode 194), mint whether their section runs or not.
+- The six column knobs are one size (r ≈ 20.1), the plate knobs are The God Particle's (r 25.06). Knob centres were
+  taken from their silver regions, corrected as on The God Particle's knobs (known exactly), then checked against our
+  snapshot to 0.1 px.
+- I/O meters as The God Particle's, lower: LEDs on a 4 px pitch from y 258, readouts at x 30.5 / 60.5 (output 827.5 /
+  857.5); the input target is narrower (lines x 36 … 54) and higher (y 100.5 … 120).
+- The compression readout shows a reduction as "- 3.6" (a gap after the minus) and rest as "0.0". The sparks, the two
+  circles and the readout are not drawn while their module is off.
+- The harmonic EQ's curve (drawn while the EQ is on): a log axis from 40 Hz at the left edge to about 24 kHz over
+  x 432 … 600, 6 dB = 50 px above a baseline at y 124; the bands are drawn about 1.4 octaves wide at half height.
+- Faders: caps 37 × 22.5, brushed metal with a radial sheen and a groove, travelling from y 237.25 (level 0) to 85.25
+  (level 1); the track is mint below the cap while the path is on.
+- The plate grille: 19 staggered rows (21 / 20 dots), a halftone of an arch: the dot area follows
+  0.043 + 0.932 exp(−((d − 239.3) / 26.3)²) of the largest, d the distance from (300, 587.8), fitted to every dot.
+- The stripe under the columns is black with a soft grey floor (y 291 … 297), a faint line at its foot and a cyan glint
+  at its left end; particles stream through it while audio plays (to be matched in the UI rounds).
+- Settings: one row, particle animation ON / OFF, in a 420 × 254 box.
+
+Ours, not the reference's: the drive colour and the compression mode are host parameters (`Drive Color`,
+`Comp Mode`), the window can be resized from its corner, and the maker's mark is the Orrery Suite mark.

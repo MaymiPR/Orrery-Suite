@@ -39,6 +39,7 @@ enable_testing()
 # build/<Target>_artefacts. packaging/plugins.txt lists them for the installers and the release workflow.
 include(shared/shared.cmake)
 include(plugins/TheAntiparticle/plugin.cmake)
+include(plugins/Scorpius/plugin.cmake)
 
 if(AP_TOOLS)
     juce_add_console_app(ParamDump PRODUCT_NAME "ParamDump")

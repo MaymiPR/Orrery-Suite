@@ -21,6 +21,7 @@ public:
     void paint (juce::Graphics&) override;
     void mouseUp (const juce::MouseEvent& e) override { if (contains (e.getPosition()) && onClick) onClick(); }
     bool active = true;
+    float boxHeight = 24.5f;         // The God Particle's buttons; Orion's are 23.5 tall
     std::function<void()> onClick;
 };
 

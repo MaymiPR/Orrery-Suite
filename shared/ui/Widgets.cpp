@@ -33,7 +33,7 @@ static void powerIcon (Graphics& g, Point<float> c, float r, Colour col, float s
 
 void PowerButton::paint (Graphics& g)
 {
-    const auto b = getLocalBounds().toFloat().withHeight (24.5f);
+    const auto b = getLocalBounds().toFloat().withHeight (boxHeight);
     if (active)
     {
         g.setColour (theme::mint.brighter (isMouseOver() ? 0.06f : 0.0f));
