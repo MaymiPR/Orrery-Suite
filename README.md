@@ -96,7 +96,7 @@ plug-in's fitting helpers. The Windows installer is made with Inno Setup 6:
 
 ```bash
 pwsh packaging/make_iss_include.ps1 build
-iscc /DAppVersion=1.0.0 packaging/OrrerySuite.iss
+iscc /DAppVersion=1.0.1 packaging/OrrerySuite.iss
 ```
 
 ## Repository layout

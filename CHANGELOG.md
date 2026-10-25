@@ -1,5 +1,18 @@
 # Changelog
 
+## 1.0.1
+
+Fixes in **The Antiparticle**:
+
+- **About no longer crashes the host.** Choosing "About The Antiparticle" from the logo's menu could crash the DAW;
+  the menu now closes safely before the panel opens. The About panel is also larger, so its text has room.
+- **The I/O readouts read like The God Particle's,** measured frame by frame from films of the original:
+  - **RMS readout:** live instead of held. It updates about four times a second and shows the RMS + 1.5 dB, as the
+    original does. It falls back to -inf when the audio stops, on the input and the output.
+  - **Peak readout:** held until clicked, as before, but it now samples the level about every 46 ms as the original
+    does. Very short spikes read lower than the sample peak, as they do on the original.
+  - Below -96 dB a readout shows -inf.
+
 ## 1.0.0
 
 The first release of Orrery Suite, with its first plug-in, **The Antiparticle**: a recreation of Cradle's The God

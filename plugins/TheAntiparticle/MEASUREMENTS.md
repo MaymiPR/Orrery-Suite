@@ -668,13 +668,27 @@ nulls the band closely):
 - low: −2.8
 - limiter: −0.1, −1.4, −3.0 for the same bursts with default settings
 
-**I/O RMS readout: still open.** Recorded data:
-- It is live, not held.
-- It reads closer to peak than RMS: a −6 dBFS sine reads −6.9 to −7.2 below 1 kHz, −8.1 at 2–5 kHz and 20 kHz,
-  and −7.4 at 8 and 16 kHz.
-- Noise at RMS −12 dB reads −10.4.
+**I/O readouts** (`readout_probe.py`: tones, noise, bursts, steps, pulse trains, DC, repeated runs, a fade and
+30 s of music, each filmed with RefCapture; `readouts.py` reads every frame's eight readouts):
+- **RMS readout:** live, not held. It updates every 0.231 s and shows the plain RMS (a one-pole on x², 89 ms) +
+  1.5 dB. In silence it falls exactly 11.27 dB per update (48.7 dB/s), and below −96 dB it reads −inf (−96.0 is
+  shown, the next step is −inf). It rises within one update (the second update after an onset is within 0.1 dB).
+  - Fitted on music, the model agrees to 0.5 dB rms. On steady probes it is within 0.55 dB rms; the reference itself
+    spreads ±0.3 dB between identical runs (a −6 dBFS 1 kHz tone read −7.2, −7.3, −7.3 and −7.7).
+  - Signals of constant magnitude read higher: a fs/4 tone at 45° and DC read +2.1 … +2.6 dB over their RMS. Sparse
+    pulse trains read only +0.3 … +0.6 dB over theirs. This was not modelled.
+- **Peak readout:** the sample peak, held until clicked, but sampled. About every 46 ms it takes the latest block's
+  peak, so peaks in the blocks in between are never seen.
+  - Music with +2.12 dBFS overs read +0.9: that is a 480-sample block whose peak was +0.93.
+  - The onset spike of a tone at the output (−0.1 dBFS, steady peak −2.6) read −1.3.
+  - Every output reading matched a block peak, with blocks offset about 230 samples from the host's. The input
+    readings matched no block of the raw input at any offset, so the input meter may see a slightly filtered
+    signal; sines read their peak exactly.
+- Both readouts are after the gains: the input readouts after the input gain, the output readouts after the
+  output gain (−12 dBFS in, +6 / −6 dB gains: input −6.0, output peak −7.3).
+- Values are rounded to 0.1 dB (−2.67 shows −2.7), and a positive peak turns red.
 
-The short-term LUFS mode and the peak readouts' hold and reset were not measured yet.
+The short-term LUFS mode was not measured yet.
 
 ## 7. Oversampling (`measure_oversampling.py`)
 

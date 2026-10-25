@@ -189,24 +189,26 @@ void Logo::paint (Graphics& g)
 }
 
 InfoDialog::InfoDialog (String t, std::vector<std::pair<String, String>> r)
-    : Dialog (std::move (t), { 214.0f, 56.0f, 460.0f, 248.0f }, true), rows (std::move (r)) {}
+    : Dialog (std::move (t), { 154.0f, 46.0f, 580.0f, 288.0f }, true), rows (std::move (r)) {}
 
 void InfoDialog::paint (Graphics& g)
 {
     Dialog::paint (g);
-    float y = box.getY() + 54.0f;
+    constexpr float lineH = 16.5f, rowGap = 23.0f;
+    float y = box.getY() + 58.0f;
     for (auto& [label, value] : rows)
     {
-        if (label.isEmpty() && value.isEmpty()) { y += 8.0f; continue; }
+        if (label.isEmpty() && value.isEmpty()) { y += 9.0f; continue; }
         g.setFont (theme::font (11.5f));
         g.setColour (Colour (0xff8c8c8c));
-        theme::textAt (g, label, box.getX() + 20.0f, y);
+        theme::textAt (g, label, box.getX() + 24.0f, y);
         g.setColour (theme::text);
         GlyphArrangement ga;
-        ga.addJustifiedText (theme::font (11.5f), value, box.getX() + 112.0f, y, box.getWidth() - 132.0f, Justification::left);
+        ga.addJustifiedText (theme::font (11.5f), value, box.getX() + 124.0f, y, box.getWidth() - 152.0f, Justification::left,
+                             lineH - theme::font (11.5f).getHeight());
         ga.draw (g);
-        const int lines = jmax (1, (int) std::round ((ga.getBoundingBox (0, -1, true).getBottom() - y + 9.0f) / 15.0f));
-        y += 15.0f * (float) (lines - 1) + 19.0f;
+        const int lines = jmax (1, (int) std::round ((ga.getBoundingBox (0, -1, true).getBottom() - y + 9.0f) / lineH));
+        y += lineH * (float) (lines - 1) + rowGap;
     }
 }
 
@@ -227,7 +229,9 @@ int DropList::rowAt (int y) const
 void DropList::mouseUp (const MouseEvent& e)
 {
     const int r = rowAt (e.y);
-    if (r >= 0 && onPick) onPick (r);
+    // called through a copy: the callback usually closes (deletes) this list, which would free it, and what it
+    // captured, while it is still running
+    if (r >= 0 && onPick) { auto pick = onPick; pick (r); }
 }
 
 void DropList::paint (Graphics& g)

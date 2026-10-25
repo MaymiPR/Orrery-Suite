@@ -13,16 +13,18 @@ namespace ap
 // to the fast peak, a held peak LED; the readouts beside it.
 struct LevelTap
 {
-    std::atomic<float> peak { 0.0f };     // highest sample since the editor last took it (linear): peak readout
-    std::atomic<float> rms { 0.0f };      // latest RMS for the readout (linear, AES: a sine reads its peak)
+    std::atomic<float> peak { 0.0f };     // highest sample since the editor last took it (linear): is audio playing?
+    std::atomic<float> blockPeak { 0.0f };// the latest block's sample peak (linear): the peak readout samples it
+    std::atomic<float> meanSquare { 0.0f };// latest mean square for the RMS readout (plain; one-pole on x^2, 89 ms)
     std::atomic<float> bar { 0.0f };      // latest RMS for the green bar (linear, plain; one-pole on x^2, 150 ms)
     std::atomic<float> fast { 0.0f };     // highest fast peak (|x| follower, 1 ms / 50 ms) since the editor took it
-    void push (float blockPeak, float blockRms, float blockBar, float blockFast)
+    void push (float blockPk, float blockMeanSquare, float blockBar, float blockFast)
     {
         auto raise = [] (std::atomic<float>& a, float v) { float p = a.load(); while (v > p && ! a.compare_exchange_weak (p, v)) {} };
-        raise (peak, blockPeak);
+        raise (peak, blockPk);
         raise (fast, blockFast);
-        rms.store (blockRms);
+        blockPeak.store (blockPk);
+        meanSquare.store (blockMeanSquare);
         bar.store (blockBar);
     }
     float takePeak() { return peak.exchange (0.0f); }

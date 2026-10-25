@@ -85,7 +85,8 @@ void AntiparticleProcessor::prepareToPlay (double sampleRate, int block)
     meterBuf.setSize (2, jmax (1, block));
     const auto& t = ap::dsp::tuning();
     engine.prepare (sampleRate, block, t.forceOversampling > 0 ? (int) t.forceOversampling : ap::Settings::get().oversampling(), t);
-    rmsCoef = (float) std::exp (-1.0 / (0.3 * sampleRate));       // placeholder readout RMS window (MEASUREMENTS.md 6: open)
+    // the RMS readout's mean square (MEASUREMENTS.md 6): in silence the readout falls 48.7 dB/s
+    rmsCoef = (float) std::exp (-1.0 / (0.089 * sampleRate));
     // the meters as fitted to the reference's LEDs on a pink-noise ramp (MEASUREMENTS.md 6): the green bar is the plain
     // RMS over 150 ms, the mint run and the input target follow a fast peak (1 ms attack, 50 ms release)
     barCoef = (float) std::exp (-1.0 / (0.15 * sampleRate));
@@ -114,7 +115,7 @@ void AntiparticleProcessor::measure (const AudioBuffer<float>& b, ap::LevelTap& 
             fastMax = jmax (fastMax, fast);
         }
         st[0] = ms; st[1] = bar; st[2] = fast;
-        taps[c]->push (pk, std::sqrt (2.0f * ms), std::sqrt (bar), fastMax);
+        taps[c]->push (pk, ms, std::sqrt (bar), fastMax);
     }
 }
 

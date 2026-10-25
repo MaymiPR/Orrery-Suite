@@ -28,7 +28,8 @@ public:
 private:
     struct Meter                                     // one channel of an I/O meter as drawn
     {
-        float peakHoldDb = -200.0f, rmsHoldDb = -200.0f;   // the readouts (held until clicked)
+        float peakHoldDb = -200.0f;                         // peak readout (held until clicked)
+        float rmsDb = -200.0f, rmsMeanSquare = 0.0f;        // RMS readout (live) and the mean square it shows
         float barDb = -200.0f;                              // green LED bar (RMS, 150 ms)
         float fastDb = -200.0f;                             // top of the mint run (fast peak); drives the input target
         float rawPeakDb = -200.0f;                          // this frame's sample peak (is audio playing?)
@@ -54,6 +55,17 @@ private:
     void showAboutMenu();
     void showDialog (std::unique_ptr<ap::Dialog>);
     void updateMeter (Meter&, ap::LevelTap&);
+    void sampleReadouts();
+
+    // the I/O readouts update on the reference's own clock (MEASUREMENTS.md 6), apart from the 30 Hz repaint: every
+    // 46 ms the peak readout takes the latest block's peak, every fifth time the RMS readout takes the mean square
+    struct ReadoutClock : juce::Timer
+    {
+        explicit ReadoutClock (AntiparticleEditor& e) : ed (e) {}
+        void timerCallback() override { ed.sampleReadouts(); }
+        AntiparticleEditor& ed;
+    } readoutClock { *this };
+    int readoutTicks = 0, readoutBlocks = 0;
 
     void paintTopBar (juce::Graphics&);
     void paintPanel (juce::Graphics&);

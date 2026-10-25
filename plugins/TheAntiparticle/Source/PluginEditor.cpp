@@ -37,7 +37,7 @@ Rectangle<float> eqCell (float cy) { return { 133.375f - 43.5f, cy - 20.5f, 87.0
 
 String dbText (float db)
 {
-    if (db <= -100.0f) return "-inf";
+    if (db < -96.0f) return "-inf";         // the reference shows -96.0 and, one step lower, -inf
     return String (db, 1);
 }
 
@@ -167,10 +167,12 @@ AntiparticleEditor::AntiparticleEditor (AntiparticleProcessor& p) : AudioProcess
     grip->setAlwaysOnTop (true);
     setUiScale (proc.uiScale.load());
     startTimerHz (30);
+    readoutClock.startTimer (46);
 }
 
 AntiparticleEditor::~AntiparticleEditor()
 {
+    readoutClock.stopTimer();
     content.removeMouseListener (&hoverTracker);
     ap::Settings::get().removeChangeListener (this);
     for (auto* pid : { ap::id::eqBypass, ap::id::characterBypass, ap::id::limiterBypass, ap::id::character, ap::id::inputGain, ap::id::outputGain })
@@ -328,13 +330,37 @@ void AntiparticleEditor::endLink (ap::MetalKnob& src)
 
 void AntiparticleEditor::updateMeter (Meter& m, ap::LevelTap& tap)
 {
-    const float pk = toDb (tap.takePeak());
-    const float rms = toDb (tap.rms.load());
-    m.rawPeakDb = pk;
-    m.peakHoldDb = jmax (m.peakHoldDb, pk);
-    m.rmsHoldDb = jmax (m.rmsHoldDb, rms);
+    m.rawPeakDb = toDb (tap.takePeak());
     m.barDb = toDb (tap.bar.load());
     m.fastDb = toDb (tap.takeFast());
+}
+
+// The I/O readouts as the reference updates them (MEASUREMENTS.md 6), measured with RefCapture films read frame by
+// frame (nulltest/readouts.py):
+// - peak: every 46 ms it takes the latest block's sample peak and holds the highest (until clicked); peaks in the
+//   blocks in between are not seen, so a short spike reads lower than the sample peak (music with +2.1 dBFS overs
+//   reads +0.9)
+// - RMS: live, every fifth time (231 ms): the plain RMS (one-pole on x^2, 89 ms) + 1.5 dB; in silence it falls the
+//   same 11.27 dB per update (also when the host stops calling the plug-in), and below -96 dB it reads -inf
+void AntiparticleEditor::sampleReadouts()
+{
+    if (frozen) return;
+    Meter* meters[4] { &inMeter[0], &inMeter[1], &outMeter[0], &outMeter[1] };
+    ap::LevelTap* taps[4] { &proc.inL, &proc.inR, &proc.outL, &proc.outR };
+    for (int i = 0; i < 4; ++i)
+        meters[i]->peakHoldDb = jmax (meters[i]->peakHoldDb, toDb (taps[i]->blockPeak.load()));
+    if (++readoutTicks < 5) return;
+    readoutTicks = 0;
+    const int blocks = proc.blocksProcessed.load();
+    const bool running = blocks != readoutBlocks;
+    readoutBlocks = blocks;
+    constexpr float silenceStep = 0.0747f;          // 10^(-11.27 / 10): 231 ms of the 89 ms one-pole
+    for (int i = 0; i < 4; ++i)
+    {
+        auto& m = *meters[i];
+        m.rmsMeanSquare = running ? taps[i]->meanSquare.load() : m.rmsMeanSquare * silenceStep;
+        m.rmsDb = m.rmsMeanSquare > 1.0e-20f ? 10.0f * std::log10 (m.rmsMeanSquare) + 1.5f : -200.0f;
+    }
 }
 
 void AntiparticleEditor::timerCallback()
@@ -362,8 +388,8 @@ void AntiparticleEditor::timerCallback()
 void AntiparticleEditor::setTestLevels (float inDb, float outDb, bool audio)
 {
     frozen = true;
-    for (auto& m : inMeter) { m.barDb = inDb - 3.0f; m.fastDb = inDb; m.peakHoldDb = inDb; m.rmsHoldDb = inDb - 3.0f; }
-    for (auto& m : outMeter) { m.barDb = outDb - 3.0f; m.fastDb = outDb; m.peakHoldDb = outDb; m.rmsHoldDb = outDb - 3.0f; }
+    for (auto& m : inMeter) { m.barDb = inDb - 3.0f; m.fastDb = inDb; m.peakHoldDb = inDb; m.rmsDb = inDb - 1.5f; }
+    for (auto& m : outMeter) { m.barDb = outDb - 3.0f; m.fastDb = outDb; m.peakHoldDb = outDb; m.rmsDb = outDb - 1.5f; }
     if (audio) visualizer.advance (0.0f, characterOn ? jlimit (0.0f, 1.0f, characterValue / 0.5f) : 0.0f, true,
                                    ap::Settings::get().particleStyle() == ap::Settings::Particles::antiparticle);
     content.repaint();
@@ -380,12 +406,12 @@ void AntiparticleEditor::Content::paint (Graphics& g)
 
 void AntiparticleEditor::Content::mouseDown (const MouseEvent& e)
 {
-    // clicking a readout resets the held readouts of that meter
+    // clicking a readout resets the held readouts of that meter (the RMS readout is live)
     const auto p = e.position;
     if (p.y > 40.0f && p.y < 84.0f)
     {
-        if (p.x < columnX[0]) for (auto& m : ed.inMeter) m.peakHoldDb = m.rmsHoldDb = -200.0f;
-        if (p.x > columnX[4]) for (auto& m : ed.outMeter) m.peakHoldDb = m.rmsHoldDb = -200.0f;
+        if (p.x < columnX[0]) for (auto& m : ed.inMeter) m.peakHoldDb = -200.0f;
+        if (p.x > columnX[4]) for (auto& m : ed.outMeter) m.peakHoldDb = -200.0f;
         if (p.x > columnX[3] && p.x < columnX[4]) for (auto& v : ed.limGrHold) v = 0.0f;
         repaint();
     }
@@ -465,7 +491,7 @@ void AntiparticleEditor::paintIoMeter (Graphics& g, float x0, const Meter (&m)[2
         g.setColour (m[c].peakHoldDb > 0.0f ? theme::clip : theme::mint);
         g.drawText (dbText (m[c].peakHoldDb), Rectangle<float> (centres[c] - 20.0f, 44.5f, 40.0f, 16.0f), Justification::centredTop, false);
         g.setColour (theme::mint);
-        g.drawText (dbText (m[c].rmsHoldDb), Rectangle<float> (centres[c] - 20.0f, 67.5f, 40.0f, 16.0f), Justification::centredTop, false);
+        g.drawText (dbText (m[c].rmsDb), Rectangle<float> (centres[c] - 20.0f, 67.5f, 40.0f, 16.0f), Justification::centredTop, false);
     }
 
     const float (&lx)[2] = ledX[x0 > 0.0f ? 1 : 0];
@@ -980,7 +1006,7 @@ void AntiparticleEditor::showAboutMenu()
                 { "Built with", "JUCE, the VST3 SDK and CLAP; Instrument Sans (SIL OFL). Their licenses come with it" },
                 { "Source", repository.fromFirstOccurrenceOf ("https://", false, false) },
                 { {}, {} },
-                { "Note", "An independent project: not made, endorsed or supported by Cradle or Jaycen Joshua. The God Particle is a trademark of its owner." } }));
+                { "Note", "An independent project, not affiliated with Cradle. The God Particle is a trademark of its owner." } }));
         }
         else if (row == 2) URL (repository).launchInDefaultBrowser();
         else if (row == 3) URL (repository + "/issues/new/choose").launchInDefaultBrowser();
