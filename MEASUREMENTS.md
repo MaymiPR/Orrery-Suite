@@ -422,6 +422,21 @@ again (1.9 dB, ratio 2.2, release 138 ms).
 | Full chain, drums peaking at −1 dBFS | −50.0 | −56.5 |
 | Character only, pink −10, 100 % | −47.7 | −44.6 |
 
+**The mid band refitted the same way** (`fit_music.py mid N --loud --track --relative --fixed`). The mid band's laws
+had been fitted on the synthetic music set alone, with the high band held at an old broadband law. Refitted at every
+amount node with the loud signals and the track excerpts, against the current high-band laws (`--fixed`) and with each
+signal weighed equally in dB, they change little: at 100 % ratio 2.40 → 2.28, mix 0.703 → 0.716. The stress median
+went from −62.5 to −63.3 dB (mean change −1.2 dB; quiet music −20 dBFS −77.3 → −85.3, wide stereo −64.0 → −67.3, music
+at 0 dBFS −53.8 → −55.3; the worst change +1.3 dB, music −10 with the low EQ at +6). The track at the defaults moved
+from −43.7 to −43.9 dB.
+
+**The high band's detector hears the band's lower end more quietly than ours** (`staticn.py` at 3 – 16 kHz). Steady
+tone staircases at each frequency, each read as a level shift against the 8 kHz curve: the reference's curves at 6 – 16
+kHz are pure shifts of it (shape error under 0.01 dB), so the frequency acts on the detector's level only. Against the
+reference, ours hears 4 kHz 0.44 dB louder, 4.5 kHz 0.26, 5 kHz 0.09, and 6 – 16 kHz 0.11 – 0.18 dB quieter. So the
+reference's detector has a steeper low edge than its shaper (and than ours), about 0.6 dB at 4 kHz. A detector-only
+highpass without refitting the law (`detedge.py`) changed the program nulls by under 1 dB either way.
+
 ## 4. Limiter (`measure_limiter.py`)
 
 | Property | Measured |

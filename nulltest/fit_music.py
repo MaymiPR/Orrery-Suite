@@ -10,6 +10,8 @@ writes bandlaw_music[_tp]_loud[_shp].json
 read through the measured shaper), its error in nepers weighed by W; writes ..._static.json
 --track: two 6 s excerpts of the demo track (reference/demo_future_house.wav, 30 s and 44 s, resampled to 48 kHz) too;
 writes ..._track.json
+--dethp: (high band) a first-order highpass in front of the detector only, its corner fitted too (detedge.py)
+--fixed FILE: the other two bands from that law file (as the plug-in's table has them), not the defaults
 --shaper: the shaper's k and dry share fixed at the values read directly with anti-phase tones (shapeside.py,
 measurements/character/shaper_<band>.txt); the other bands from bandlaw_final.json; writes bandlaw_music_shp.json"""
 import json, os, sys
@@ -20,7 +22,8 @@ import tgp, charsim as C, ident as I, nulltest as N, stress as S, ident_signals 
 D = os.path.join(tgp.ROOT, 'measurements', 'character')
 OUT = os.path.join(D, ('bandlaw_music_tp' if '--truepeak' in sys.argv else 'bandlaw_music') + ('_rel' if '--relative' in sys.argv else '')
                    + ('_loud' if '--loud' in sys.argv else '') + ('_shp' if '--shaper' in sys.argv else '')
-                   + ('_static' if '--static' in sys.argv else '') + ('_track' if '--track' in sys.argv else '') + '.json')
+                   + ('_static' if '--static' in sys.argv else '') + ('_track' if '--track' in sys.argv else '')
+                   + ('_fixed' if '--fixed' in sys.argv else '') + ('_dethp' if '--dethp' in sys.argv else '') + '.json')
 SHAPER = '--shaper' in sys.argv
 
 
@@ -79,13 +82,19 @@ def other_laws(band, node, table, broad):
 
 if __name__ == '__main__':
     band, node = sys.argv[1], float(sys.argv[2]); node = int(node) if node == int(node) else node
-    skip = {sys.argv.index('--static') + 1} if '--static' in sys.argv else set()
+    skip = {sys.argv.index(o) + 1 for o in ('--static', '--fixed') if o in sys.argv}
     starts = [a for i, a in enumerate(sys.argv) if i >= 3 and i not in skip and not a.startswith('--')] or ['bandlaw_sd.json', 'bandlaw.json', 'bandlaw_lowrich.json']
     table = json.load(open(os.path.join(D, 'bandlaw_final.json' if SHAPER else 'bandlaw_sd.json'))); broad = json.load(open(os.path.join(D, 'fit_char.json')))
     if os.path.exists(OUT): table.update(json.load(open(OUT)))       # laws already fitted this way take precedence
     xs = signals(band)
     refs = tgp.render_many([dict(x=x.astype(np.float32), norm={**tgp.CHAR_ONLY, 'Character': node / 8}, raw=True) for x in xs], 'ref', cache=True)
     laws = other_laws(band, node, table, broad)
+    if '--fixed' in sys.argv:
+        ft = json.load(open(os.path.join(D, sys.argv[sys.argv.index('--fixed') + 1])))
+        for b in M.NAMES:
+            if b != band:
+                laws[b] = dict(F.law_at(ft, b, node)); laws[b]['peak'] = 1 if b == 'high' else laws[b].get('peak', 0)
+        print('fixed bands from', sys.argv[sys.argv.index('--fixed') + 1], flush=True)
     bi = M.NAMES.index(band); k17 = int(round(node * 2))
     data = []
     for x, r in zip(xs, refs):
@@ -97,6 +106,7 @@ if __name__ == '__main__':
     peak = 0 if band != 'high' else (2 if '--truepeak' in sys.argv else 1)
     if band == 'high':        # the high band also has a slow second detector (the broadband fit's structure)
         KEYS = KEYS + ['attack2', 'release2', 'slowOffset']; LO = LO + [1.0, 1.0, -60.0]; HI = HI + [20000.0, 20000.0, 20.0]
+        if '--dethp' in sys.argv: KEYS = KEYS + ['detHp']; LO = LO + [2.0]; HI = HI + [6000.0]
     fixed_law = {}
     if SHAPER:              # k and shapeDry measured, not fitted
         kk, dd = measured_shaper(band, node); fixed_law = dict(k=kk, shapeDry=dd, shapeMid=measured_shape_mid(band, node))
@@ -143,7 +153,7 @@ if __name__ == '__main__':
             tb = json.load(open(os.path.join(D, sf)))
             st = F.law_at(tb, band, node) if f'{band}|{node}' not in tb else tb[f'{band}|{node}']
         if not st: continue
-        q0 = [min(max(st.get(k, 0.0 if k == 'shapeDry' else (LO[i] + HI[i]) / 2), LO[i]), HI[i]) for i, k in enumerate(KEYS)]
+        q0 = [min(max(st.get(k, 0.0 if k == 'shapeDry' else 1500.0 if k == 'detHp' else (LO[i] + HI[i]) / 2), LO[i]), HI[i]) for i, k in enumerate(KEYS)]
         if RELATIVE: wts[:] = 1 / np.sqrt(np.array(per_signal(q0)))
         print(band, node, 'start', sf, 'mean residual %.2f dB' % score(q0), 'per signal', ' '.join('%.1f' % (10 * np.log10(v)) for v in per_signal(q0)), flush=True)
         r = least_squares(resid, q0, bounds=(LO, HI), x_scale='jac', max_nfev=300)
