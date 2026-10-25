@@ -29,7 +29,7 @@ public:
         // sigma 4.4 samples at 44.1 kHz, 3.5 at 48, 1.3 - 1.8 above), so it is no fixed-length kernel scaled with the rate.
         struct PerRate { double rate; int window, release, taps; double beta; };
         constexpr PerRate perRate[] { { 44100, 19, 20, 28, 10.0 }, { 48000, 21, 22, 24, 12.0 }, { 88200, 39, 40, 12, 11.0 },
-                                      { 96000, 43, 44, 14, 20.0 }, { 192000, 86, 87, 10, 16.0 } };
+                                      { 96000, 43, 44, 12, 14.5 }, { 192000, 86, 87, 10, 16.0 } };
         double w = t.limWindow * fs / 48000.0, rel = t.limReleaseSteps * fs / 48000.0;
         const PerRate* nearest = &perRate[1];
         for (const auto& pr : perRate)

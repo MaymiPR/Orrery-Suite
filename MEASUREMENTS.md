@@ -430,6 +430,21 @@ went from −62.5 to −63.3 dB (mean change −1.2 dB; quiet music −20 dBFS �
 at 0 dBFS −53.8 → −55.3; the worst change +1.3 dB, music −10 with the low EQ at +6). The track at the defaults moved
 from −43.7 to −43.9 dB.
 
+**The high band refitted again against the new mid laws**, at 100 % and at 125 – 200 % (which had never seen the
+track), each signal weighed equally. The whole track, character only:
+
+| Amount | Before | After |
+|---|---|---|
+| 100 % | −45.7 dB | −46.1 dB |
+| 125 % | −40.1 | −44.0 |
+| 150 % | −39.5 | −42.5 |
+| 175 % | −38.8 | −40.9 |
+| 200 % | −38.9 | −39.4 |
+
+Drums −1 gained 2 – 8 dB at these amounts. Steady pink noise lost 0.4 – 1.5 dB in the fit (in the stress suite pink
+−10 at 150 % −46.2 → −43.0 dB). Stress median −63.3 dB, worst −40.4. A first-order highpass in front of the
+detector, fitted with the law (`--dethp`), went to its lower bound: no filter.
+
 **The high band's detector hears the band's lower end more quietly than ours** (`staticn.py` at 3 – 16 kHz). Steady
 tone staircases at each frequency, each read as a level shift against the 8 kHz curve: the reference's curves at 6 – 16
 kHz are pure shifts of it (shape error under 0.01 dB), so the frequency acts on the detector's level only. Against the
@@ -527,7 +542,7 @@ Kaiser points on the ridge, and a sinc cut off below Nyquist is worse still.
 | 44.1 kHz | 28, 10 | −44.9 dB | −68.2 dB |
 | 48 kHz | 24, 12 | −53.6 | −69.2 |
 | 88.2 kHz | 12, 11 | −39.2 | −52.1 |
-| 96 kHz | 14, 20 | −37.5 | −52.0 |
+| 96 kHz | 12, 14.5 | −37.5 | −56.7 |
 | 192 kHz | 10, 16 | −35.6 | −55.4 |
 
 Signals outside the fit: the whole track, limiter only at 44.1 kHz, −46.3 → −60.8 dB; at 48 kHz pink −6 (5 dB in)

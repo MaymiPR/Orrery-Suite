@@ -1,7 +1,7 @@
 """Why 44.1 kHz nulls worse than 48 kHz: loud drums, pink noise and the demo track at both rates, each stage alone and
 the defaults, with the residual split into the three bands (FFT masks at the crossovers).
 
-    python rate44.py [--tune key=value ...]     (tune: Tuning overrides for our processor, e.g. high.attack.4=0.8)"""
+    python rate44.py [rates ...] [--tune key=value ...]     (tune: Tuning overrides for our processor, e.g. high.attack.8=0.8)"""
 import sys
 import numpy as np
 import tgp, nulltest as N, track as T, trackdiag as TD
@@ -11,7 +11,7 @@ if __name__ == '__main__':
     xt, fst = T.load(T.WAV)
     sigs = {'drums -1': N.sig_drums(-1), 'pink -6': N.sig_noise(-6), 'track 30 s': xt[:, 30 * fst:36 * fst]}
     stages = {'char only': tgp.CHAR_ONLY, 'lim only': tgp.LIM_ONLY, 'defaults': {}}
-    for fs in (44100, 48000):
+    for fs in [int(a) for a in sys.argv[1:] if a.isdigit()] or (44100, 48000):
         pre = 2 * fs
         jobs, names = [], []
         for sn, x in sigs.items():
