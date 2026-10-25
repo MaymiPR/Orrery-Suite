@@ -1,5 +1,8 @@
 <p align="center">
-  <img src="docs/branding/orrery-banner.svg" alt="Orrery Suite" width="100%">
+  <picture>
+    <source media="(prefers-color-scheme: dark)" srcset="docs/branding/orrery-banner-dark.svg">
+    <img src="docs/branding/orrery-banner-light.svg" alt="Orrery Suite: Cradle's mix-bus processors, recreated and null-tested" width="100%">
+  </picture>
 </p>
 
 <p align="center">
