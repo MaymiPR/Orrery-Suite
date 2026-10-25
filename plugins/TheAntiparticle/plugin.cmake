@@ -14,7 +14,7 @@ set(AP_SOURCES
     ${AP_DIR}/Source/ui/Visualizer.cpp
     ${AP_DIR}/Source/ui/Widgets.cpp)
 
-set(AP_DEFS ${NS_DEFS} NS_REPOSITORY="${NS_REPOSITORY}")
+set(AP_DEFS ${SUITE_DEFS} SUITE_REPOSITORY="${SUITE_REPOSITORY}")
 # the snapshot / test executables compile the plug-in sources outside the plug-in wrapper
 set(AP_APP_DEFS ${AP_DEFS} JucePlugin_Name="The Antiparticle" JucePlugin_IsSynth=0 JucePlugin_WantsMidiInput=0
     JucePlugin_ProducesMidiOutput=0 JucePlugin_IsMidiEffect=0 JucePlugin_VersionString="${PROJECT_VERSION}")
@@ -25,7 +25,7 @@ if(APPLE)
 endif()
 # The manufacturer and plug-in codes make the plug-in's identity in hosts (saved projects find it by them): keep them.
 juce_add_plugin(TheAntiparticle
-    COMPANY_NAME "Newton Suite"
+    COMPANY_NAME "Orrery Suite"
     PLUGIN_MANUFACTURER_CODE Antp
     PLUGIN_CODE Atpl
     FORMATS ${formats}
@@ -37,7 +37,7 @@ juce_add_plugin(TheAntiparticle
     EDITOR_WANTS_KEYBOARD_FOCUS FALSE   # the host keeps its transport shortcuts
     VST3_CATEGORIES Fx Dynamics Mastering
     AU_MAIN_TYPE kAudioUnitType_Effect
-    BUNDLE_ID com.newtonsuite.theantiparticle)
+    BUNDLE_ID com.orrerysuite.theantiparticle)
 # MSBuild cannot handle the apostrophe of the product name in the shared-code library's file name
 set_target_properties(TheAntiparticle PROPERTIES OUTPUT_NAME "TheAntiparticle_SharedCode")
 target_sources(TheAntiparticle PRIVATE ${AP_SOURCES})
@@ -47,7 +47,7 @@ target_link_libraries(TheAntiparticle PRIVATE AntiparticleData juce::juce_audio_
     juce::juce_recommended_config_flags juce::juce_recommended_lto_flags juce::juce_recommended_warning_flags)
 if(AP_CLAP)
     clap_juce_extensions_plugin(TARGET TheAntiparticle
-        CLAP_ID "com.newtonsuite.theantiparticle" CLAP_FEATURES audio-effect mastering stereo)
+        CLAP_ID "com.orrerysuite.theantiparticle" CLAP_FEATURES audio-effect mastering stereo)
 endif()
 
 # Unit tests (DSP + processor):  cmake --build build --target AntiparticleTests, then ctest --test-dir build -C Release

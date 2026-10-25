@@ -4,10 +4,10 @@
 
 using namespace juce;
 namespace theme = ap::theme;
-#ifndef NS_REPOSITORY
- #define NS_REPOSITORY "https://github.com/MaymiPR/NewtonSuite"
+#ifndef SUITE_REPOSITORY
+ #define SUITE_REPOSITORY "https://github.com/MaymiPR/OrrerySuite"
 #endif
-static const juce::String repository = NS_REPOSITORY;     // the Newton Suite repository (CMakeLists.txt)
+static const juce::String repository = SUITE_REPOSITORY;     // the Orrery Suite repository (CMakeLists.txt)
 
 namespace
 {
@@ -902,7 +902,7 @@ void AntiparticleEditor::showAboutMenu()
     if (dropList != nullptr) { closePopups(); return; }
     const String version = JucePlugin_VersionString;
     dropList = std::make_unique<ap::DropList>();
-    dropList->setItems ({ { "The Antiparticle v" + version, true }, { "About The Antiparticle" }, { "Newton Suite on GitHub" },
+    dropList->setItems ({ { "The Antiparticle v" + version, true }, { "About The Antiparticle" }, { "Orrery Suite on GitHub" },
                           { "Report an Issue" }, { "License (AGPL-3.0)" } }, 24.0f, true);
     dropList->onPick = [safe = Component::SafePointer<AntiparticleEditor> (this), version] (int row)
     {
@@ -916,7 +916,7 @@ void AntiparticleEditor::showAboutMenu()
                 { "Version", version + (wrapper == AudioProcessor::wrapperType_Undefined ? String() : " (" + format + ")") },
                 { {}, {} },
                 { "What it is", "An open-source mix-bus processor modelled on and measured against Cradle's The God Particle" },
-                { "Part of", "Newton Suite: open-source recreations, null-tested against the originals" },
+                { "Part of", "Orrery Suite: open-source recreations, null-tested against the originals" },
                 { "License", "Free software under the GNU Affero General Public License v3" },
                 { "Built with", "JUCE, the VST3 SDK and CLAP; Instrument Sans (SIL OFL). Their licenses come with it" },
                 { "Source", repository.fromFirstOccurrenceOf ("https://", false, false) },

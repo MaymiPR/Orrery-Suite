@@ -1,41 +1,44 @@
 <p align="center">
-  <img src="docs/branding/newton-banner.svg" alt="Newton Suite" width="100%">
+  <img src="docs/branding/orrery-banner.svg" alt="Orrery Suite" width="100%">
 </p>
 
 <p align="center">
-  <a href="https://github.com/MaymiPR/NewtonSuite/releases/latest"><img alt="Latest release" src="https://img.shields.io/github/v/release/MaymiPR/NewtonSuite?color=b07cff&label=release"></a>
-  <img alt="Formats" src="https://img.shields.io/badge/formats-VST3%20%7C%20CLAP%20%7C%20AU-23293d">
-  <img alt="Platforms" src="https://img.shields.io/badge/platforms-Windows%20%7C%20macOS%20%7C%20Linux-23293d">
-  <a href="LICENSE"><img alt="License: AGPL v3" src="https://img.shields.io/badge/license-AGPL--3.0-3fb8ff"></a>
+  <a href="https://github.com/MaymiPR/OrrerySuite/releases/latest"><img alt="Latest release" src="https://img.shields.io/github/v/release/MaymiPR/OrrerySuite?color=b07cff&label=release"></a>
+  <img alt="Formats" src="https://img.shields.io/badge/formats-VST3%20%7C%20CLAP%20%7C%20AU-25202f">
+  <img alt="Platforms" src="https://img.shields.io/badge/platforms-Windows%20%7C%20macOS%20%7C%20Linux-25202f">
+  <a href="LICENSE"><img alt="License: AGPL v3" src="https://img.shields.io/badge/license-AGPL--3.0-9b6cff"></a>
 </p>
 
-# Newton Suite
+# Orrery Suite
 
-Open-source mix-bus processors (**VST3**, **CLAP**, **AU**) for Windows, macOS and Linux, built with JUCE. Each Newton
+Open-source mix-bus processors (**VST3**, **CLAP**, **AU**) for Windows, macOS and Linux, built with JUCE. Each Orrery
 plug-in is an independent, from-scratch recreation of a well-known mixing tool: its controls and look studied, its sound
 measured black-box, and the result null-tested against the original, with the numbers published as they are.
 
-> Newton Suite is an independent project. It is not affiliated with, endorsed by or sponsored by Cradle or Jaycen
-> Joshua. Other companies' product names appear only to describe what a Newton plug-in is modelled on and belong to
+An orrery is a clockwork model of the heavens that reproduces their motions. Each Orrery plug-in is a working model
+of a well-known original in the same spirit.
+
+> Orrery Suite is an independent project. It is not affiliated with, endorsed by or sponsored by Cradle or Jaycen
+> Joshua. Other companies' product names appear only to describe what a Orrery plug-in is modelled on and belong to
 > their owners. No code of theirs is included: the sound and the look were measured from the outside.
 
 ## Download
 
 One installer per operating system installs every plug-in in the suite. Get it from
-[Releases](https://github.com/MaymiPR/NewtonSuite/releases):
+[Releases](https://github.com/MaymiPR/OrrerySuite/releases):
 
 | System | File | Installs to |
 |---|---|---|
-| Windows 10 / 11 (64-bit) | `NewtonSuite-<version>-Windows-Setup.exe` | `Common Files\VST3\Newton Suite`, `Common Files\CLAP\Newton Suite`; standalone apps optionally |
-| macOS 10.13+ (Apple Silicon and Intel) | `NewtonSuite-<version>-macOS.pkg` | `/Library/Audio/Plug-Ins/{Components, VST3/Newton Suite, CLAP/Newton Suite}` |
-| Linux x86-64 (glibc 2.35+) | `NewtonSuite-<version>-Linux.tar.gz` | `~/.vst3/Newton Suite`, `~/.clap/Newton Suite` (run `install-linux.sh`) |
+| Windows 10 / 11 (64-bit) | `OrrerySuite-<version>-Windows-Setup.exe` | `Common Files\VST3\Orrery Suite`, `Common Files\CLAP\Orrery Suite`; standalone apps optionally |
+| macOS 10.13+ (Apple Silicon and Intel) | `OrrerySuite-<version>-macOS.pkg` | `/Library/Audio/Plug-Ins/{Components, VST3/Orrery Suite, CLAP/Orrery Suite}` |
+| Linux x86-64 (glibc 2.35+) | `OrrerySuite-<version>-Linux.tar.gz` | `~/.vst3/Orrery Suite`, `~/.clap/Orrery Suite` (run `install-linux.sh`) |
 
 The installers are not code-signed or notarized; see [packaging/](packaging) for the first-run steps on each system.
 Each release lists the files' SHA-256 checksums.
 
 ## Plug-ins
 
-| Newton plug-in | Modelled on | Status |
+| Orrery plug-in | Modelled on | Status |
 |---|---|---|
 | **[The Antiparticle](plugins/TheAntiparticle)** | Cradle The God Particle: mix-bus EQ, multiband character and limiter | released: close, not a null on every material (see below) |
 | **Orion** (working title) | Cradle Orion | next |
@@ -90,7 +93,7 @@ plug-in's fitting helpers. The Windows installer is made with Inno Setup 6:
 
 ```bash
 pwsh packaging/make_iss_include.ps1 build
-iscc /DAppVersion=0.1.0 packaging/NewtonSuite.iss
+iscc /DAppVersion=0.1.0 packaging/OrrerySuite.iss
 ```
 
 ## Repository layout

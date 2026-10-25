@@ -1,14 +1,14 @@
 #!/bin/sh
-# Installs every Newton Suite plug-in in this folder for the current user (~/.vst3, ~/.clap).
+# Installs every Orrery Suite plug-in in this folder for the current user (~/.vst3, ~/.clap).
 #   sh install-linux.sh              install
 #   sh install-linux.sh --uninstall  remove again
 set -e
 cd "$(dirname "$0")"
-V="$HOME/.vst3/Newton Suite"
-C="$HOME/.clap/Newton Suite"
+V="$HOME/.vst3/Orrery Suite"
+C="$HOME/.clap/Orrery Suite"
 if [ "$1" = "--uninstall" ]; then
     rm -rf "$V" "$C"
-    echo "Newton Suite removed from $V and $C"
+    echo "Orrery Suite removed from $V and $C"
     exit 0
 fi
 mkdir -p "$V" "$C"

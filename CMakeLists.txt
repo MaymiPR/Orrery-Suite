@@ -1,7 +1,7 @@
 cmake_minimum_required(VERSION 3.22)
 
-# Newton Suite: one CMake project for every plug-in (plugins/<Name>/plugin.cmake) and the measurement tools.
-project(NewtonSuite VERSION 0.1.0)
+# Orrery Suite: one CMake project for every plug-in (plugins/<Name>/plugin.cmake) and the measurement tools.
+project(OrrerySuite VERSION 0.1.0)
 
 set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
@@ -29,8 +29,8 @@ endif()
 # Measurement tools (hosts for the reference plug-ins, fitting helpers); not shipped.
 option(AP_TOOLS "Build the measurement tools" ON)
 
-set(NS_DEFS JUCE_WEB_BROWSER=0 JUCE_USE_CURL=0 JUCE_VST3_CAN_REPLACE_VST2=0)
-set(NS_REPOSITORY "https://github.com/MaymiPR/NewtonSuite")
+set(SUITE_DEFS JUCE_WEB_BROWSER=0 JUCE_USE_CURL=0 JUCE_VST3_CAN_REPLACE_VST2=0)
+set(SUITE_REPOSITORY "https://github.com/MaymiPR/OrrerySuite")
 enable_testing()
 
 # The plug-ins. Each is included (not added as a subdirectory), so its build output stays at

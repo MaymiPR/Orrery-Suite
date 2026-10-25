@@ -1,13 +1,13 @@
-Newton Suite for Windows (64-bit)
+Orrery Suite for Windows (64-bit)
 =================================
 
-Run NewtonSuite-<version>-Windows-Setup.exe. It installs every Newton Suite plug-in:
-  - VST3 to C:\Program Files\Common Files\VST3\Newton Suite
-  - CLAP to C:\Program Files\Common Files\CLAP\Newton Suite
-  - optionally the standalone apps to C:\Program Files\Newton Suite
+Run OrrerySuite-<version>-Windows-Setup.exe. It installs every Orrery Suite plug-in:
+  - VST3 to C:\Program Files\Common Files\VST3\Orrery Suite
+  - CLAP to C:\Program Files\Common Files\CLAP\Orrery Suite
+  - optionally the standalone apps to C:\Program Files\Orrery Suite
 Pick "Choose plug-ins and formats" to leave some out, then rescan plug-ins in your DAW.
-Uninstall from Settings > Apps > Newton Suite.
+Uninstall from Settings > Apps > Orrery Suite.
 
 The installer is not code-signed, so Windows SmartScreen may warn: click "More info", then "Run anyway".
 To check the download, compare its SHA-256 with SHA256SUMS.txt on the Releases page:
-  certutil -hashfile NewtonSuite-<version>-Windows-Setup.exe SHA256
+  certutil -hashfile OrrerySuite-<version>-Windows-Setup.exe SHA256

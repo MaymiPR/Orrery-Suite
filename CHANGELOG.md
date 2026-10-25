@@ -2,7 +2,7 @@
 
 ## 0.1.0
 
-The first release of Newton Suite, with its first plug-in, **The Antiparticle**: a recreation of Cradle's The God
+The first release of Orrery Suite, with its first plug-in, **The Antiparticle**: a recreation of Cradle's The God
 Particle (v1.2.4), its controls, look and sound, null-tested against the original. VST3, CLAP and a standalone app on
 Windows; VST3 and CLAP on Linux; AU, VST3 and CLAP on macOS (universal).
 

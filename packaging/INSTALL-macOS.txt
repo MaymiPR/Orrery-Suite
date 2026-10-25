@@ -1,11 +1,11 @@
-Newton Suite for macOS (universal: Apple Silicon and Intel, macOS 10.13 or later)
+Orrery Suite for macOS (universal: Apple Silicon and Intel, macOS 10.13 or later)
 =================================================================================
 
-Open NewtonSuite-<version>-macOS.pkg. It installs every Newton Suite plug-in as AU, VST3 and CLAP
+Open OrrerySuite-<version>-macOS.pkg. It installs every Orrery Suite plug-in as AU, VST3 and CLAP
 (Customize lets you leave formats out):
   - AU   -> /Library/Audio/Plug-Ins/Components
-  - VST3 -> /Library/Audio/Plug-Ins/VST3/Newton Suite
-  - CLAP -> /Library/Audio/Plug-Ins/CLAP/Newton Suite
+  - VST3 -> /Library/Audio/Plug-Ins/VST3/Orrery Suite
+  - CLAP -> /Library/Audio/Plug-Ins/CLAP/Orrery Suite
 
 The installer is not notarized by Apple (that needs a paid developer account), so macOS stops it
 the first time:
@@ -14,4 +14,4 @@ the first time:
 Restart your DAW afterwards (Logic rescans AUs at launch).
 
 To check the download, compare its SHA-256 with SHA256SUMS.txt on the Releases page:
-  shasum -a 256 NewtonSuite-<version>-macOS.pkg
+  shasum -a 256 OrrerySuite-<version>-macOS.pkg

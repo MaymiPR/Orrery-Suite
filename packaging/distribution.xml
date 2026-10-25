@@ -1,7 +1,7 @@
 <?xml version="1.0" encoding="utf-8"?>
 <!-- macOS installer layout for the whole suite (productbuild); VERSION is filled in by the release workflow. -->
 <installer-gui-script minSpecVersion="2">
-    <title>Newton Suite VERSION</title>
+    <title>Orrery Suite VERSION</title>
     <license file="LICENSE.txt"/>
     <options customize="allow" require-scripts="false" hostArchitectures="arm64,x86_64"/>
     <domains enable_localSystem="true"/>
@@ -10,16 +10,16 @@
         <line choice="vst3"/>
         <line choice="clap"/>
     </choices-outline>
-    <choice id="au" title="Audio Unit (AU)" description="Every Newton Suite plug-in for Logic Pro, GarageBand, Ableton Live and other AU hosts. Installs to /Library/Audio/Plug-Ins/Components.">
-        <pkg-ref id="com.newtonsuite.au"/>
+    <choice id="au" title="Audio Unit (AU)" description="Every Orrery Suite plug-in for Logic Pro, GarageBand, Ableton Live and other AU hosts. Installs to /Library/Audio/Plug-Ins/Components.">
+        <pkg-ref id="com.orrerysuite.au"/>
     </choice>
-    <choice id="vst3" title="VST3" description="Every Newton Suite plug-in for Ableton Live, FL Studio, Reaper, Cubase and other VST3 hosts. Installs to /Library/Audio/Plug-Ins/VST3/Newton Suite.">
-        <pkg-ref id="com.newtonsuite.vst3"/>
+    <choice id="vst3" title="VST3" description="Every Orrery Suite plug-in for Ableton Live, FL Studio, Reaper, Cubase and other VST3 hosts. Installs to /Library/Audio/Plug-Ins/VST3/Orrery Suite.">
+        <pkg-ref id="com.orrerysuite.vst3"/>
     </choice>
-    <choice id="clap" title="CLAP" description="Every Newton Suite plug-in for Bitwig, Reaper and other CLAP hosts. Installs to /Library/Audio/Plug-Ins/CLAP/Newton Suite.">
-        <pkg-ref id="com.newtonsuite.clap"/>
+    <choice id="clap" title="CLAP" description="Every Orrery Suite plug-in for Bitwig, Reaper and other CLAP hosts. Installs to /Library/Audio/Plug-Ins/CLAP/Orrery Suite.">
+        <pkg-ref id="com.orrerysuite.clap"/>
     </choice>
-    <pkg-ref id="com.newtonsuite.au" version="VERSION">NewtonSuite-AU.pkg</pkg-ref>
-    <pkg-ref id="com.newtonsuite.vst3" version="VERSION">NewtonSuite-VST3.pkg</pkg-ref>
-    <pkg-ref id="com.newtonsuite.clap" version="VERSION">NewtonSuite-CLAP.pkg</pkg-ref>
+    <pkg-ref id="com.orrerysuite.au" version="VERSION">OrrerySuite-AU.pkg</pkg-ref>
+    <pkg-ref id="com.orrerysuite.vst3" version="VERSION">OrrerySuite-VST3.pkg</pkg-ref>
+    <pkg-ref id="com.orrerysuite.clap" version="VERSION">OrrerySuite-CLAP.pkg</pkg-ref>
 </installer-gui-script>

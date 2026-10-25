@@ -1,6 +1,6 @@
 # The Antiparticle
 
-Part of [Newton Suite](../../README.md). A recreation of Cradle's The God Particle (v1.2.4): its controls, look and
+Part of [Orrery Suite](../../README.md). A recreation of Cradle's The God Particle (v1.2.4): its controls, look and
 sound, null-tested against the original.
 
 <p align="center">

@@ -7,9 +7,9 @@ $build = (Resolve-Path $BuildDir).Path
 $plugins = Get-Content "$here/plugins.txt" | Where-Object { $_.Trim() -and -not $_.StartsWith('#') } | ForEach-Object {
     $parts = $_.Split([char]0x7C); @{ Target = $parts[0].Trim(); Product = $parts[1].Trim() } }
 $c = @('[Components]',
-       'Name: "vst3"; Description: "VST3 plug-ins (C:\Program Files\Common Files\VST3\Newton Suite)"; Types: full all custom',
-       'Name: "clap"; Description: "CLAP plug-ins (C:\Program Files\Common Files\CLAP\Newton Suite)"; Types: full all custom',
-       'Name: "app"; Description: "Standalone apps (C:\Program Files\Newton Suite)"; Types: all')
+       'Name: "vst3"; Description: "VST3 plug-ins (C:\Program Files\Common Files\VST3\Orrery Suite)"; Types: full all custom',
+       'Name: "clap"; Description: "CLAP plug-ins (C:\Program Files\Common Files\CLAP\Orrery Suite)"; Types: full all custom',
+       'Name: "app"; Description: "Standalone apps (C:\Program Files\Orrery Suite)"; Types: all')
 $f = @('[Files]')
 $i = @('[Icons]')
 $u = @('[UninstallDelete]')

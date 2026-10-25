@@ -1,6 +1,6 @@
 ---
 name: Null-test report
-about: A setting or material where a Newton plug-in differs from the original
+about: A setting or material where a Orrery plug-in differs from the original
 labels: null test
 ---
 

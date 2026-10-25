@@ -1,9 +1,9 @@
-# Builds every Newton Suite plug-in (listed in packaging/plugins.txt) on Windows (VST3 + CLAP + standalone), macOS
+# Builds every Orrery Suite plug-in (listed in packaging/plugins.txt) on Windows (VST3 + CLAP + standalone), macOS
 # (universal AU + VST3 + CLAP) and Linux (VST3 + CLAP), runs the unit tests, validates the plug-ins with pluginval at
 # the strictest level (and auval on macOS) and makes ONE installer per operating system holding all of them:
-#   Windows  NewtonSuite-<version>-Windows-Setup.exe   (Inno Setup, packaging/NewtonSuite.iss)
-#   macOS    NewtonSuite-<version>-macOS.pkg           (productbuild, packaging/distribution.xml)
-#   Linux    NewtonSuite-<version>-Linux.tar.gz        (with packaging/install-linux.sh)
+#   Windows  OrrerySuite-<version>-Windows-Setup.exe   (Inno Setup, packaging/OrrerySuite.iss)
+#   macOS    OrrerySuite-<version>-macOS.pkg           (productbuild, packaging/distribution.xml)
+#   Linux    OrrerySuite-<version>-Linux.tar.gz        (with packaging/install-linux.sh)
 # Runs only when a version tag is pushed (git tag v0.1.0 && git push origin v0.1.0), which also publishes the installers
 # as a GitHub Release with that version's notes from CHANGELOG.md and their SHA-256 checksums, or when started by hand
 # (Actions tab > Run workflow; the installers come out as downloadable artifacts). Ordinary pushes do not run it, to save
@@ -54,16 +54,16 @@ jobs:
       - name: Installer (Inno Setup, every plug-in)
         shell: pwsh
         run: |
-          $version = (Select-String -Path CMakeLists.txt -Pattern 'project\(NewtonSuite VERSION ([0-9.]+)\)').Matches[0].Groups[1].Value
+          $version = (Select-String -Path CMakeLists.txt -Pattern 'project\(OrrerySuite VERSION ([0-9.]+)\)').Matches[0].Groups[1].Value
           pwsh packaging/make_iss_include.ps1 build
           $iscc = "${env:ProgramFiles(x86)}\Inno Setup 6\ISCC.exe"
           if (-not (Test-Path $iscc)) { choco install innosetup -y --no-progress | Out-Null }
-          & $iscc "/DAppVersion=$version" "packaging\NewtonSuite.iss"
+          & $iscc "/DAppVersion=$version" "packaging\OrrerySuite.iss"
           if ($LASTEXITCODE -ne 0) { exit 1 }
 
       - uses: actions/upload-artifact@v6
         with:
-          name: NewtonSuite-Windows
+          name: OrrerySuite-Windows
           path: dist/*.exe
 
   macos:
@@ -113,7 +113,7 @@ jobs:
       - name: Installer (.pkg, every plug-in)
         run: |
           set -e
-          V=$(sed -n 's/^project(NewtonSuite VERSION \([0-9.]*\)).*/\1/p' CMakeLists.txt)
+          V=$(sed -n 's/^project(OrrerySuite VERSION \([0-9.]*\)).*/\1/p' CMakeLists.txt)
           mkdir -p pkg/res dist
           # Install exactly where stated (pkgbuild would otherwise follow a copy of a bundle found elsewhere on the disk).
           for c in au vst3 clap; do
@@ -121,17 +121,17 @@ jobs:
             n=$(plutil -extract @count raw pkg/$c.plist 2>/dev/null || echo 1)
             for ((i = 0; i < n; i++)); do plutil -replace $i.BundleIsRelocatable -bool NO pkg/$c.plist; done
           done
-          pkgbuild --root stage/au   --component-plist pkg/au.plist   --install-location "/Library/Audio/Plug-Ins/Components"         --identifier com.newtonsuite.au   --version "$V" pkg/NewtonSuite-AU.pkg
-          pkgbuild --root stage/vst3 --component-plist pkg/vst3.plist --install-location "/Library/Audio/Plug-Ins/VST3/Newton Suite" --identifier com.newtonsuite.vst3 --version "$V" pkg/NewtonSuite-VST3.pkg
-          pkgbuild --root stage/clap --component-plist pkg/clap.plist --install-location "/Library/Audio/Plug-Ins/CLAP/Newton Suite" --identifier com.newtonsuite.clap --version "$V" pkg/NewtonSuite-CLAP.pkg
+          pkgbuild --root stage/au   --component-plist pkg/au.plist   --install-location "/Library/Audio/Plug-Ins/Components"         --identifier com.orrerysuite.au   --version "$V" pkg/OrrerySuite-AU.pkg
+          pkgbuild --root stage/vst3 --component-plist pkg/vst3.plist --install-location "/Library/Audio/Plug-Ins/VST3/Orrery Suite" --identifier com.orrerysuite.vst3 --version "$V" pkg/OrrerySuite-VST3.pkg
+          pkgbuild --root stage/clap --component-plist pkg/clap.plist --install-location "/Library/Audio/Plug-Ins/CLAP/Orrery Suite" --identifier com.orrerysuite.clap --version "$V" pkg/OrrerySuite-CLAP.pkg
           cp LICENSE pkg/res/LICENSE.txt
           sed "s/VERSION/$V/g" packaging/distribution.xml > pkg/distribution.xml
-          productbuild --distribution pkg/distribution.xml --package-path pkg --resources pkg/res "dist/NewtonSuite-$V-macOS.pkg"
-          pkgutil --payload-files "dist/NewtonSuite-$V-macOS.pkg" | head -20
+          productbuild --distribution pkg/distribution.xml --package-path pkg --resources pkg/res "dist/OrrerySuite-$V-macOS.pkg"
+          pkgutil --payload-files "dist/OrrerySuite-$V-macOS.pkg" | head -20
 
       - uses: actions/upload-artifact@v6
         with:
-          name: NewtonSuite-macOS
+          name: OrrerySuite-macOS
           path: dist/*.pkg
 
   linux:
@@ -167,8 +167,8 @@ jobs:
       - name: Installer (tarball with install script, every plug-in)
         run: |
           set -e
-          V=$(sed -n 's/^project(NewtonSuite VERSION \([0-9.]*\)).*/\1/p' CMakeLists.txt)
-          D="NewtonSuite-$V-Linux"
+          V=$(sed -n 's/^project(OrrerySuite VERSION \([0-9.]*\)).*/\1/p' CMakeLists.txt)
+          D="OrrerySuite-$V-Linux"
           mkdir -p "$D/VST3" "$D/CLAP" dist
           grep -v '^#' packaging/plugins.txt | grep -v '^\s*$' | while IFS='|' read -r t p code mfr; do
             A="build/${t}_artefacts/Release"
@@ -183,7 +183,7 @@ jobs:
 
       - uses: actions/upload-artifact@v6
         with:
-          name: NewtonSuite-Linux
+          name: OrrerySuite-Linux
           path: dist/*.tar.gz
 
   release:
@@ -203,7 +203,7 @@ jobs:
           VERSION="${GITHUB_REF_NAME#v}"
           # This version's section of CHANGELOG.md
           tr -d '\r' < CHANGELOG.md | awk -v v="## $VERSION" '$0 == v {on = 1; next} /^## / {on = 0} on' > notes.md
-          [ -s notes.md ] || echo "Newton Suite $VERSION" > notes.md
+          [ -s notes.md ] || echo "Orrery Suite $VERSION" > notes.md
           cat packaging/INSTALL-Windows.txt packaging/INSTALL-macOS.txt packaging/INSTALL-Linux.txt | sed 's/^/    /' > install.md
           printf '\n## Installing\n\n' >> notes.md; cat install.md >> notes.md
           FILES=$(find artifacts -type f \( -name '*.exe' -o -name '*.pkg' -o -name '*.tar.gz' \))
@@ -211,4 +211,4 @@ jobs:
           (cd artifacts && find . -type f \( -name '*.exe' -o -name '*.pkg' -o -name '*.tar.gz' \) -exec sha256sum {} + | sed 's|  .*/|  |') > SHA256SUMS.txt
           cat SHA256SUMS.txt
           gh release create "${GITHUB_REF_NAME}" $FILES SHA256SUMS.txt \
-            --repo "${GITHUB_REPOSITORY}" --title "Newton Suite ${VERSION}" --notes-file notes.md
+            --repo "${GITHUB_REPOSITORY}" --title "Orrery Suite ${VERSION}" --notes-file notes.md
