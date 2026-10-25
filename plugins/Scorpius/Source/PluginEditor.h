@@ -76,7 +76,16 @@ private:
     } hoverTracker { *this };
     void updateHover (const juce::MouseEvent&, bool released);
     juce::String caption (const juce::Slider&, const juce::String& name) const;
+    juce::Rectangle<float> hoverCell (const juce::Slider&) const;
     const juce::Slider* hovered = nullptr;
+
+    // I/O link (ours, as in The Antiparticle): while linked the output gain is always the input gain's opposite. A
+    // gesture on either knob moves the other (as one host gesture each); changes from the host are mirrored too
+    void beginLink (juce::Slider&);
+    void endLink (juce::Slider&);
+    void mirror (bool fromInput);
+    juce::Slider* linkSource = nullptr;
+    bool mirroring = false;
 
     ScorpiusProcessor& proc;
     Content content { *this };
@@ -99,6 +108,7 @@ private:
     orrery::IconButton prevButton { orrery::IconButton::Icon::left }, nextButton { orrery::IconButton::Icon::right },
         saveButton { orrery::IconButton::Icon::save };
     sc::CompareToggle compare;
+    orrery::LinkButton ioLinkButton;
     orrery::GearButton gear;
 
     // drive

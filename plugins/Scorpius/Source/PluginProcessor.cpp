@@ -92,8 +92,9 @@ void ScorpiusProcessor::processBlock (AudioBuffer<float>& buffer, MidiBuffer&)
     if (main.getNumChannels() < 2) return;
     const bool bypassed = bypassParam->getValue() >= 0.5f;
 
-    inGain.setTargetValue (bypassed ? 1.0f : Decibels::decibelsToGain (inGainRaw->load()));
-    outGain.setTargetValue (bypassed ? 1.0f : Decibels::decibelsToGain (outGainRaw->load()));
+    const float inDb = inGainRaw->load(), outDb = ioLink.load() ? -inDb : outGainRaw->load();   // the I/O link: output = -input, always
+    inGain.setTargetValue (bypassed ? 1.0f : Decibels::decibelsToGain (inDb));
+    outGain.setTargetValue (bypassed ? 1.0f : Decibels::decibelsToGain (outDb));
     for (int i = 0; i < n; ++i)
     {
         const float g = inGain.getNextValue();
@@ -142,6 +143,8 @@ void ScorpiusProcessor::selectCompareSlot (int s)
     s = jlimit (0, 1, s);
     if (s == slot) return;
     slots[slot] = captureSlot();
+    if (! slotUsed[s]) slots[s] = slots[slot].createCopy();
+    slotUsed[s] = true;
     slot = s;
     applySlot (slots[slot]);
 }
@@ -150,6 +153,7 @@ void ScorpiusProcessor::copyCompareSlot()
 {
     slots[slot] = captureSlot();
     slots[1 - slot] = slots[slot].createCopy();
+    slotUsed[1 - slot] = true;
 }
 
 void ScorpiusProcessor::getStateInformation (MemoryBlock& dest)
@@ -159,9 +163,10 @@ void ScorpiusProcessor::getStateInformation (MemoryBlock& dest)
     state.setProperty ("animation", animation.load() ? 1 : 0, nullptr);
     state.setProperty ("preset", presets.currentName(), nullptr);
     state.setProperty ("compare", slot, nullptr);
-    // the inactive compare slot (the active one is the parameters themselves)
+    state.setProperty ("ioLink", ioLink.load() ? 1 : 0, nullptr);
+    // the inactive compare slot (the active one is the parameters themselves), if it was ever used
     state.removeChild (state.getChildWithName ("SLOT"), nullptr);
-    state.appendChild (slots[1 - slot].createCopy(), nullptr);
+    if (slotUsed[1 - slot]) state.appendChild (slots[1 - slot].createCopy(), nullptr);
     if (auto xml = state.createXml()) copyXmlToBinary (*xml, dest);
 }
 
@@ -175,10 +180,13 @@ void ScorpiusProcessor::setStateInformation (const void* data, int size)
             animation = (int) tree.getProperty ("animation", 1) != 0;
             presets.setCurrentName (tree.getProperty ("preset", sc::PresetManager::defaultName()).toString());
             slot = jlimit (0, 1, (int) tree.getProperty ("compare", 0));
+            ioLink = (int) tree.getProperty ("ioLink", 0) != 0;
             auto other = tree.getChildWithName ("SLOT");
             tree.removeChild (other, nullptr);
             apvts.replaceState (tree);
             slots[slot] = captureSlot();
+            slotUsed[slot] = true;
+            slotUsed[1 - slot] = other.isValid();
             slots[1 - slot] = other.isValid() ? other.createCopy() : slots[slot].createCopy();
         }
 }

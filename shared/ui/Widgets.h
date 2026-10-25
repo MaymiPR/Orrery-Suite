@@ -22,6 +22,9 @@ public:
     void mouseUp (const juce::MouseEvent& e) override { if (contains (e.getPosition()) && onClick) onClick(); }
     bool active = true;
     float boxHeight = 24.5f;         // The God Particle's buttons; Orion's are 23.5 tall
+    // Orion's hover (measured): a running button does not change, a bypassed one fills with mint at 20 %; pressed, either
+    // shows a dark mint box without outline
+    bool offHoverFill = false;
     std::function<void()> onClick;
 };
 
@@ -56,7 +59,8 @@ class DropBox : public juce::Component
 public:
     DropBox() { noFocus (*this); setRepaintsOnMouseActivity (true); }
     void paint (juce::Graphics&) override;
-    void mouseDown (const juce::MouseEvent&) override { if (onClick) onClick(); }
+    // opens on release over it, as Orion's (a press dragged off does nothing)
+    void mouseUp (const juce::MouseEvent& e) override { if (contains (e.getPosition()) && onClick) onClick(); }
     juce::String text;
     bool open = false;
     std::function<void()> onClick;

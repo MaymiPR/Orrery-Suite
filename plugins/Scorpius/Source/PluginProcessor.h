@@ -37,7 +37,8 @@ public:
 
     // Compare A -> B: two complete settings in one instance (as the reference). The active one lives in the parameters;
     // the other is kept here. Switching stores the active one and loads the other; copy() copies the active one over
-    // the other (the arrow: A -> B while A is active, B -> A while B is).
+    // the other (the arrow: A -> B while A is active, B -> A while B is). A setting never used yet starts as a copy of
+    // the one in use when it is first selected (measured: B shows A's changes until B itself is changed).
     int compareSlot() const { return slot; }
     void selectCompareSlot (int);
     void copyCompareSlot();
@@ -46,6 +47,7 @@ public:
     // in its state's prefs)
     std::atomic<float> uiScale { 1.0f };
     std::atomic<bool> animation { true };
+    std::atomic<bool> ioLink { false };      // I/O link (ours, as in The Antiparticle): the output gain mirrors the input gain
 
     // meters: input (after the input gain) and output, L R; the compression module's gain reduction (positive dB)
     orrery::LevelMeter inMeter, outMeter;
@@ -62,6 +64,7 @@ private:
     juce::AudioBuffer<float> meterBuf;
     juce::SmoothedValue<float> inGain, outGain;
     juce::ValueTree slots[2];
+    bool slotUsed[2] { true, false };
     int slot = 0;
 
     JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR (ScorpiusProcessor)

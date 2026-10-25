@@ -34,14 +34,27 @@ static void powerIcon (Graphics& g, Point<float> c, float r, Colour col, float s
 void PowerButton::paint (Graphics& g)
 {
     const auto b = getLocalBounds().toFloat().withHeight (boxHeight);
+    if (offHoverFill && isMouseButtonDown() && isMouseOver())
+    {
+        // Orion's pressed look, on or off: a dark mint box without its outline and a dimmed icon (measured)
+        g.setColour (theme::mint.withAlpha (0.2f));
+        g.fillRoundedRectangle (b.reduced (0.5f), 2.5f);
+        powerIcon (g, b.getCentre().translated (0.0f, 0.5f), 6.2f, theme::mint.withAlpha (0.85f), 1.0f);
+        return;
+    }
     if (active)
     {
-        g.setColour (theme::mint.brighter (isMouseOver() ? 0.06f : 0.0f));
+        g.setColour (theme::mint.brighter (isMouseOver() && ! offHoverFill ? 0.06f : 0.0f));
         g.fillRoundedRectangle (b, 2.5f);
         powerIcon (g, b.getCentre().translated (0.0f, 0.5f), 6.2f, Colour (0xff0b1512), 1.0f);
     }
     else
     {
+        if (offHoverFill && isMouseOver())
+        {
+            g.setColour (theme::mint.withAlpha (0.2f));
+            g.fillRoundedRectangle (b.reduced (0.5f), 2.5f);
+        }
         g.setColour (theme::mint);
         g.drawRoundedRectangle (b.reduced (0.5f), 2.5f, 1.0f);
         powerIcon (g, b.getCentre().translated (0.0f, 0.5f), 6.2f, theme::mint, 1.0f);
@@ -63,7 +76,8 @@ void LinkButton::paint (Graphics& g)
 void IconButton::paint (Graphics& g)
 {
     const auto b = getLocalBounds().toFloat().withHeight (24.5f);
-    g.setColour (theme::boxFill);
+    // under the mouse the box lightens (#121211 -> #252523, measured on Orion's top bar)
+    g.setColour (isMouseOver() || isMouseButtonDown() ? Colour (0xff252523) : theme::boxFill);
     g.fillRoundedRectangle (b.reduced (0.5f), 4.0f);
     g.setColour (theme::text.withAlpha (isMouseOver() ? 1.0f : 0.95f));
     g.drawRoundedRectangle (b.reduced (0.5f), 4.0f, 1.0f);
@@ -110,7 +124,7 @@ void DropBox::paint (Graphics& g)
     const auto b = getLocalBounds().toFloat().withHeight (24.5f);
     g.setColour (theme::boxFill);
     g.fillRect (b);
-    g.setColour (open ? theme::text : theme::boxLine);
+    g.setColour (open || isMouseOver() ? theme::text : theme::boxLine);     // the frame turns white under the mouse (measured)
     g.drawRect (b, 1.0f);
     g.setColour (theme::text);
     g.setFont (theme::font (12.0f));
@@ -156,7 +170,7 @@ void GearButton::paint (Graphics& g)
         gear.lineTo (p1);
     }
     gear.closeSubPath();
-    g.setColour (isMouseOver() ? theme::text : theme::boxLine);
+    g.setColour (isMouseOver() ? Colour (0xffb2b1ad) : theme::boxLine);      // brighter under the mouse (measured on Orion)
     g.strokePath (gear, PathStrokeType (1.3f, PathStrokeType::curved));
     g.drawEllipse (Rectangle<float> (6.2f, 6.2f).withCentre (c), 1.3f);
 }

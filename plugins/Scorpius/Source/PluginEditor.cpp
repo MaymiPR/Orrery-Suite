@@ -58,7 +58,7 @@ ScorpiusEditor::ScorpiusEditor (ScorpiusProcessor& p) : AudioProcessorEditor (p)
     addAndMakeVisible (content);
     content.setBounds (0, 0, (int) std::ceil (designW), (int) std::ceil (designH));
 
-    for (auto* c : std::initializer_list<Component*> { &logo, &presetBox, &prevButton, &nextButton, &saveButton, &compare, &scaleBox, &gear,
+    for (auto* c : std::initializer_list<Component*> { &logo, &presetBox, &prevButton, &nextButton, &saveButton, &compare, &ioLinkButton, &scaleBox, &gear,
                                                        &drivePower, &sparks, &hiPass, &color, &harmPower, &compPower, &liftPower, &harmBlob,
                                                        &liftBlob, &freq, &mode, &harmKnob, &compKnob, &liftKnob, &eqPower, &eqCurve,
                                                        &inputKnob, &outputKnob })
@@ -75,11 +75,12 @@ ScorpiusEditor::ScorpiusEditor (ScorpiusProcessor& p) : AudioProcessorEditor (p)
     nextButton.setBounds (405, 3, 24, 25);
     saveButton.setBounds (439, 3, 24, 25);
     compare.setBounds (660, 3, 74, 25);
+    ioLinkButton.setBounds (502, 3, 64, 25);       // ours: centred between the save button (ends 463) and "Compare" (604)
     scaleBox.setBounds (794, 3, 66, 25);
     gear.setBounds (866, 7, 16, 17);
 
     // power buttons: 72 x 23.5 (parallels 38 wide) at y 41.5
-    for (auto* b : { &drivePower, &harmPower, &compPower, &liftPower, &eqPower }) b->boxHeight = 23.5f;
+    for (auto* b : { &drivePower, &harmPower, &compPower, &liftPower, &eqPower }) { b->boxHeight = 23.5f; b->offHoverFill = true; }
     place (drivePower, 96.0f, 41.5f, 72.0f, 23.5f);
     place (harmPower, 184.0f, 41.5f, 72.0f, 23.5f);
     place (compPower, 264.0f, 41.5f, 72.0f, 23.5f);
@@ -88,6 +89,7 @@ ScorpiusEditor::ScorpiusEditor (ScorpiusProcessor& p) : AudioProcessorEditor (p)
     for (int k = 0; k < 4; ++k)
     {
         parPower[k].boxHeight = 23.5f;
+        parPower[k].offHoverFill = true;
         place (parPower[k], parX[k] - 19.0f, 41.5f, 38.0f, 23.5f);
         place (faders[k], parX[k] - sc::Fader::capW * 0.5f, sc::Fader::top, sc::Fader::capW, 180.0f);
     }
@@ -123,6 +125,27 @@ ScorpiusEditor::ScorpiusEditor (ScorpiusProcessor& p) : AudioProcessorEditor (p)
     for (int k = 0; k < 4; ++k) attach (faders[k], sc::parallels[k].level);
     attach (inputKnob, sc::id::inputGain);
     attach (outputKnob, sc::id::outputGain);
+
+    for (auto* k : { &inputKnob, &outputKnob })
+    {
+        k->onDragStart = [this, k] { beginLink (*k); };
+        k->onValueChange = [this, k] { if (linkSource == k) mirror (k == &inputKnob); };
+        k->onDragEnd = [this, k] { endLink (*k); };
+    }
+    ioLinkButton.active = proc.ioLink.load();
+    ioLinkButton.onClick = [this]
+    {
+        proc.ioLink = ! proc.ioLink.load();
+        ioLinkButton.active = proc.ioLink.load();
+        ioLinkButton.repaint();
+        if (proc.ioLink.load())                    // linking snaps the output to the input's opposite
+            if (auto* prm = proc.apvts.getParameter (sc::id::outputGain))
+            {
+                prm->beginChangeGesture();
+                mirror (true);
+                prm->endChangeGesture();
+            }
+    };
 
     drivePower.onClick = [this] { toggleParam (sc::id::driveOn); };
     hiPass.onClick = [this] { toggleParam (sc::id::driveHiPass); };
@@ -252,9 +275,50 @@ void ScorpiusEditor::endLiveResize()
     content.repaint();
 }
 
-void ScorpiusEditor::parameterChanged (const String&, float)
+void ScorpiusEditor::parameterChanged (const String& pid, float)
 {
-    MessageManager::callAsync ([safe = Component::SafePointer<ScorpiusEditor> (this)] { if (safe != nullptr) safe->updateFromParams(); });
+    const bool gain = pid == sc::id::inputGain || pid == sc::id::outputGain, fromInput = pid == sc::id::inputGain;
+    MessageManager::callAsync ([safe = Component::SafePointer<ScorpiusEditor> (this), gain, fromInput]
+    {
+        if (safe == nullptr) return;
+        if (gain && safe->linkSource == nullptr) safe->mirror (fromInput);      // automation, presets: keep the link
+        safe->updateFromParams();
+    });
+}
+
+void ScorpiusEditor::beginLink (Slider& src)
+{
+    if (! proc.ioLink.load() || linkSource != nullptr) return;
+    if (auto* prm = proc.apvts.getParameter (&src == &inputKnob ? sc::id::outputGain : sc::id::inputGain))
+    {
+        linkSource = &src;
+        prm->beginChangeGesture();
+        mirror (&src == &inputKnob);
+    }
+}
+
+void ScorpiusEditor::mirror (bool fromInput)
+{
+    if (! proc.ioLink.load() || mirroring) return;
+    const ScopedValueSetter<bool> guard (mirroring, true);
+    const auto* srcId = fromInput ? sc::id::inputGain : sc::id::outputGain;
+    const auto* dstId = fromInput ? sc::id::outputGain : sc::id::inputGain;
+    if (auto* dst = dynamic_cast<RangedAudioParameter*> (proc.apvts.getParameter (dstId)))
+    {
+        const float target = dst->getNormalisableRange().snapToLegalValue (-proc.apvts.getRawParameterValue (srcId)->load());
+        if (std::abs (proc.apvts.getRawParameterValue (dstId)->load() - target) > 1.0e-5f)
+            dst->setValueNotifyingHost (dst->convertTo0to1 (target));
+    }
+    content.repaint();
+}
+
+void ScorpiusEditor::endLink (Slider& src)
+{
+    if (linkSource != &src) return;
+    if (auto* prm = proc.apvts.getParameter (&src == &inputKnob ? sc::id::outputGain : sc::id::inputGain))
+        prm->endChangeGesture();
+    linkSource = nullptr;
+    content.repaint();
 }
 
 void ScorpiusEditor::updateFromParams()
@@ -271,6 +335,7 @@ void ScorpiusEditor::updateFromParams()
     mode.selected = jlimit (0, 1, roundToInt (v (sc::id::compMode)));
     freq.selected = v (sc::id::harmFreq) < 65.0f ? 0 : 1;
     sparks.hiPass = hiPass.active;
+    sparks.colour = color.selected;
     sparks.setVisible (drivePower.active);
     harmBlob.setVisible (harmPower.active);
     liftBlob.setVisible (liftPower.active);
@@ -292,21 +357,56 @@ void ScorpiusEditor::updateHover (const MouseEvent& e, bool released)
     const Slider* t = nullptr;
     std::vector<const Slider*> all { &harmKnob, &compKnob, &liftKnob, &inputKnob, &outputKnob };
     for (auto& k : eqKnobs) all.push_back (&k);
+    for (auto& f : faders) all.push_back (&f);
     if (! released)
         for (auto* k : all)
             if (k->isMouseButtonDown()) t = k;                // a drag keeps its caption wherever the mouse goes
     const bool inside = content.getLocalBounds().toFloat().contains (p) && dialog == nullptr && dropList == nullptr;
     if (t == nullptr && inside)
         for (auto* k : all)
-            if (k->getBoundsInParent().toFloat().expanded (6.0f).contains (p)) t = k;
+            if (hoverCell (*k).contains (p)) t = k;
     if (t != hovered) { hovered = t; content.repaint(); }
+}
+
+// where hovering shows a control's value (measured on the reference with hover probes): a knob of the panel over a
+// cell taking in its label and some 32 px either side; a fader over its column from under its power button down to its
+// label; the plate knobs over their plate column
+Rectangle<float> ScorpiusEditor::hoverCell (const Slider& k) const
+{
+    if (&k == &inputKnob || &k == &outputKnob)
+        return { (&k == &inputKnob ? inputX : outputX) - 43.5f, plateTop, 87.0f, designH - plateTop };
+    if (&k == &harmKnob || &k == &compKnob || &k == &liftKnob)
+    {
+        const float cx = &k == &harmKnob ? harmX : &k == &compKnob ? compX : liftX;
+        return { cx - 40.0f, bottomRowY - 30.0f, 80.0f, 38.0f + 30.0f };
+    }
+    for (int i = 0; i < 4; ++i)
+        if (&k == &faders[i]) return { parX[i] - 18.5f, 66.0f, 37.0f, 270.0f - 66.0f };
+    for (int b = 0; b < 5; ++b)
+        if (&k == &eqKnobs[b])
+        {
+            const float cy = eqTop[b] ? topRowY : bottomRowY;
+            return { eqX[b] - 31.0f, cy - 30.0f, 62.0f, 38.0f + 30.0f };
+        }
+    return {};
 }
 
 String ScorpiusEditor::caption (const Slider& k, const String& name) const
 {
-    if (&k != hovered) return name;
-    // amounts as percent ("80.0%"), the EQ and the gains in dB
+    const bool linkedPartner = linkSource != nullptr && linkSource != &k && (&k == &inputKnob || &k == &outputKnob);
+    if (&k != hovered && ! linkedPartner) return name;
+    // as the reference: amounts in percent ("80.0%"), the EQ and the gains in dB ("0.0 dB"), the faders as the gain of
+    // their path in dB without a unit ("-8.0"; "-inf" at the bottom): 2 (e^(k L) - 1) / (e^k - 1), k = 2.188, fitted
+    // to its captions at 14 levels to 0.03 dB
     if (&k == &harmKnob || &k == &compKnob || &k == &liftKnob) return String (k.getValue() * 100.0, 1) + "%";
+    for (auto& f : faders)
+        if (&k == &f)
+        {
+            const double lv = k.getValue();
+            if (lv <= 0.0) return "-inf";
+            const double gain = 1.9965 * (std::exp (2.1883 * lv) - 1.0) / (std::exp (2.1883) - 1.0);
+            return String (Decibels::gainToDecibels (gain), 1);
+        }
     return String::formatted ("%.1f dB", k.getValue());
 }
 
@@ -327,10 +427,9 @@ void ScorpiusEditor::timerCallback()
     const float target = jlimit (0.0f, 1.0f, (pk + 60.0f) / 60.0f);
     inLevel = target > inLevel ? target : inLevel + (target - inLevel) * 0.12f;
     if (proc.animation.load()) phase += 1.0f / 30.0f;
-    sparks.level = inLevel; sparks.phase = phase;
     harmBlob.level = inLevel; harmBlob.phase = phase; harmBlob.amount = (float) harmKnob.getValue();
     liftBlob.level = inLevel * 0.15f; liftBlob.phase = phase * 1.4f; liftBlob.amount = (float) liftKnob.getValue();
-    sparks.repaint(); harmBlob.repaint(); liftBlob.repaint();
+    harmBlob.repaint(); liftBlob.repaint();
     content.repaint();
 }
 
@@ -355,7 +454,7 @@ void ScorpiusEditor::setTestLevels (float inDb, float outDb, bool audio)
     for (auto& m : inMeter) { m.barDb = inDb - 3.0f; m.fastDb = inDb; m.peakHoldDb = inDb; m.rmsDb = inDb - 1.5f; }
     for (auto& m : outMeter) { m.barDb = outDb - 3.0f; m.fastDb = outDb; m.peakHoldDb = outDb; m.rmsDb = outDb - 1.5f; }
     inLevel = audio ? jlimit (0.0f, 1.0f, (inDb + 60.0f) / 60.0f) : 0.0f;
-    sparks.level = harmBlob.level = inLevel; liftBlob.level = inLevel * 0.15f;
+    harmBlob.level = inLevel; liftBlob.level = inLevel * 0.15f;
     harmBlob.amount = (float) harmKnob.getValue(); liftBlob.amount = (float) liftKnob.getValue();
     content.repaint();
 }
@@ -430,7 +529,7 @@ void ScorpiusEditor::paintPanel (Graphics& g)
     const char* eqNames[5] { "40Hz", "100Hz", "1kHz", "3kHz", "10kHz" };
     for (int b = 0; b < 5; ++b)
         label (caption (eqKnobs[b], eqNames[b]), eqLabelX[b], eqTop[b] ? upperLabelBaseline : labelBaseline, eqPower.active);
-    for (int k = 0; k < 4; ++k) label (sc::parallels[k].name, parX[k], labelBaseline, parPower[k].active);
+    for (int k = 0; k < 4; ++k) label (caption (faders[k], sc::parallels[k].name), parX[k], labelBaseline, parPower[k].active);
 
     // the compression's gain reduction readout (not drawn while the module is off, as the circles and sparks)
     if (compPower.active)

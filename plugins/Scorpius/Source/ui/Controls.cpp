@@ -22,9 +22,15 @@ void SegmentStack::paint (Graphics& g)
         const bool first = i == 0, last = i == n - 1;
         Path p;
         p.addRoundedRectangle (row.getX(), row.getY(), row.getWidth(), row.getHeight(), 3.0f, 3.0f, first, first, last, last);
+        const bool down = i == pressed && held;
+        if (i != selected && (i == hover || down))
+        {
+            g.setColour (theme::mint.withAlpha (0.2f));
+            g.fillPath (p);
+        }
         g.setColour (theme::mint);
         if (i == selected) g.fillPath (p);
-        else
+        else if (! down)                    // held down, a row shows no outline (measured)
         {
             Path o;
             const auto r = row.reduced (0.5f);
@@ -36,24 +42,54 @@ void SegmentStack::paint (Graphics& g)
     }
 }
 
-void SegmentStack::mouseDown (const MouseEvent& e)
+// a row is chosen on release over the row that was pressed (measured: a press dragged off chooses nothing)
+void SegmentStack::mouseDown (const MouseEvent& e) { pressed = rowAt (e.y); held = true; repaint(); }
+
+// the pressed look lasts only while the mouse stays on the row it pressed
+void SegmentStack::mouseDrag (const MouseEvent& e)
 {
-    const int i = jlimit (0, options.size() - 1, (int) ((float) e.y / (rowHeight + gap)));
-    if (i != selected) { selected = i; repaint(); if (onChange) onChange (i); }
+    const bool on = getLocalBounds().contains (e.getPosition()) && rowAt (e.y) == pressed;
+    if (on != held) { held = on; repaint(); }
+}
+
+void SegmentStack::mouseUp (const MouseEvent& e)
+{
+    const int i = rowAt (e.y);
+    const bool over = getLocalBounds().contains (e.getPosition());
+    const int was = pressed;
+    pressed = -1;
+    held = false;
+    repaint();
+    if (over && i == was && i != selected) { selected = i; if (onChange) onChange (i); }
 }
 
 //==============================================================================
 void TextToggle::paint (Graphics& g)
 {
     const auto b = getLocalBounds().toFloat().withHeight (23.5f);
+    g.setFont (theme::font (12.0f));
+    if (isMouseButtonDown() && isMouseOver())
+    {
+        // pressed, on or off: a dark mint box without outline, the text dimmed (measured)
+        g.setColour (theme::mint.withAlpha (0.2f));
+        g.fillRoundedRectangle (b.reduced (0.5f), 3.0f);
+        g.setColour (theme::mint.withAlpha (0.85f));
+        g.drawText (text, b.translated (0.0f, -0.5f), Justification::centred, false);
+        return;
+    }
     if (active)
     {
-        g.setColour (theme::mint.brighter (isMouseOver() ? 0.06f : 0.0f));
+        g.setColour (theme::mint);
         g.fillRoundedRectangle (b, 3.0f);
         g.setColour (Colour (0xff0b1512));
     }
     else
     {
+        if (isMouseOver())
+        {
+            g.setColour (theme::mint.withAlpha (0.2f));
+            g.fillRoundedRectangle (b.reduced (0.5f), 3.0f);
+        }
         g.setColour (theme::mint);
         g.drawRoundedRectangle (b.reduced (0.5f), 3.0f, 1.0f);
     }
@@ -71,6 +107,7 @@ void CompareToggle::paint (Graphics& g)
 {
     const auto b = getLocalBounds().toFloat().withHeight (24.5f).reduced (0.5f);
     const float half = b.getWidth() * 0.5f;
+    const int inactive = 1 - slot;
     g.setColour (theme::boxFill);
     g.fillRoundedRectangle (b, 4.0f);
     {
@@ -78,23 +115,33 @@ void CompareToggle::paint (Graphics& g)
         Path clip;
         clip.addRoundedRectangle (b, 4.0f);
         g.reduceClipRegion (clip);
-        g.setColour (theme::text);
+        if (hover == inactive || pressedPart == inactive)
+        {
+            g.setColour (Colour (0xff252523));
+            g.fillRect (inactive == 0 ? b.withWidth (half) : b.withTrimmedLeft (half));
+        }
+        // the active half is white, or dark while held down
+        g.setColour (pressedPart == slot ? Colour (0xff252523) : theme::text);
         g.fillRect (slot == 0 ? b.withWidth (half) : b.withTrimmedLeft (half));
     }
     g.setColour (theme::text);
     g.drawRoundedRectangle (b, 4.0f, 1.0f);
     g.setFont (theme::font (12.0f));
-    g.setColour (slot == 0 ? theme::boxFill : theme::text);
+    const Colour grey (0xff6e7375);
+    // the active letter: dark on white, grey under the mouse, white while held down
+    g.setColour (slot == 0 ? (pressedPart == 0 ? theme::text : hover == 0 ? grey : theme::boxFill) : theme::text);
     g.drawText ("A", Rectangle<float> (0.0f, 0.0f, 26.0f, 24.5f).translated (0.5f, -0.5f), Justification::centred, false);
-    g.setColour (slot == 1 ? theme::boxFill : theme::text);
+    g.setColour (slot == 1 ? (pressedPart == 1 ? theme::text : hover == 1 ? grey : theme::boxFill) : theme::text);
     g.drawText ("B", Rectangle<float> (b.getRight() - 26.0f, 0.0f, 26.0f, 24.5f).translated (0.0f, -0.5f), Justification::centred, false);
 
-    // the copy button: a circle across the middle with an arrow towards the other setting
+    // the copy button: a black circle across the middle, ringed, with an arrow towards the other setting
     const auto c = circle();
-    g.setColour (theme::boxFill);
+    g.setColour (pressedPart == 2 ? Colour (0xff3a3a38) : Colour (0xff0b0b0b));
     g.fillEllipse (c);
-    g.setColour (theme::text.withAlpha (isMouseOver() && c.contains (getMouseXYRelative().toFloat()) ? 1.0f : 0.95f));
+    g.setColour (theme::text);
     g.drawEllipse (c.reduced (0.5f), 1.0f);
+    // the arrow: grey under the mouse, white again while held down
+    g.setColour (hover == 2 && pressedPart != 2 ? Colour (0xff9a9fa1) : theme::text);
     const float d = slot == 0 ? 1.0f : -1.0f;
     const auto m = c.getCentre();
     Path p;
@@ -106,11 +153,24 @@ void CompareToggle::paint (Graphics& g)
     g.strokePath (p, PathStrokeType (1.1f, PathStrokeType::mitered, PathStrokeType::rounded));
 }
 
-void CompareToggle::mouseDown (const MouseEvent& e)
+int CompareToggle::partAt (Point<float> p) const
 {
-    if (circle().contains (e.position)) { if (onCopy) onCopy(); return; }
-    const int s = e.x < getWidth() / 2 ? 0 : 1;
-    if (s != slot && onSelect) onSelect (s);
+    if (circle().contains (p)) return 2;
+    return p.x < (float) getWidth() * 0.5f ? 0 : 1;
+}
+
+// acts on release over the part that was pressed (measured: a press dragged off does nothing)
+void CompareToggle::mouseDown (const MouseEvent& e) { pressedPart = partAt (e.position); repaint(); }
+
+void CompareToggle::mouseUp (const MouseEvent& e)
+{
+    const int part = getLocalBounds().contains (e.getPosition()) ? partAt (e.position) : -1;
+    const int was = pressedPart;
+    pressedPart = -1;
+    repaint();
+    if (part != was) return;
+    if (part == 2) { if (onCopy) onCopy(); return; }
+    if (part >= 0 && part != slot && onSelect) onSelect (part);
 }
 
 //==============================================================================
@@ -122,7 +182,8 @@ Fader::Fader()
     setRange (0.0, 1.0);
     setSliderSnapsToMousePosition (false);
     setVelocityBasedMode (false);
-    setMouseDragSensitivity (roundToInt (bottomY - topY));
+    setMouseDragSensitivity (pixelsPerRange);
+    setDoubleClickReturnValue (true, 0.0);
 }
 
 void Fader::paint (Graphics& g)
@@ -131,12 +192,12 @@ void Fader::paint (Graphics& g)
     const float v = (float) valueToProportionOfLength (getValue());
     const float capY = bottomY + (topY - bottomY) * v;
     // track: a thin line over the cap's travel; mint from the cap down while the path is on
-    g.setColour (Colour (0xff4a4a4a));
-    g.fillRect (cx - 0.75f, topY, 1.5f, bottomY - topY);
+    g.setColour (Colour (0xff494949));
+    g.fillRect (cx - 1.0f, topY, 2.0f, bottomY - topY);
     if (on && v > 0.0f)
     {
         g.setColour (theme::mint);
-        g.fillRect (cx - 0.75f, capY, 1.5f, bottomY - capY);
+        g.fillRect (cx - 1.0f, capY, 2.0f, bottomY - capY);
     }
     // cap: brushed metal with a radial sheen (bright towards the upper right and lower left, as a spun knob face), a
     // bright rim and a dark groove across just above the middle (measured on the reference at 200 %)
@@ -172,18 +233,17 @@ void Fader::paint (Graphics& g)
 //==============================================================================
 void DriveSparks::paint (Graphics& g)
 {
-    // five marks (measured, design px relative to the column; size = arm length): two large, three small
+    // five marks per colour (measured at 200 %: centres in design px from the column's corner at 96, 41; size = arm
+    // length): two large, three small
     struct Mark { float x, y, size; };
-    static constexpr Mark marks[5] { { 42.5f, 39.5f, 7.5f }, { 42.5f, 64.75f, 7.25f }, { 57.5f, 48.75f, 4.25f },
-                                     { 20.5f, 54.75f, 4.25f }, { 6.5f, 73.75f, 4.25f } };
-    const auto col = on ? theme::mint : theme::dimLabel;
-    for (int i = 0; i < 5; ++i)
+    static constexpr Mark marks[3][5] {
+        { { 6.5f, 73.75f, 4.25f }, { 20.5f, 54.75f, 4.25f }, { 42.5f, 39.75f, 7.5f }, { 42.5f, 64.75f, 7.5f }, { 57.5f, 48.75f, 4.25f } },
+        { { 7.5f, 57.75f, 4.25f }, { 20.5f, 39.75f, 7.5f }, { 33.5f, 52.75f, 7.5f }, { 40.5f, 74.75f, 4.25f }, { 58.5f, 42.75f, 4.25f } },
+        { { 10.5f, 61.75f, 7.5f }, { 21.5f, 52.75f, 4.25f }, { 35.5f, 38.75f, 4.25f }, { 35.5f, 75.75f, 4.25f }, { 53.5f, 51.75f, 7.5f } } };
+    for (auto& m : marks[jlimit (0, 2, colour)])
     {
-        const auto& m = marks[i];
-        // twinkle: each mark breathes with the level on its own phase
-        const float tw = on ? 1.0f + 0.25f * level * std::sin (phase * 6.0f + (float) i * 1.7f) : 1.0f;
-        const float s = m.size * tw;
-        g.setColour (col);
+        const float s = m.size;
+        g.setColour (theme::mint);
         Path p;
         p.startNewSubPath (m.x - s, m.y); p.lineTo (m.x + s, m.y);
         p.startNewSubPath (m.x, m.y - s); p.lineTo (m.x, m.y + s);
@@ -193,7 +253,7 @@ void DriveSparks::paint (Graphics& g)
             p.startNewSubPath (m.x - d, m.y - d); p.lineTo (m.x + d, m.y + d);
             p.startNewSubPath (m.x - d, m.y + d); p.lineTo (m.x + d, m.y - d);
         }
-        g.strokePath (p, PathStrokeType (m.size > 5.0f ? 1.25f : 1.0f));
+        g.strokePath (p, PathStrokeType (m.size > 5.0f ? 1.0f : 0.55f));        // (measured: 2 px and 1 px at 200 %)
     }
 }
 

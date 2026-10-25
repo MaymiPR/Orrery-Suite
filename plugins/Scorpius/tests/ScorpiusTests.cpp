@@ -95,6 +95,53 @@ static void testCompareAndState()
     CHECK_NEAR (real (q, sc::id::liftAmount), 0.3, 1e-4);
 }
 
+// a setting never used yet starts as a copy of the one in use (as the reference: B shows A's changes)
+static void testCompareFirstUse()
+{
+    ScorpiusProcessor p;
+    setReal (p, sc::id::driveColor, 2.0f);
+    setReal (p, sc::id::liftAmount, 0.25f);
+    p.selectCompareSlot (1);
+    CHECK_NEAR (real (p, sc::id::driveColor), 2.0, 1e-6);
+    CHECK_NEAR (real (p, sc::id::liftAmount), 0.25, 1e-4);
+    setReal (p, sc::id::liftAmount, 0.5f);
+    p.selectCompareSlot (0);
+    CHECK_NEAR (real (p, sc::id::liftAmount), 0.25, 1e-4);
+    // the state remembers that B was used; a fresh instance's B is unused (copied on its first use)
+    MemoryBlock mb;
+    p.getStateInformation (mb);
+    ScorpiusProcessor q;
+    q.setStateInformation (mb.getData(), (int) mb.getSize());
+    q.selectCompareSlot (1);
+    CHECK_NEAR (real (q, sc::id::liftAmount), 0.5, 1e-4);
+}
+
+// the I/O link: the output gain follows the input gain inverted, in the audio whatever the output parameter says
+static void testIoLink()
+{
+    ScorpiusProcessor p;
+    p.setPlayConfigDetails (2, 2, 48000.0, 512);
+    p.prepareToPlay (48000.0, 512);
+    p.ioLink = true;
+    setReal (p, sc::id::inputGain, 9.0f);
+    setReal (p, sc::id::outputGain, 3.0f);
+    AudioBuffer<float> b (2, 512);
+    MidiBuffer midi;
+    float last = 0.0f;
+    for (int block = 0; block < 20; ++block)
+    {
+        for (int c = 0; c < 2; ++c) for (int i = 0; i < 512; ++i) b.setSample (c, i, 0.25f);
+        p.processBlock (b, midi);
+        last = b.getSample (1, 511);
+    }
+    CHECK_NEAR (Decibels::gainToDecibels (last / 0.25f), 0.0, 0.01);
+    MemoryBlock mb;
+    p.getStateInformation (mb);
+    ScorpiusProcessor q;
+    q.setStateInformation (mb.getData(), (int) mb.getSize());
+    CHECK (q.ioLink.load());
+}
+
 static void testPassThrough()
 {
     ScorpiusProcessor p;
@@ -121,6 +168,8 @@ int main()
     testParameters();
     testPresets();
     testCompareAndState();
+    testCompareFirstUse();
+    testIoLink();
     testPassThrough();
     std::printf ("%d checks, %d failed\n", checks, failures);
     return failures == 0 ? 0 : 1;
