@@ -204,8 +204,7 @@ jobs:
           # This version's section of CHANGELOG.md
           tr -d '\r' < CHANGELOG.md | awk -v v="## $VERSION" '$0 == v {on = 1; next} /^## / {on = 0} on' > notes.md
           [ -s notes.md ] || echo "Orrery Suite $VERSION" > notes.md
-          cat packaging/INSTALL-Windows.txt packaging/INSTALL-macOS.txt packaging/INSTALL-Linux.txt | sed 's/^/    /' > install.md
-          printf '\n## Installing\n\n' >> notes.md; cat install.md >> notes.md
+          # (the install steps live in the README, as in Chan Sampler; the notes are the changelog only)
           FILES=$(find artifacts -type f \( -name '*.exe' -o -name '*.pkg' -o -name '*.tar.gz' \))
           # Checksums, so downloads of these unsigned files can be checked
           (cd artifacts && find . -type f \( -name '*.exe' -o -name '*.pkg' -o -name '*.tar.gz' \) -exec sha256sum {} + | sed 's|  .*/|  |') > SHA256SUMS.txt

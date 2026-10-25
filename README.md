@@ -25,19 +25,30 @@ of a well-known original in the same spirit.
 > Joshua. Other companies' product names appear only to describe what a Orrery plug-in is modelled on and belong to
 > their owners. No code of theirs is included: the sound and the look were measured from the outside.
 
-## Download
+## Install
 
-One installer per operating system installs every plug-in in the suite. Get it from
-[Releases](https://github.com/MaymiPR/OrrerySuite/releases):
+Download from the [Releases](https://github.com/MaymiPR/OrrerySuite/releases)
+page. One installer per system holds every plug-in in the suite:
 
-| System | File | Installs to |
-|---|---|---|
-| Windows 10 / 11 (64-bit) | `OrrerySuite-<version>-Windows-Setup.exe` | `Common Files\VST3\Orrery Suite`, `Common Files\CLAP\Orrery Suite`; standalone apps optionally |
-| macOS 10.13+ (Apple Silicon and Intel) | `OrrerySuite-<version>-macOS.pkg` | `/Library/Audio/Plug-Ins/{Components, VST3/Orrery Suite, CLAP/Orrery Suite}` |
-| Linux x86-64 (glibc 2.35+) | `OrrerySuite-<version>-Linux.tar.gz` | `~/.vst3/Orrery Suite`, `~/.clap/Orrery Suite` (run `install-linux.sh`) |
+- **Windows:** `OrrerySuite-<version>-Windows-Setup.exe` installs the VST3 and
+  the CLAP to `C:\Program Files\Common Files\` (in `Orrery Suite` folders) and,
+  if you choose, the standalone apps (Start menu), with an uninstaller.
+- **macOS** (universal, 10.13 or later): `OrrerySuite-<version>-macOS.pkg`
+  installs the AU, the VST3 and the CLAP (you can choose which).
+- **Linux** (x86-64, glibc 2.35 or later): `OrrerySuite-<version>-Linux.tar.gz`
+  holds the VST3 and the CLAP; run `sh install-linux.sh` to copy them to
+  `~/.vst3` and `~/.clap` (see its `INSTALL.txt`).
 
-The installers are not code-signed or notarized; see [packaging/](packaging) for the first-run steps on each system.
-Each release lists the files' SHA-256 checksums.
+Then rescan plugins in your DAW.
+
+**Security warnings.** Orrery Suite isn't code-signed or notarized (that needs
+paid certificates), so the first time you open it:
+- Windows SmartScreen: *More info* → *Run anyway*.
+- macOS 15 and later: open it once, then System Settings → Privacy & Security
+  → *Open Anyway*. On earlier macOS: right-click → *Open*.
+
+Each release lists the files' SHA-256 checksums in `SHA256SUMS.txt`, so you can
+check that a download is the published one.
 
 ## Plug-ins
 
