@@ -1,5 +1,10 @@
 # Changelog
 
+## Unreleased
+
+In **The Antiparticle**: fine adjustment of the knobs is Shift only, as on The God Particle (Ctrl now drags at the
+normal speed).
+
 ## 1.0.1
 
 Fixes in **The Antiparticle**:

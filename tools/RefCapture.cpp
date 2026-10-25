@@ -8,6 +8,7 @@
 // out.raw.pcm the plug-in's output (float32, interleaved stereo, 48 kHz).
 //   ... state=<file>      loads a raw plug-in state (getStateInformation bytes) before the editor opens
 //   ... shot=<ms>         writes one PNG (out path) after <ms> of audio instead of filming
+//   ... rows=<from>,<to>  films only that band of rows (fractions of the editor's height)
 #include <juce_audio_processors/juce_audio_processors.h>
 #include <juce_gui_basics/juce_gui_basics.h>
 #include <windows.h>
@@ -113,15 +114,17 @@ public:
         const double t = Time::getMillisecondCounterHiRes() * 0.001 - feeder.startTime;
         stream->write (&t, sizeof (double));
         HeapBlock<uint8> rgb ((size_t) w * 3);
-        for (int row = 0; row < h; ++row)
+        const int r0 = jlimit (0, h, roundToInt (rowFrom * (float) h)), r1 = jlimit (r0, h, roundToInt (rowTo * (float) h));
+        for (int row = r0; row < r1; ++row)
         {
             const uint8* src = px.get() + (size_t) row * (size_t) stride;
             for (int c = 0; c < w; ++c) { rgb[c * 3] = src[c * 3 + 2]; rgb[c * 3 + 1] = src[c * 3 + 1]; rgb[c * 3 + 2] = src[c * 3]; }
             stream->write (rgb.get(), (size_t) w * 3);
         }
-        if (! sizeWritten) { File (out.getFullPathName() + ".txt").replaceWithText (String (w) + " " + String (h)); sizeWritten = true; }
+        if (! sizeWritten) { File (out.getFullPathName() + ".txt").replaceWithText (String (w) + " " + String (r1 - r0)); sizeWritten = true; }
     }
     Component& editor; Feeder& feeder; File out; std::unique_ptr<FileOutputStream> stream; bool sizeWritten = false;
+    float rowFrom = 0.0f, rowTo = 1.0f;      // rows=<from>,<to>: only that band of the editor (fractions of its height)
 };
 
 // grabs the component's screen area (also native child windows, e.g. a Waves editor) into a PNG
@@ -148,17 +151,21 @@ static Image grabImage (Component& c)
     grabEditor (c, mem, w, h); ignoreUnused (x, y);
     BITMAPINFO bi {}; bi.bmiHeader.biSize = sizeof (BITMAPINFOHEADER); bi.bmiHeader.biWidth = w; bi.bmiHeader.biHeight = -h;
     bi.bmiHeader.biPlanes = 1; bi.bmiHeader.biBitCount = 32; bi.bmiHeader.biCompression = BI_RGB;
-    Image img (Image::ARGB, w, h, true);
+    // (a software image: its pixels can be written straight, which keeps bursts of grabs fast)
+    Image img (Image::ARGB, w, h, true, SoftwareImageType());
     {
         Image::BitmapData bd (img, Image::BitmapData::writeOnly);
         HeapBlock<uint8> px ((size_t) w * (size_t) h * 4);
         GetDIBits (mem, bmp, 0, (UINT) h, px.get(), &bi, DIB_RGB_COLORS);
         for (int row = 0; row < h; ++row)
-            for (int col = 0; col < w; ++col)
+        {
+            auto* d = bd.getLinePointer (row);
+            const uint8* q = px.get() + (size_t) row * (size_t) w * 4;
+            for (int col = 0; col < w; ++col, d += bd.pixelStride, q += 4)
             {
-                const uint8* q = px.get() + ((size_t) row * (size_t) w + (size_t) col) * 4;
-                bd.setPixelColour (col, row, Colour (q[2], q[1], q[0]));
+                d[0] = q[0]; d[1] = q[1]; d[2] = q[2]; d[3] = 255;     // BGRA in both
             }
+        }
     }
     SelectObject (mem, old); DeleteObject (bmp); DeleteDC (mem); ReleaseDC (nullptr, screen);
     return img;
@@ -227,6 +234,33 @@ public:
                         if (auto st = f.createOutputStream()) PNGImageFormat().writeImageToStream (img, *st);
                     }
                 std::printf ("%s burst\n", mod.toRawUTF8()); continue;
+            }
+            if (mod == "burst" || mod == "hoverburst")            // click (or only move there), then film what follows
+            {
+                const int ms = t.size() > 5 ? t[5].getIntValue() : 1500;
+                if (mod == "burst")
+                {
+                    sleep (400);
+                    mouse_event (MOUSEEVENTF_LEFTDOWN, 0, 0, 0, 0); sleep (30);
+                    mouse_event (MOUSEEVENTF_LEFTUP, 0, 0, 0, 0);
+                }
+                const double t0 = Time::getMillisecondCounterHiRes();
+                std::vector<std::pair<double, Image>> burst;
+                while (Time::getMillisecondCounterHiRes() - t0 < ms)
+                {
+                    const double at = Time::getMillisecondCounterHiRes() - t0;
+                    burst.emplace_back (at, grabImage (editor));
+                }
+                if (shots != File())
+                    for (size_t k = 0; k < burst.size(); ++k)
+                    {
+                        auto f = shots.getSiblingFile (shots.getFileNameWithoutExtension() + "_" + String (n) + "_f" + String (k).paddedLeft ('0', 3)
+                                                       + "_" + String (roundToInt (burst[k].first)) + "ms.png");
+                        f.deleteFile();
+                        if (auto st = f.createOutputStream()) PNGImageFormat().writeImageToStream (burst[k].second, *st);
+                    }
+                std::printf ("burst: %d frames in %d ms\n", (int) burst.size(), ms);
+                dump ("after"); continue;
             }
             if (mod == "hover")                                   // no click: what does hovering show?
             {
@@ -398,7 +432,7 @@ public:
         for (int i = 3; i < args.size(); ++i)
         {
             if (args[i].startsWith ("state=") || args[i].startsWith ("shot=") || args[i].startsWith ("in=")
-                || args[i].startsWith ("drag=") || args[i].startsWith ("design=")) continue;
+                || args[i].startsWith ("drag=") || args[i].startsWith ("design=") || args[i].startsWith ("rows=")) continue;
             const auto name = args[i].upToFirstOccurrenceOf ("=", false, false);
             const float v = args[i].fromFirstOccurrenceOf ("=", false, false).getFloatValue();
             for (auto* p : plugin->getParameters())
@@ -449,6 +483,12 @@ public:
             return;
         }
         capture = std::make_unique<Capture> (*window->getContentComponent(), *feeder, args[2]);
+        for (int i = 3; i < args.size(); ++i)
+            if (args[i].startsWith ("rows="))
+            {
+                capture->rowFrom = args[i].substring (5).upToFirstOccurrenceOf (",", false, false).getFloatValue();
+                capture->rowTo = args[i].fromFirstOccurrenceOf (",", false, false).getFloatValue();
+            }
         feeder->startThread (Thread::Priority::high);
         capture->startTimer (25);
     }

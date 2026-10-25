@@ -4,6 +4,7 @@
 #include "shared/ui/MetalKnob.h"
 #include "shared/ui/Widgets.h"
 #include "ui/Controls.h"
+#include "ui/Stripe.h"
 
 // The editor is laid out in the reference's design pixels (888 x 403.5 at 100 %, measured on Orion at 200 %) and
 // scaled as a whole by the UI Scale menu (50 ... 200 %), or freely by dragging its bottom-right corner (ours).
@@ -119,6 +120,7 @@ private:
     // harmonics, compression, lift
     orrery::PowerButton harmPower, compPower, liftPower;
     sc::Blob harmBlob { 6.5f }, liftBlob { 6.5f };
+    sc::GrReadout grReadout;
     sc::SegmentStack freq { { "50Hz", "80Hz" } }, mode { { "a", "b" } };
     orrery::MetalKnob harmKnob { orrery::MetalKnob::Kind::small }, compKnob { orrery::MetalKnob::Kind::small },
         liftKnob { orrery::MetalKnob::Kind::small };
@@ -133,6 +135,11 @@ private:
     sc::Fader faders[4];
     // plate
     orrery::MetalKnob inputKnob { orrery::MetalKnob::Kind::plate }, outputKnob { orrery::MetalKnob::Kind::plate };
+    sc::Stripe stripe;
+    sc::Toast toast;
+    // module displays fade with their power buttons; changes animate once the editor is up (not while it opens)
+    sc::Fades fades;
+    bool animateChanges = false;
 
     std::vector<std::unique_ptr<juce::AudioProcessorValueTreeState::SliderAttachment>> attachments;
     std::unique_ptr<orrery::DropList> dropList;

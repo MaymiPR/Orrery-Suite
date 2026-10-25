@@ -1,5 +1,6 @@
 #include "Controls.h"
 #include "Params.h"
+#include "FaderCap.h"
 
 using namespace juce;
 namespace theme = orrery::theme;
@@ -182,8 +183,22 @@ Fader::Fader()
     setRange (0.0, 1.0);
     setSliderSnapsToMousePosition (false);
     setVelocityBasedMode (false);
+    // Shift: JUCE's velocity mode (cursor hidden, slow moves fine-tune), as the reference; Ctrl drags at the normal speed
+    setVelocityModeParameters (1.0, 1, 0.0, true, ModifierKeys::shiftModifier);
     setMouseDragSensitivity (pixelsPerRange);
     setDoubleClickReturnValue (true, 0.0);
+}
+
+// Alt-click: back to 0 (measured), without a drag after it
+void Fader::mouseDown (const MouseEvent& e)
+{
+    Slider::mouseDown (e);
+    if (e.mods.isAltDown()) setValue (getDoubleClickReturnValue(), sendNotificationSync);
+}
+
+void Fader::mouseDrag (const MouseEvent& e)
+{
+    if (! e.mods.isAltDown()) Slider::mouseDrag (e);
 }
 
 void Fader::paint (Graphics& g)
@@ -199,62 +214,235 @@ void Fader::paint (Graphics& g)
         g.setColour (theme::mint);
         g.fillRect (cx - 1.0f, capY, 2.0f, bottomY - capY);
     }
-    // cap: brushed metal with a radial sheen (bright towards the upper right and lower left, as a spun knob face), a
-    // bright rim and a dark groove across just above the middle (measured on the reference at 200 %)
+    // cap: the reference's cap, drawn from the model fitted to it (FaderCap.h), rendered per pixel at the current scale
+    const int px = jmax (1, roundToInt (theme::pixelScale (g, *this) * 8.0f));      // eighths of a pixel per design px
+    if (capImage.isNull() || (px != capPx && ! theme::liveResizing (*this))) renderCap (px);
     const Rectangle<float> cap (cx - capW * 0.5f, capY - capH * 0.5f, capW, capH);
+    g.drawImage (capImage, cap, RectanglePlacement::stretchToFit);
+}
+
+// grey of the cap at a point (2 px per design px, from its centre), or < 0 outside it
+static float capGrey (float x, float y)
+{
+    namespace fc = fadercap;
+    auto inside = [] (float px, float py, float hw, float hh, float r)       // distance inside a rounded rectangle
     {
-        Graphics::ScopedSaveState s (g);
-        Path clip;
-        clip.addRoundedRectangle (cap, 3.0f);
-        g.reduceClipRegion (clip);
-        const auto c = cap.getCentre();
-        constexpr int wedges = 72;
-        for (int i = 0; i < wedges; ++i)
+        const float qx = std::abs (px) - (hw - r), qy = std::abs (py) - (hh - r);
+        return r - std::hypot (jmax (qx, 0.0f), jmax (qy, 0.0f)) - jmin (jmax (qx, qy), 0.0f);
+    };
+    const float d = inside (x, y, fc::halfW, fc::halfH, fc::radius);
+    if (d <= 0.0f) return -1.0f;
+    const float gx = 0.5f * (fc::grooveL + fc::grooveR), gy = 0.5f * (fc::grooveT + fc::grooveB);
+    const float dg = inside (x - gx, y - gy, 0.5f * (fc::grooveR - fc::grooveL), 0.5f * (fc::grooveB - fc::grooveT), fc::grooveRadius);
+    if (dg > 0.0f) return dg < fc::ring ? fc::grooveEdge : fc::grooveCore;
+    // a table over an angle (turns clockwise from up), read with linear interpolation round the circle
+    auto lookup = [] (const float* table, int steps, float turns)
+    {
+        const float u = (turns - std::floor (turns)) * (float) steps;
+        const int i0 = (int) u % steps;
+        const float w = u - std::floor (u);
+        return table[i0] * (1.0f - w) + table[(i0 + 1) % steps] * w;
+    };
+    const int ring = (int) (d / fc::ring);
+    if (ring < fc::rings)
+        return lookup (fc::rim[ring], fc::rimSteps, std::atan2 (x / fc::halfW, -y / fc::halfH) / MathConstants<float>::twoPi);
+    // the face repeats every half turn
+    return lookup (dg > -fc::ring ? fc::halo : fc::face, fc::steps, std::atan2 (x, -y) / MathConstants<float>::pi);
+}
+
+void Fader::renderCap (int px)
+{
+    capPx = px;
+    const float s = (float) px / 8.0f;                 // physical px per design px
+    const int w = jmax (1, roundToInt (capW * s)), h = jmax (1, roundToInt (capH * s));
+    capImage = Image (Image::ARGB, w, h, true, SoftwareImageType());
+    Image::BitmapData bd (capImage, Image::BitmapData::writeOnly);
+    constexpr int ss = 4;                              // 4 x 4 samples per pixel
+    const float toModelX = capW * 2.0f / (float) w, toModelY = capH * 2.0f / (float) h;
+    for (int j = 0; j < h; ++j)
+        for (int i = 0; i < w; ++i)
         {
-            const float a0 = MathConstants<float>::twoPi * (float) i / (float) wedges, a1 = a0 + MathConstants<float>::twoPi / (float) wedges + 0.01f;
-            const float am = 0.5f * (a0 + a1);
-            // angle from up, clockwise: brightest at 45 and 225 degrees
-            const float v = 0.62f + 0.22f * std::cos (2.0f * (am - MathConstants<float>::pi * 0.25f)) + 0.04f * (std::cos (am) < 0.0f ? 1.0f : 0.0f);
-            Path w;
-            w.startNewSubPath (c);
-            w.lineTo (c.x + 40.0f * std::sin (a0), c.y - 40.0f * std::cos (a0));
-            w.lineTo (c.x + 40.0f * std::sin (a1), c.y - 40.0f * std::cos (a1));
-            w.closeSubPath();
-            g.setColour (Colour::greyLevel (jlimit (0.0f, 1.0f, v)));
-            g.fillPath (w);
+            float sum = 0.0f;
+            int in = 0;
+            for (int sj = 0; sj < ss; ++sj)
+                for (int si = 0; si < ss; ++si)
+                {
+                    const float x = ((float) i + ((float) si + 0.5f) / ss) * toModelX - capW - 2.0f * capOffsetX;
+                    const float y = ((float) j + ((float) sj + 0.5f) / ss) * toModelY - capH;
+                    const float v = capGrey (x, y);
+                    if (v >= 0.0f) { sum += v; ++in; }
+                }
+            if (in == 0) continue;
+            const float alpha = (float) in / (float) (ss * ss);
+            const auto grey = (uint8) jlimit (0, 255, roundToInt (sum / (float) in));
+            bd.setPixelColour (i, j, Colour (grey, grey, grey).withAlpha (alpha));
         }
-    }
-    g.setColour (Colour (0xffcfcfcf));
-    g.drawRoundedRectangle (cap.reduced (0.5f), 3.0f, 1.0f);
-    g.setColour (Colour (0xff2e2e2e));
-    g.fillRoundedRectangle (cap.getX() + 3.5f, cap.getCentreY() - 1.75f, cap.getWidth() - 7.0f, 2.0f, 1.0f);
 }
 
 //==============================================================================
+namespace
+{
+// the marks' centres per colour (measured at 200 %: design px from the column's corner at 96, 41), in the order of
+// their identities: a mark moves to its own place when the colour changes (marks 2 and 3 are the large ones)
+constexpr float markPos[3][5][2] {
+    { { 6.5f, 73.75f }, { 20.5f, 54.75f }, { 42.5f, 39.75f }, { 42.5f, 64.75f }, { 57.5f, 48.75f } },
+    { { 40.5f, 74.75f }, { 58.5f, 42.75f }, { 20.5f, 39.75f }, { 33.5f, 52.75f }, { 7.5f, 57.75f } },
+    { { 35.5f, 38.75f }, { 21.5f, 52.75f }, { 10.5f, 61.75f }, { 53.5f, 51.75f }, { 35.5f, 75.75f } } };
+constexpr float markSize[5] { 4.25f, 4.25f, 7.5f, 7.5f, 4.25f };       // arm length
+
+double nowMs() { return Time::getMillisecondCounterHiRes(); }
+
+float easeInOutCubic (float u)
+{
+    return u < 0.5f ? 4.0f * u * u * u : 1.0f - std::pow (-2.0f * u + 2.0f, 3.0f) * 0.5f;
+}
+}
+
+Point<float> DriveSparks::markAt (int i, double now) const
+{
+    const Point<float> to (markPos[colour][i][0], markPos[colour][i][1]);
+    const float u = (float) jlimit (0.0, 1.0, (now - moveStart) / moveMs);
+    return from[i] + (to - from[i]) * easeInOutCubic (u);
+}
+
+void DriveSparks::setColour (int c, bool animate)
+{
+    c = jlimit (0, 2, c);
+    if (c == colour) return;
+    const double now = nowMs();
+    for (int i = 0; i < 5; ++i)            // (a move under way sets out again from where its marks are)
+        from[i] = animate ? markAt (i, now) : Point<float> (markPos[c][i][0], markPos[c][i][1]);
+    colour = c;
+    moveStart = animate ? now : -1.0e9;
+    if (animate) startTimerHz (60);
+    repaint();
+}
+
+void DriveSparks::setHiPass (bool on, bool animate)
+{
+    if (on == hiPass) return;
+    hiPass = on;
+    crossStart = animate ? nowMs() : -1.0e9;
+    if (animate) startTimerHz (60);
+    repaint();
+}
+
+void DriveSparks::timerCallback()
+{
+    const double now = nowMs();
+    if (now - moveStart > moveMs && now - crossStart > crossMs) stopTimer();
+    repaint();
+}
+
 void DriveSparks::paint (Graphics& g)
 {
-    // five marks per colour (measured at 200 %: centres in design px from the column's corner at 96, 41; size = arm
-    // length): two large, three small
-    struct Mark { float x, y, size; };
-    static constexpr Mark marks[3][5] {
-        { { 6.5f, 73.75f, 4.25f }, { 20.5f, 54.75f, 4.25f }, { 42.5f, 39.75f, 7.5f }, { 42.5f, 64.75f, 7.5f }, { 57.5f, 48.75f, 4.25f } },
-        { { 7.5f, 57.75f, 4.25f }, { 20.5f, 39.75f, 7.5f }, { 33.5f, 52.75f, 7.5f }, { 40.5f, 74.75f, 4.25f }, { 58.5f, 42.75f, 4.25f } },
-        { { 10.5f, 61.75f, 7.5f }, { 21.5f, 52.75f, 4.25f }, { 35.5f, 38.75f, 4.25f }, { 35.5f, 75.75f, 4.25f }, { 53.5f, 51.75f, 7.5f } } };
-    for (auto& m : marks[jlimit (0, 2, colour)])
+    const double now = nowMs();
+    // the cross-fade: the shape on its way out first, the new one over it
+    const float q = (float) jlimit (0.0, 1.0, (now - crossStart) / crossMs);
+    for (int layer = 0; layer < 2; ++layer)
     {
-        const float s = m.size;
-        g.setColour (theme::mint);
-        Path p;
-        p.startNewSubPath (m.x - s, m.y); p.lineTo (m.x + s, m.y);
-        p.startNewSubPath (m.x, m.y - s); p.lineTo (m.x, m.y + s);
-        if (hiPass)
+        const bool star = layer == 0 ? ! hiPass : hiPass;
+        const float alpha = layer == 0 ? 1.0f - q : q;
+        if (alpha <= 0.0f) continue;
+        g.setColour (theme::mint.withMultipliedAlpha (alpha));
+        for (int i = 0; i < 5; ++i)
         {
-            const float d = s * 0.72f;
-            p.startNewSubPath (m.x - d, m.y - d); p.lineTo (m.x + d, m.y + d);
-            p.startNewSubPath (m.x - d, m.y + d); p.lineTo (m.x + d, m.y - d);
+            const auto m = markAt (i, now);
+            const float s = markSize[i];
+            Path p;
+            p.startNewSubPath (m.x - s, m.y); p.lineTo (m.x + s, m.y);
+            p.startNewSubPath (m.x, m.y - s); p.lineTo (m.x, m.y + s);
+            if (star)
+            {
+                const float d = s * 0.72f;
+                p.startNewSubPath (m.x - d, m.y - d); p.lineTo (m.x + d, m.y + d);
+                p.startNewSubPath (m.x - d, m.y + d); p.lineTo (m.x + d, m.y - d);
+            }
+            g.strokePath (p, PathStrokeType (s > 5.0f ? 1.0f : 0.55f));        // (measured: 2 px and 1 px at 200 %)
         }
-        g.strokePath (p, PathStrokeType (m.size > 5.0f ? 1.0f : 0.55f));        // (measured: 2 px and 1 px at 200 %)
     }
+}
+
+//==============================================================================
+void Fades::show (Component& c, bool visible, bool animate)
+{
+    const float target = visible ? 1.0f : 0.0f;
+    auto it = std::find_if (fades.begin(), fades.end(), [&c] (const Fade& f) { return f.c == &c; });
+    if (it != fades.end() ? it->to == target : c.isVisible() == visible) return;        // already there or on its way
+    const float now = c.isVisible() ? c.getAlpha() : 0.0f;                               // (a fade under way turns back)
+    if (it != fades.end()) fades.erase (it);
+    if (! animate)
+    {
+        c.setAlpha (1.0f);
+        c.setVisible (visible);
+        return;
+    }
+    c.setAlpha (now);
+    c.setVisible (true);
+    fades.push_back ({ &c, now, target, nowMs() });
+    startTimerHz (60);
+}
+
+void Fades::timerCallback()
+{
+    const double t = nowMs();
+    for (auto it = fades.begin(); it != fades.end();)
+    {
+        if (it->c == nullptr) { it = fades.erase (it); continue; }
+        const double span = fullMs * std::abs (it->to - it->from);
+        const float u = span <= 0.0 ? 1.0f : (float) jlimit (0.0, 1.0, (t - it->start) / span);
+        it->c->setAlpha (it->from + (it->to - it->from) * u);
+        if (u >= 1.0f)
+        {
+            it->c->setVisible (it->to > 0.0f);
+            it->c->setAlpha (1.0f);
+            it = fades.erase (it);
+        }
+        else
+            ++it;
+    }
+    if (fades.empty()) stopTimer();
+}
+
+//==============================================================================
+void GrReadout::paint (Graphics& g)
+{
+    g.setColour (theme::mint);
+    g.setFont (theme::font (19.5f));
+    theme::textAt (g, text, (float) getWidth() * 0.5f, 22.0f, Justification::horizontallyCentred);
+}
+
+//==============================================================================
+void Toast::show (const String& t)
+{
+    text = t;
+    shownAt = nowMs();
+    setAlpha (1.0f);
+    setVisible (true);
+    toFront (false);
+    repaint();
+    startTimerHz (60);
+}
+
+void Toast::timerCallback()
+{
+    const double t = nowMs() - shownAt - holdMs;
+    if (t >= fadeMs) { stopTimer(); setVisible (false); setAlpha (1.0f); return; }
+    setAlpha (t <= 0.0 ? 1.0f : (float) (1.0 - t / fadeMs));
+}
+
+void Toast::paint (Graphics& g)
+{
+    // (measured at 200 %: the box 200 x 60.5 with a 1 px edge #252523, filled #050607; the text as the labels, its
+    // baseline 34.25 below the box's top)
+    const auto b = getLocalBounds().toFloat();
+    g.setColour (Colour (0xff252523));
+    g.fillRect (b);
+    g.setColour (Colour (0xff050607));
+    g.fillRect (b.reduced (1.0f));
+    g.setColour (theme::text);
+    g.setFont (theme::font (12.0f));
+    theme::textAt (g, text, b.getCentreX() - 1.0f, 34.25f, Justification::horizontallyCentred);
 }
 
 //==============================================================================

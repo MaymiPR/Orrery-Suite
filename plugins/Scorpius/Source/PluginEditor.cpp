@@ -14,7 +14,7 @@ namespace
 // Layout measured on the reference at 200 % (plugins/Scorpius/tools/measure_ui.py, measure_text.py), design px.
 constexpr float columnX[] { 86.0f, 175.0f, 424.0f, 608.0f, 801.0f };
 constexpr float panelTop = 31.75f, panelBottom = 308.0f, plateTop = 310.75f;
-constexpr float dividerTop = 36.0f, dividerBottom = 270.5f, stripeLine = 271.5f;
+constexpr float dividerTop = 36.0f, dividerBottom = 272.5f, stripeLine = 272.5f;
 constexpr float labelBaseline = 263.5f, upperLabelBaseline = 192.5f, selectorLabelBaseline = 194.0f;
 constexpr float readoutCentres[2][2] { { 30.5f, 60.5f }, { 827.5f, 857.5f } };     // input L R, output L R
 constexpr float ledX[2][2] { { 26.0f, 56.0f }, { 824.0f, 854.0f } };
@@ -60,12 +60,14 @@ ScorpiusEditor::ScorpiusEditor (ScorpiusProcessor& p) : AudioProcessorEditor (p)
 
     for (auto* c : std::initializer_list<Component*> { &logo, &presetBox, &prevButton, &nextButton, &saveButton, &compare, &ioLinkButton, &scaleBox, &gear,
                                                        &drivePower, &sparks, &hiPass, &color, &harmPower, &compPower, &liftPower, &harmBlob,
-                                                       &liftBlob, &freq, &mode, &harmKnob, &compKnob, &liftKnob, &eqPower, &eqCurve,
-                                                       &inputKnob, &outputKnob })
+                                                       &liftBlob, &grReadout, &freq, &mode, &harmKnob, &compKnob, &liftKnob, &eqPower,
+                                                       &eqCurve, &inputKnob, &outputKnob })
         content.addAndMakeVisible (*c);
     for (auto& k : eqKnobs) content.addAndMakeVisible (k);
     for (auto& b : parPower) content.addAndMakeVisible (b);
     for (auto& f : faders) content.addAndMakeVisible (f);
+    content.addAndMakeVisible (stripe);
+    content.addChildComponent (toast);                // over everything else (shown by Compare's arrow)
     content.addMouseListener (&hoverTracker, true);
 
     // top bar (the same as The God Particle's, with Compare where it has the side-chain switch)
@@ -102,6 +104,10 @@ ScorpiusEditor::ScorpiusEditor (ScorpiusProcessor& p) : AudioProcessorEditor (p)
     place (harmBlob, 220.0f - 25.0f, 99.25f - 25.0f, 50.0f, 50.0f);
     place (liftBlob, 380.0f - 25.0f, 99.25f - 25.0f, 50.0f, 50.0f);
     place (eqCurve, 432.0f, 70.0f, 168.0f, 55.0f);
+    place (grReadout, 300.5f - 40.0f, 106.0f - 22.0f, 80.0f, 28.0f);      // (text baseline at y 106)
+    place (toast, 344.0f, 337.0f, 200.0f, 60.5f);
+    place (stripe, sc::Stripe::left, sc::Stripe::top, sc::Stripe::width, sc::Stripe::height);
+    stripe.paintBackground = [this] (Graphics& g) { paintPanel (g); };
 
     placeKnob (harmKnob, harmX, bottomRowY, smallR);
     placeKnob (compKnob, compX, bottomRowY, smallR);
@@ -162,6 +168,7 @@ ScorpiusEditor::ScorpiusEditor (ScorpiusProcessor& p) : AudioProcessorEditor (p)
             prm->setValueNotifyingHost ((float) index / (float) (count - 1));
             prm->endChangeGesture();
         }
+        updateFromParams();
     };
     color.onChange = [choose] (int i) { choose (sc::id::driveColor, i, 3); };
     mode.onChange = [choose] (int i) { choose (sc::id::compMode, i, 2); };
@@ -177,7 +184,11 @@ ScorpiusEditor::ScorpiusEditor (ScorpiusProcessor& p) : AudioProcessorEditor (p)
         compare.repaint(); presetBox.repaint();
         updateFromParams();
     };
-    compare.onCopy = [this] { proc.copyCompareSlot(); };
+    compare.onCopy = [this]
+    {
+        proc.copyCompareSlot();
+        toast.show (proc.compareSlot() == 0 ? "A copied to B." : "B copied to A.");
+    };
     presetBox.onClick = [this] { if (dropList != nullptr) closePopups(); else showPresetList(); };
     scaleBox.onClick = [this] { if (dropList != nullptr) closePopups(); else showScaleList(); };
     prevButton.onClick = [this] { proc.presets.step (-1); presetBox.text = proc.presets.currentName(); presetBox.repaint(); };
@@ -198,6 +209,7 @@ ScorpiusEditor::ScorpiusEditor (ScorpiusProcessor& p) : AudioProcessorEditor (p)
     addAndMakeVisible (*grip);
     grip->setAlwaysOnTop (true);
     setUiScale (proc.uiScale.load());
+    animateChanges = true;
     startTimerHz (30);
     readoutClock.startTimer (46);
 }
@@ -217,6 +229,7 @@ void ScorpiusEditor::toggleParam (const char* pid)
         prm->setValueNotifyingHost (prm->getValue() >= 0.5f ? 0.0f : 1.0f);
         prm->endChangeGesture();
     }
+    updateFromParams();         // at once (the listener's update comes a message later)
 }
 
 void ScorpiusEditor::setUiScale (float s)
@@ -334,16 +347,17 @@ void ScorpiusEditor::updateFromParams()
     color.selected = jlimit (0, 2, roundToInt (v (sc::id::driveColor)));
     mode.selected = jlimit (0, 1, roundToInt (v (sc::id::compMode)));
     freq.selected = v (sc::id::harmFreq) < 65.0f ? 0 : 1;
-    sparks.hiPass = hiPass.active;
-    sparks.colour = color.selected;
-    sparks.setVisible (drivePower.active);
-    harmBlob.setVisible (harmPower.active);
-    liftBlob.setVisible (liftPower.active);
-    eqCurve.setVisible (eqPower.active);
+    sparks.setHiPass (hiPass.active, animateChanges);
+    sparks.setColour (color.selected, animateChanges);
+    fades.show (sparks, drivePower.active, animateChanges);
+    fades.show (harmBlob, harmPower.active, animateChanges);
+    fades.show (grReadout, compPower.active, animateChanges);
+    fades.show (liftBlob, liftPower.active, animateChanges);
+    fades.show (eqCurve, eqPower.active, animateChanges);
     for (int b = 0; b < 5; ++b) eqCurve.gains[b] = v (sc::eqIds[b]);
     for (int k = 0; k < 4; ++k) { parPower[k].active = on (sc::parallels[k].on); faders[k].on = parPower[k].active; faders[k].repaint(); }
     for (auto* c : std::initializer_list<Component*> { &drivePower, &hiPass, &harmPower, &compPower, &liftPower, &eqPower, &color, &mode, &freq,
-                                                       &sparks, &harmBlob, &liftBlob, &eqCurve })
+                                                       &harmBlob, &liftBlob, &eqCurve })
         c->repaint();
     for (auto& b : parPower) b.repaint();
     presetBox.text = proc.presets.currentName();
@@ -419,6 +433,7 @@ void ScorpiusEditor::timerCallback()
     outMeter[0].update (proc.outMeter.left);
     outMeter[1].update (proc.outMeter.right);
     compGrDb = proc.compGr.load();
+    if (grText (compGrDb) != grReadout.text) { grReadout.text = grText (compGrDb); grReadout.repaint(); }
     const int blocks = proc.blocksProcessed.load();
     const bool running = blocks != lastBlocks;
     lastBlocks = blocks;
@@ -430,7 +445,10 @@ void ScorpiusEditor::timerCallback()
     harmBlob.level = inLevel; harmBlob.phase = phase; harmBlob.amount = (float) harmKnob.getValue();
     liftBlob.level = inLevel * 0.15f; liftBlob.phase = phase * 1.4f; liftBlob.amount = (float) liftKnob.getValue();
     harmBlob.repaint(); liftBlob.repaint();
-    content.repaint();
+    stripe.setInput (pk, running, proc.animation.load());
+    // only the meters change on this clock (the rest repaints when it changes)
+    content.repaint (0, 36, (int) columnX[0], 236);
+    content.repaint ((int) columnX[4] + 1, 36, (int) (designW - columnX[4]), 236);
 }
 
 void ScorpiusEditor::sampleReadouts()
@@ -450,12 +468,14 @@ void ScorpiusEditor::sampleReadouts()
 void ScorpiusEditor::setTestLevels (float inDb, float outDb, bool audio)
 {
     frozen = true;
+    animateChanges = false;
     updateFromParams();
     for (auto& m : inMeter) { m.barDb = inDb - 3.0f; m.fastDb = inDb; m.peakHoldDb = inDb; m.rmsDb = inDb - 1.5f; }
     for (auto& m : outMeter) { m.barDb = outDb - 3.0f; m.fastDb = outDb; m.peakHoldDb = outDb; m.rmsDb = outDb - 1.5f; }
     inLevel = audio ? jlimit (0.0f, 1.0f, (inDb + 60.0f) / 60.0f) : 0.0f;
     harmBlob.level = inLevel; liftBlob.level = inLevel * 0.15f;
     harmBlob.amount = (float) harmKnob.getValue(); liftBlob.amount = (float) liftKnob.getValue();
+    if (audio && proc.animation.load()) stripe.freeze (jlimit (0.0f, 1.0f, (inDb + 67.5f) / 27.5f));
     content.repaint();
 }
 
@@ -502,13 +522,13 @@ void ScorpiusEditor::paintPanel (Graphics& g)
     {
         // thin glass edge inside the outline, visible on the left
         Graphics::ScopedSaveState s (g);
-        g.reduceClipRegion (Rectangle<int> (0, 45, 9, 230));
+        g.reduceClipRegion (Rectangle<int> (0, 45, 9, 252));
         g.setColour (Colour (0xff8a8a8a));
         g.drawRoundedRectangle (panel.reduced (4.0f), 11.0f, 1.0f);
     }
     g.setColour (theme::divider);
     for (float x : columnX) g.fillRect (x, dividerTop, 1.0f, dividerBottom - dividerTop);
-    g.fillRect (8.0f, stripeLine, designW - 16.0f, 1.0f);
+    g.fillRect (4.5f, stripeLine, designW - 9.0f, 1.0f);
 
     paintIoMeter (g, false);
     paintIoMeter (g, true);
@@ -530,14 +550,6 @@ void ScorpiusEditor::paintPanel (Graphics& g)
     for (int b = 0; b < 5; ++b)
         label (caption (eqKnobs[b], eqNames[b]), eqLabelX[b], eqTop[b] ? upperLabelBaseline : labelBaseline, eqPower.active);
     for (int k = 0; k < 4; ++k) label (caption (faders[k], sc::parallels[k].name), parX[k], labelBaseline, parPower[k].active);
-
-    // the compression's gain reduction readout (not drawn while the module is off, as the circles and sparks)
-    if (compPower.active)
-    {
-    g.setColour (theme::mint);
-    g.setFont (theme::font (19.5f));
-    theme::textAt (g, grText (compGrDb), 300.5f, 106.0f, Justification::horizontallyCentred);
-    }
 
     paintStripe (g);
 }
@@ -607,39 +619,46 @@ void ScorpiusEditor::paintIoMeter (Graphics& g, bool output)
 // the stripe across the panel's foot: a dark glass tube; particles stream through it while audio plays
 void ScorpiusEditor::paintStripe (Graphics& g)
 {
-    // measured with the dark levels lifted: black, with a soft grey floor (y 291 ... 297, grey ~28) rounded at both
-    // ends, a faint line at its foot (303 ... 305, ~35) and a small cyan glint at the top of the left end
-    const Rectangle<float> tube (11.0f, 280.0f, designW - 22.0f, 25.0f);
+    // the dark glass tube the stripe's light plays in (measured on the reference at 200 % with the dark levels lifted):
+    // a faint capsule outline, a flat grey floor along its lower half (rounded with its ends), a short cyan glint inside
+    // its left end and a soft highlight inside its right end; under it the panel's inner edge as a dim band
+    const Rectangle<float> tube (11.75f, 283.75f, 874.5f - 11.75f, 14.5f);
+    constexpr float radius = 4.0f;
     {
         Graphics::ScopedSaveState s (g);
         Path clip;
-        clip.addRoundedRectangle (tube, 9.0f);
+        clip.addRoundedRectangle (tube, radius);
         g.reduceClipRegion (clip);
-        ColourGradient floor (Colour (0xff1f1f1f), 0.0f, 290.5f, Colour (0xff070707), 0.0f, 298.5f, false);
-        g.setGradientFill (floor);
-        g.fillRect (tube.getX(), 290.5f, tube.getWidth(), 8.0f);
+        // floor: grey 27, turning a little green towards the right; a brighter line along its top, a soft foot
+        g.setGradientFill (ColourGradient (Colour (0xff1b1b1b), tube.getX(), 0.0f, Colour (0xff1d1f1e), tube.getRight(), 0.0f, false));
+        g.fillRect (tube.getX(), 290.75f, tube.getWidth(), 6.25f);
+        g.setColour (Colour (0xff1f1f1f));
+        g.fillRect (tube.getX(), 290.75f, tube.getWidth(), 0.5f);
+        g.setGradientFill (ColourGradient (Colour (0xff151515), 0.0f, 297.0f, Colour (0x00050505), 0.0f, 298.25f, false));
+        g.fillRect (tube.getX(), 297.0f, tube.getWidth(), 1.25f);
+        // the right end's highlight: a tall soft patch, brightest a little left of the end
+        g.setGradientFill (ColourGradient (Colour (0x10ffffff), 868.75f, 0.0f, Colour (0x96ffffff), 871.5f, 0.0f, false));
+        g.fillRoundedRectangle (868.75f, 284.75f, 4.25f, 5.75f, 1.5f);
     }
-    g.setColour (Colour (0xff232323));
-    g.fillRect (tube.getX() + 6.0f, 303.0f, tube.getWidth() - 12.0f, 2.5f);
+    g.setColour (Colour (0xff141414));
+    g.drawRoundedRectangle (tube.reduced (0.25f), radius, 0.5f);
+    g.setColour (Colour (0xff9a9a9a).withAlpha (0.7f));
+    g.fillRect (873.75f, 285.0f, 0.75f, 6.0f);                        // (the right end's edge, lit)
+    g.setGradientFill (ColourGradient (Colour (0xff363f42), 13.25f, 0.0f, Colour (0x00363f42), 19.25f, 0.0f, false));
+    g.fillRoundedRectangle (13.0f, 285.25f, 6.25f, 1.25f, 0.6f);      // the left end's glint
     {
-        Path glint;
-        glint.addCentredArc (tube.getX() + 9.0f, tube.getY() + 9.0f, 7.5f, 7.5f, 0.0f, -1.45f, -0.35f, true);
-        g.setColour (Colour (0xff7fc7d6).withAlpha (0.85f));
-        g.strokePath (glint, PathStrokeType (1.0f, PathStrokeType::curved, PathStrokeType::rounded));
+        // the panel's inner edge along the bottom and up the corners, a dim band (grey ~36)
+        Graphics::ScopedSaveState s (g);
+        const auto inner = Rectangle<float> (1.5f, panelTop, designW - 3.0f, panelBottom - panelTop).reduced (4.25f);
+        g.reduceClipRegion (Rectangle<int> (0, 291, (int) designW, 20));
+        g.setColour (Colour (0xff242424));
+        g.drawRoundedRectangle (inner, 10.75f, 2.5f);
+        // (round the bottom-left corner the bright edge of the left side fades into it)
+        g.setGradientFill (ColourGradient (Colour (0xff8a8a8a), 5.0f, 296.0f, Colour (0xff242424), 16.0f, 305.0f, false));
+        g.reduceClipRegion (Rectangle<int> (0, 291, 16, 20));
+        g.drawRoundedRectangle (inner, 10.75f, 1.5f);
     }
-    if (inLevel <= 0.0f || ! proc.animation.load()) return;
-    // a first version of the particles: coloured sparks drifting along, as many as the level asks for
-    Random rng (17);
-    const int count = (int) (inLevel * 260.0f);
-    const Colour palette[] { Colour (0xffff6b6b), Colour (0xffffd166), Colour (0xff6bd5ff), Colour (0xffb38bff), Colour (0xff8edbc4), Colours::white };
-    for (int i = 0; i < count; ++i)
-    {
-        const float speed = 20.0f + 60.0f * rng.nextFloat();
-        const float x = std::fmod (rng.nextFloat() * tube.getWidth() + phase * speed, tube.getWidth()) + tube.getX();
-        const float y = tube.getY() + 4.0f + rng.nextFloat() * (tube.getHeight() - 8.0f);
-        g.setColour (palette[rng.nextInt ((int) std::size (palette))].withAlpha (0.5f + 0.5f * rng.nextFloat()));
-        g.fillEllipse (x, y, 1.6f, 1.6f);
-    }
+    // (the light that plays in it is the Stripe component's)
 }
 
 void ScorpiusEditor::paintPlate (Graphics& g)

@@ -212,13 +212,55 @@ region with our own snapshots (`tools/compare_ui.py`, `ScorpiusSnapshot`). Findi
   circles and the readout are not drawn while their module is off.
 - The harmonic EQ's curve (drawn while the EQ is on): a log axis from 40 Hz at the left edge to about 24 kHz over
   x 432 … 600, 6 dB = 50 px above a baseline at y 124; the bands are drawn about 1.4 octaves wide at half height.
-- Faders: caps 37 × 22.5, brushed metal with a radial sheen and a groove, travelling from y 237.25 (level 0) to 85.25
-  (level 1); the track is mint below the cap while the path is on.
+- Faders: the cap is one image (the four are identical), 36.9 × 22.9, drawn 0.12 px left of the track, travelling
+  from y 237.5 (level 0) to 85.5 (level 1); the track is mint below the cap while the path is on. See UI round 3.
 - The plate grille: 19 staggered rows (21 / 20 dots), a halftone of an arch: the dot area follows
   0.043 + 0.932 exp(−((d − 239.3) / 26.3)²) of the largest, d the distance from (300, 587.8), fitted to every dot.
-- The stripe under the columns is black with a soft grey floor (y 291 … 297), a faint line at its foot and a cyan glint
-  at its left end; particles stream through it while audio plays (to be matched in the UI rounds).
+- The stripe under the columns: see UI round 3.
 - Settings: one row, particle animation ON / OFF, in a 420 × 254 box.
 
 Ours, not the reference's: the drive colour and the compression mode are host parameters (`Drive Color`,
 `Comp Mode`), the window can be resized from its corner, and the maker's mark is the Orrery Suite mark.
+
+## UI round 3: animations, the copy message, the fader cap, the stripe (RefCapture films at 200 %)
+
+`tools/RefCapture` gained `drag=x,y,0,0,burst,<ms>` (click, then grab the editor as fast as it can, ~70 frames/s, each
+frame named with its time since the click) and `rows=<from>,<to>` (film only a band of rows). The same scripts were
+run on the reference and on ours, and compared.
+- **Drive marks:** each of the five marks keeps its identity and size through a, b and c (a → b → c → a brings every
+  mark home), and a new colour moves each one in a straight line to its new place, easing in and out (cubic) over
+  215 ms; their paths cross. The hi-pass cross-fades the two shapes over ~110 ms (the old one fades out under the new
+  one). The drive's power button fades the marks out or in over ~85 ms.
+- **Module displays** (the circles, the GR readout, the EQ curve, the marks) fade linearly over ~85 ms with their power
+  buttons, also when a preset or a compare slot switches them; knobs, faders and selectors jump.
+- **Copy message:** Compare's arrow (only it) shows "A copied to B." (or "B copied to A.") in a box 200 × 60.5 at
+  (344, 337) over the plate: fill #050607, a 1 px edge #252523, the text as the labels (12 px, baseline 34.25 below the
+  box's top). It is there at once, holds 0.55 s, then fades out linearly over 1.05 s.
+- **Mouse on knobs and faders:** Shift = JUCE's velocity mode (cursor hidden, fine moves), Ctrl = normal speed,
+  Alt-click = default value, on knobs and faders alike.
+- **Fader cap:** fitted per pixel (`tools/fit_fadercap.py` → `FaderCap.h`, 4.8 grey levels rms): a rounded rectangle
+  with four one-pixel rim rings (each a table over the angle round the cap), a spun-metal face whose grey depends only
+  on the angle round its centre (period 180°: darkest ~92 a little right of up, brightest ~207 a little below the
+  right), a darker ring round the groove, and the groove (grey 45, its edge 58) 31.95 × 2.06 across the middle.
+- **Stripe, idle:** a divider at y 272.5 … 273.5 (the column dividers run down to it); a capsule outline (grey ~12)
+  x 11.75 … 874.5, y 283.75 … 298.25, radius ~4; a flat grey-27 floor y 290.75 … 297 along its lower half, a little
+  green towards the right; a short cyan-grey glint (54, 66, 69) inside the left end at y 285.25; a soft highlight
+  (~150) inside the right end; under it the panel's inner edge as a dim band (~36) at y 303 … 305.5.
+- **Stripe, playing** (`tools/fit_stripe.py`, a probe of 1 kHz tones and level steps):
+  - brightness follows the input's peak level: dark below −67.5 dBFS, full from −40 up, linear in dB between (0.27 at
+    −60, 0.43 at −55, 0.59 at −50, 0.78 at −45); the level it follows rises at once and falls at 50 dB/s, so after a
+    −10 dBFS tone stops the light stays full 0.6 s and fades over ~0.55 s, after −40 it fades at once. (One case does
+    not fit: a slow ramp up from −60 dBFS stays dim all the way, then lights fully once it stops.) With the particle
+    animation off, the stripe stays dark;
+  - a fixed glow: the 20th percentile of the lit frames is separable, a profile down the stripe (brightest at y 289)
+    times a bell along it (centre x ≈ 452, Gaussian width ≈ 227 plus a sharp core), fitted to 8.8 grey levels rms;
+  - particles: ~1600 local maxima per frame, spread almost evenly along x 55 … 815 and across y 272.5 … 306 (dense in
+    286 … 302); dashes in the band keep to three one-pixel lanes (y 289.1, 291.6, 294.25, a weaker one at 302.5);
+    isolated dots are ~1 × 1 px cores with a faint halo; colours: about half nearly white, the rest amber, cyan,
+    blue-violet, red-orange, azure, pink-red (in that order of frequency), a few flares (rounded, 2 … 3.5 wide, up to
+    ~14 tall) swelling and shrinking within ~0.15 s;
+  - motion: frame-to-frame correlation of the particle layer 0.36 at 26 ms, 0.23 at 53 ms; in the band particles slide
+    sideways either way at ~±150 px/s, above it they rise and below it they sink (up to ~100 px/s).
+  Ours (`Source/ui/Stripe.cpp`) draws the fitted glow and ~1600 particles sampled from these distributions, adds them
+  as light per physical pixel and matches these statistics (mean light 47 vs 46 grey levels, particle-layer
+  correlation 0.34 vs 0.35 at one frame, the brightness after every stop within ~0.1).

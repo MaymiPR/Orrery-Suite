@@ -11,8 +11,8 @@ namespace orrery
 //     any UI scale), so a drag past an end has to come back that far before the value moves again;
 //   - Shift: velocity mode, the cursor hidden. Each mouse move of d px changes the value by
 //     0.2 (1 + sin (pi (1.5 + min (0.5, max (0, d - 1) / 200)))) of the range: slow moves fine-tune, fast ones jump.
-//     Releasing the key restores the cursor where the value puts it and continues from there. Ctrl (Cmd) does the
-//     same here; on the reference it drags at the normal speed;
+//     Releasing the key restores the cursor where the value puts it and continues from there. Ctrl (Cmd) drags at the
+//     normal speed (as both references);
 //   - double-click or Alt-click = default value.
 class MetalKnob : public juce::Slider
 {
@@ -40,7 +40,7 @@ private:
     bool velocity = false;
     juce::Point<float> downScreen;                 // where the press was (screen)
     float designY (const juce::MouseEvent&) const;
-    static bool velocityKeys (const juce::ModifierKeys& m) { return m.isShiftDown() || m.isCtrlDown() || m.isCommandDown(); }
+    static bool velocityKeys (const juce::ModifierKeys& m) { return m.isShiftDown(); }
     void restoreMouse();
     void renderBody (int px);
 };

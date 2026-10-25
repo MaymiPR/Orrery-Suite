@@ -28,8 +28,8 @@ input: the main signal or the side-chain bus.
 
 ## Using it
 
-- **Knobs:** drag up / down. Hold Shift or Ctrl (Cmd on macOS) for fine adjustment. While the mouse is over a knob, its
-  label shows the value.
+- **Knobs:** drag up / down. Hold Shift for fine adjustment; double-click or Alt-click resets. While the mouse is over
+  a knob, its label shows the value.
 - **I/O LINK** (top bar, ours): the output gain follows the input gain inverted, so you can drive the chain harder
   without the level changing.
 - **Presets:** the arrows step through them; the save button stores the EQ, character and limiter settings as an

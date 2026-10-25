@@ -70,29 +70,85 @@ private:
 
 // Vertical fader of the parallels: a grey track, mint below the cap while the path is on, and a metal cap.
 // Mouse (measured on the reference): a drag anywhere on the fader moves the level by 1/176 per design pixel, relative to
-// where it started (a click without a drag does not jump); a double-click resets it to 0.
+// where it started (a click without a drag does not jump); Shift = velocity mode (fine); a double-click or an Alt-click
+// resets it to 0.
 class Fader : public juce::Slider
 {
 public:
     Fader();
     void paint (juce::Graphics&) override;
+    void mouseDown (const juce::MouseEvent&) override;
+    void mouseDrag (const juce::MouseEvent&) override;
     bool on = false;
     static constexpr int pixelsPerRange = 176;     // (JUCE's own relative drag, so the host gets the gestures)
     // the fader's bounds are 37 x 180 from design y 72; the cap's centre travels from level 1 to level 0 between
-    // these (the fader's own coordinates; measured: y 85.25 and 237.25 on the panel)
-    static constexpr float top = 72.0f, capW = 37.0f, capH = 22.5f, topY = 85.25f - top, bottomY = 237.25f - top;
+    // these (the fader's own coordinates; measured at 200 %: y 85.5 and 237.5 on the panel; the cap 37 x 22.9 in a 37 x 23 box)
+    static constexpr float top = 72.0f, capW = 37.0f, capH = 23.0f, topY = 85.5f - top, bottomY = 237.5f - top;
+    static constexpr float capOffsetX = -0.12f;     // the reference draws its cap this far left of the track
+private:
+    juce::Image capImage;            // the cap at the current physical pixel size
+    int capPx = 0;
+    void renderCap (int eighths);
 };
 
 // The drive's marks: five of them, in an arrangement of their own for each colour (a, b, c), drawn as eight-armed stars
 // while the hi-pass is on and as "+" marks while it is off. They do not move with the level (measured: idle and
-// playing frames are the same).
-class DriveSparks : public juce::Component
+// playing frames are the same). Filmed on the reference (RefCapture bursts at ~70 frames/s):
+//   - a new colour moves each mark in a straight line to its place in the new arrangement (every mark keeps its own
+//     identity and size through a, b and c), easing in and out (cubic) over 215 ms;
+//   - the hi-pass cross-fades the two shapes over 112 ms: the old shape fades out under the new one fading in.
+class DriveSparks : public juce::Component, private juce::Timer
 {
 public:
     DriveSparks() { setInterceptsMouseClicks (false, false); }
     void paint (juce::Graphics&) override;
-    bool hiPass = true;
+    void setColour (int c, bool animate);
+    void setHiPass (bool on, bool animate);
+    static constexpr double moveMs = 215.0, crossMs = 112.0;
+private:
+    void timerCallback() override;
+    juce::Point<float> markAt (int mark, double now) const;
     int colour = 0;
+    bool hiPass = true;
+    juce::Point<float> from[5];           // where each mark set out from
+    double moveStart = -1.0e9, crossStart = -1.0e9;
+};
+
+// Fades components in and out as the reference fades a module's display when its power button is pressed (the
+// circles, the GR readout, the EQ curve, the drive's marks): linearly, 85 ms for a full fade (measured).
+class Fades : private juce::Timer
+{
+public:
+    static constexpr double fullMs = 85.0;
+    void show (juce::Component&, bool visible, bool animate);
+private:
+    struct Fade { juce::Component::SafePointer<juce::Component> c; float from, to; double start; };
+    std::vector<Fade> fades;
+    void timerCallback() override;
+};
+
+// The compression's gain reduction readout above its knob ("- 3.6", "0.0").
+class GrReadout : public juce::Component
+{
+public:
+    GrReadout() { setInterceptsMouseClicks (false, false); }
+    void paint (juce::Graphics&) override;
+    juce::String text { "0.0" };
+};
+
+// The message the reference shows over the plate when Compare's arrow copies one setting to the other ("A copied to
+// B."): a black box with a dark grey edge, there at once, held for 0.55 s, then fading out over 1.05 s (measured).
+class Toast : public juce::Component, private juce::Timer
+{
+public:
+    Toast() { setInterceptsMouseClicks (false, false); setVisible (false); }
+    void paint (juce::Graphics&) override;
+    void show (const juce::String&);
+    static constexpr double holdMs = 550.0, fadeMs = 1050.0;
+private:
+    void timerCallback() override;
+    juce::String text;
+    double shownAt = 0.0;
 };
 
 // The circles above harmonics and lift: a ring that wobbles and grows with the level the module works on.
