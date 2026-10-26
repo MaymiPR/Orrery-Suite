@@ -1,5 +1,5 @@
 """Learns a module of the reference with a small WaveNet (dilated causal convolutions, gated) between two learned linear
-filters (PyTorch, CPU):
+filters (PyTorch; on the GPU when there is one):
     u = Pre(x);  v = u + WaveNet(u);  y = Post(v)
 Pre a short causal FIR (starts as a unit impulse), Post a long causal FIR (starts as the measured small-signal impulse
 response), the WaveNet learning what the filters cannot (its output starts at zero). Trained on capture_nn.py's
@@ -16,6 +16,8 @@ FS = 48000
 KPRE, KPOST, SEG, BATCH = 64, 8192, 4096, 16
 MAXPEAK = 4.0          # dBFS: training and validation pieces up to this peak
 torch.set_num_threads(int(os.environ.get("THREADS", max(1, os.cpu_count() // 2))))
+DEV = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+torch.backends.cudnn.allow_tf32 = torch.backends.cuda.matmul.allow_tf32 = False    # (full float precision, as on the CPU)
 
 
 class WaveNet(torch.nn.Module):
@@ -57,7 +59,7 @@ def train(case, steps, irname, ch, layers):
     xs, ys, valid = load(case)
     keep = [i for i, x in enumerate(xs) if 20 * np.log10(np.abs(x).max() + 1e-9) <= MAXPEAK]
     h = np.load(os.path.join(IR, irname + '.npy'))[0].astype(np.float32)
-    model = Model(h, ch, layers)
+    model = Model(h, ch, layers).to(DEV)
     train_idx = [i for i in keep if not valid[i]]
     opt = torch.optim.Adam([{'params': [model.pre, model.post], 'lr': 1e-4}, {'params': model.wn.parameters(), 'lr': 2e-3}])
     sched = torch.optim.lr_scheduler.OneCycleLR(opt, max_lr=[1e-4, 3e-3], total_steps=steps)
@@ -72,7 +74,8 @@ def train(case, steps, irname, ch, layers):
             start = rng.integers(warm, len(x) - SEG)
             xb.append(x[start - warm:start + SEG]); yb.append(y[start:start + SEG])
             wb.append(1.0 / max(1e-6, float(np.mean(y[start:start + SEG] ** 2))))
-        xb = torch.tensor(np.array(xb)); yb = torch.tensor(np.array(yb)); wb = torch.tensor(wb, dtype=torch.float32)
+        xb = torch.tensor(np.array(xb), device=DEV); yb = torch.tensor(np.array(yb), device=DEV)
+        wb = torch.tensor(wb, dtype=torch.float32, device=DEV)
         out = model(xb)[:, warm:]
         loss = (((out - yb) ** 2).mean(1) * wb).mean()
         opt.zero_grad(); loss.backward(); torch.nn.utils.clip_grad_norm_(model.parameters(), 1.0); opt.step(); sched.step()
@@ -86,7 +89,7 @@ def evaluate(model, xs, ys, valid, keep, all_=False):
     with torch.no_grad():
         for i, (x, y, v) in enumerate(zip(xs, ys, valid)):
             if i not in keep or (not v and not all_): continue
-            out = model(torch.tensor(x[None]))[0].numpy()
+            out = model(torch.tensor(x[None], device=DEV))[0].cpu().numpy()
             res.append((i, o.null_db(y[None], out[None])))
     return res
 
@@ -102,4 +105,4 @@ if __name__ == '__main__':
     model, xs, ys, valid, keep = train(case, steps, irname_of(case), ch, layers)
     n = evaluate(model, xs, ys, valid, keep)
     print(case, f'ch {ch} layers {layers}', 'validation nulls', ' '.join('%d:%.1f' % v for v in n), 'mean %.1f' % np.mean([v for _, v in n]))
-    torch.save(dict(state=model.state_dict(), ch=ch, layers=layers), os.path.join(NN, case + '_wn.pt'))
+    torch.save(dict(state={k: v.cpu() for k, v in model.state_dict().items()}, ch=ch, layers=layers), os.path.join(NN, case + '_wn.pt'))
