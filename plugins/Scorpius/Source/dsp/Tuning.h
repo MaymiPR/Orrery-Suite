@@ -28,6 +28,13 @@ struct Tuning
     double eqRampMs = 5.0;                 // a band's gain moves linearly to a new value over this time
     double switchMs = 5.0;                 // a module's power crossfades over this time
 
+    // the expander (Expander.h): threshold (dBFS peak), gain slope below it, hold window, release time constant
+    double expThresholdDb = -58.098, expSlope = 2.028, expHoldMs = 1133.8, expReleaseMs = 207.8;   // (nulltest/fit_exp.py)
+    // harmonics (Harmonics.h), [0] 80 Hz, [1] 50 Hz: the bell's frequency, Q, gain, the high-pass after the clip, the
+    // clip's ceiling and knee (nulltest/fit_harm.py)
+    double harmHz[2] { 111.5166, 69.9423 }, harmQ[2] { 0.3174, 0.3127 }, harmGainDb[2] { 5.8189, 5.843 };
+    double harmHpHz[2] { 20.6772, 20.4059 }, harmCeiling[2] { 1.6403, 1.4107 }, harmKnee[2] { 1.9678, 2.2203 };
+
     // parallels (Parallels.h): each path's weight (its power times its fader's taper) moves linearly over this time
     double parRampMs = 2.0;
     // sub: gain x 6th-order Butterworth low-pass x high-pass (nulltest/fit_sub3.py)
@@ -38,7 +45,15 @@ struct Tuning
         std::vector<std::pair<const char*, double*>> e { { "eqCeiling", &eqCeiling }, { "eqKnee", &eqKnee }, { "eqRampMs", &eqRampMs },
                                                          { "switchMs", &switchMs }, { "eqHpAfter", &eqHpAfter },
                                                          { "parRampMs", &parRampMs }, { "subGain", &subGain }, { "subLowPassHz", &subLowPassHz },
-                                                         { "subHighPassHz", &subHighPassHz } };
+                                                         { "subHighPassHz", &subHighPassHz }, { "expThresholdDb", &expThresholdDb },
+                                                         { "expSlope", &expSlope }, { "expHoldMs", &expHoldMs }, { "expReleaseMs", &expReleaseMs } };
+        static const char* harmKeys[2][6] { { "harm80.hz", "harm80.q", "harm80.gain", "harm80.hp", "harm80.ceil", "harm80.knee" },
+                                            { "harm50.hz", "harm50.q", "harm50.gain", "harm50.hp", "harm50.ceil", "harm50.knee" } };
+        for (int m = 0; m < 2; ++m)
+        {
+            double* v[6] { &harmHz[m], &harmQ[m], &harmGainDb[m], &harmHpHz[m], &harmCeiling[m], &harmKnee[m] };
+            for (int k = 0; k < 6; ++k) e.push_back ({ harmKeys[m][k], v[k] });
+        }
         static const char* bandKeys[5][7] { { "eq0.hz", "eq0.q", "eq0.kind", "eq0.scale", "eq0.hp", "eq0.hpq", "eq0.ceil" },
                                             { "eq1.hz", "eq1.q", "eq1.kind", "eq1.scale", "eq1.hp", "eq1.hpq", "eq1.ceil" },
                                             { "eq2.hz", "eq2.q", "eq2.kind", "eq2.scale", "eq2.hp", "eq2.hpq", "eq2.ceil" },

@@ -3,6 +3,8 @@
 #include <vector>
 #include "Eq.h"
 #include "Parallels.h"
+#include "Harmonics.h"
+#include "Expander.h"
 #include "Filters.h"
 
 // Scorpius's processing between the input and output gains (MEASUREMENTS.md 1): drive -> harmonics -> compression ->
@@ -39,7 +41,10 @@ private:
     double fs = 48000.0;
     std::vector<double> bufL, bufR, wetL, wetR;
     bool first = true;
-    Power eqPower;
+    Power eqPower, harmPower;
+    Harmonics harm;
+    Expander expander;
+    std::vector<double> expGain;
     HarmonicEq eq;
     std::vector<double> chainL, chainR;    // the chain's output, which the parallels listen to
     Ramp parWeight[4];
