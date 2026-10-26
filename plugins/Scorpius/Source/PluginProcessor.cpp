@@ -90,8 +90,40 @@ void ScorpiusProcessor::prepareToPlay (double sampleRate, int block)
     outMeter.prepare (sampleRate);
     visuals.prepare (sampleRate);
     light.prepare (sampleRate);
-    engine.prepare (sampleRate, jmax (1, block));
-    silence.assign ((size_t) jmax (1, block), 0.0f);
+    // the modules run at 48 kHz (their fits and learned models are made there); other rates are converted in and out,
+    // as the reference does (MEASUREMENTS.md 2)
+    resampling = std::abs (sampleRate - 48000.0) > 0.5;
+    const int block48 = (int) std::ceil (jmax (1, block) * 48000.0 / sampleRate) + 8;
+    engine.prepare (48000.0, block48);
+    silence.assign ((size_t) block48, 0.0f);
+    if (resampling)
+    {
+        for (int c = 0; c < 2; ++c)
+        {
+            const auto& t = sc::dsp::tuning();
+            const bool low = sampleRate < 48000.0;
+            toInner[c].prepare (sampleRate, 48000.0, low ? t.resampleCutoffIn : t.resampleCutoffInHigh);
+            keyToInner[c].prepare (sampleRate, 48000.0, low ? t.resampleCutoffIn : t.resampleCutoffInHigh);
+            toOuter[c].prepare (48000.0, sampleRate, low ? t.resampleCutoffOut : t.resampleCutoffOutHigh);
+            inner[c].reserve ((size_t) block48 * 2);
+            keyInner[c].reserve ((size_t) block48 * 2);
+        }
+        // the delay the reference has at this rate (measured; reported a little short above 48 kHz, as it does):
+        // a few samples of output held ahead (so the output never runs short), the rest trimmed by the converters'
+        // start offsets
+        const auto [target, reported] = referenceDelay (sampleRate);
+        const double r = sampleRate / 48000.0, full = sc::dsp::Resampler::half * (1 + r);
+        const int prefill = jmax (2, (int) std::ceil (target - full));
+        const double trim = full + prefill - target;                  // 0 ... 1 + r
+        const double inTrim = jmin (0.999, trim), outTrim = jmin (0.999, (trim - inTrim) / r);
+        for (int c = 0; c < 2; ++c)
+        {
+            toInner[c].setOffset (inTrim); keyToInner[c].setOffset (inTrim); toOuter[c].setOffset (outTrim);
+            outer[c].assign ((size_t) prefill, 0.0f);
+        }
+        setLatencySamples (reported);
+    }
+    else setLatencySamples (0);
     // the input and output gains glide exponentially (measured: 90 % of a step after 19 ms, tau ~8.3 ms)
     gainCoef = (float) std::exp (-1.0 / (0.0083 * sampleRate));
     inGainNow = Decibels::decibelsToGain (inGainRaw->load());
@@ -127,17 +159,34 @@ void ScorpiusProcessor::processBlock (AudioBuffer<float>& buffer, MidiBuffer&)
     inMeter.measure (main);
     visuals.process (main, compAmountRaw->load(), external ? &side : nullptr);
     light.process (main);
-    if (! bypassed)
+    const bool key = external && side.getNumChannels() >= 2;
+    if (! resampling)
     {
-        const auto params = engineParams();
-        for (int pos = 0; pos < n; )
+        if (! bypassed) runEngine (main.getWritePointer (0), main.getWritePointer (1), n,
+                                   key ? side.getReadPointer (0) : (external ? silence.data() : nullptr),
+                                   key ? side.getReadPointer (1) : (external ? silence.data() : nullptr));
+    }
+    else
+    {
+        // to 48 kHz, the modules, back to the host's rate (the conversion runs while bypassed too, so the latency holds)
+        for (int c = 0; c < 2; ++c)
         {
-            const int len = jmin (n - pos, jmax (1, meterBuf.getNumSamples()));
-            const bool key = external && side.getNumChannels() >= 2;
-            engine.process (main.getWritePointer (0) + pos, main.getWritePointer (1) + pos, len, params,
-                            key ? side.getReadPointer (0) + pos : (external ? silence.data() : nullptr),
-                            key ? side.getReadPointer (1) + pos : (external ? silence.data() : nullptr));
-            pos += len;
+            inner[c].clear(); keyInner[c].clear();
+            toInner[c].process (main.getReadPointer (c), n, inner[c]);
+            if (key) keyToInner[c].process (side.getReadPointer (c), n, keyInner[c]);
+        }
+        const int m = (int) inner[0].size();
+        if (silence.size() < (size_t) m) silence.resize ((size_t) m, 0.0f);
+        if (! bypassed) runEngine (inner[0].data(), inner[1].data(), m,
+                                   key ? keyInner[0].data() : (external ? silence.data() : nullptr),
+                                   key ? keyInner[1].data() : (external ? silence.data() : nullptr));
+        for (int c = 0; c < 2; ++c)
+        {
+            toOuter[c].process (inner[c].data(), m, outer[c]);
+            const int take = jmin (n, (int) outer[c].size());
+            std::copy (outer[c].begin(), outer[c].begin() + take, main.getWritePointer (c));
+            std::fill (main.getWritePointer (c) + take, main.getWritePointer (c) + n, 0.0f);
+            outer[c].erase (outer[c].begin(), outer[c].begin() + take);
         }
     }
     for (int i = 0; i < n; ++i)
@@ -150,6 +199,42 @@ void ScorpiusProcessor::processBlock (AudioBuffer<float>& buffer, MidiBuffer&)
     outMeter.measure (main);
     compGr = visuals.grEstimate.load();        // the readout's own quantity (measured on the reference, dsp/Visuals.h)
     ++blocksProcessed;
+}
+
+// the reference's delay (samples) at a rate, and the latency it reports (MEASUREMENTS.md 2; between the measured
+// rates, linear in the rate)
+std::pair<double, int> ScorpiusProcessor::referenceDelay (double fs)
+{
+    static constexpr double rate[] { 32000, 44100, 48000, 88200, 96000, 176400, 192000 };
+    static constexpr double delay[] { 27.0, 31.0, 0.0, 48.742, 51.1, 81.461, 87.085 };
+    static constexpr double shown[] { 27, 31, 0, 46, 48, 75, 80 };
+    if (std::abs (fs - 48000.0) < 0.5) return { 0.0, 0 };
+    // (48 kHz itself has none: interpolate between its neighbours that convert)
+    std::vector<std::pair<double, std::pair<double, double>>> pts;
+    for (int i = 0; i < 7; ++i) if (rate[i] != 48000) pts.push_back ({ rate[i], { delay[i], shown[i] } });
+    if (fs <= pts.front().first) return { pts.front().second.first * fs / pts.front().first, (int) std::lround (pts.front().second.second * fs / pts.front().first) };
+    for (size_t i = 1; i < pts.size(); ++i)
+        if (fs <= pts[i].first)
+        {
+            const double u = (fs - pts[i - 1].first) / (pts[i].first - pts[i - 1].first);
+            return { pts[i - 1].second.first + u * (pts[i].second.first - pts[i - 1].second.first),
+                     (int) std::lround (pts[i - 1].second.second + u * (pts[i].second.second - pts[i - 1].second.second)) };
+        }
+    const auto& l = pts.back();
+    return { l.second.first * fs / l.first, (int) std::lround (l.second.second * fs / l.first) };
+}
+
+// the modules over a block (at 48 kHz), in pieces no longer than the engine was prepared for
+void ScorpiusProcessor::runEngine (float* l, float* r, int n, const float* keyL, const float* keyR)
+{
+    const auto params = engineParams();
+    const int most = jmax (1, (int) silence.size() - 8);
+    for (int pos = 0; pos < n; )
+    {
+        const int len = jmin (n - pos, most);
+        engine.process (l + pos, r + pos, len, params, keyL != nullptr ? keyL + pos : nullptr, keyR != nullptr ? keyR + pos : nullptr);
+        pos += len;
+    }
 }
 
 sc::dsp::Params ScorpiusProcessor::engineParams() const

@@ -7,6 +7,7 @@
 #include "dsp/Visuals.h"
 #include "dsp/Light.h"
 #include "dsp/Engine.h"
+#include "dsp/Resampler.h"
 
 // Scorpius: the recreation of Cradle's Orion (RESEARCH.md, MEASUREMENTS.md). The audio runs input gain -> the modules
 // (dsp/Engine.h) -> output gain.
@@ -73,6 +74,11 @@ private:
     std::atomic<float>* compAmountRaw = nullptr;
     sc::dsp::Engine engine;
     sc::dsp::Params engineParams() const;
+    void runEngine (float* l, float* r, int n, const float* keyL, const float* keyR);
+    bool resampling = false;
+    static std::pair<double, int> referenceDelay (double sampleRate);
+    sc::dsp::Resampler toInner[2], keyToInner[2], toOuter[2];
+    std::vector<float> inner[2], keyInner[2], outer[2];
     std::atomic<float>* raw (const char* pid) const { return apvts.getRawParameterValue (pid); }
     juce::AudioBuffer<float> meterBuf;
     float inGainNow = 1.0f, outGainNow = 1.0f, gainCoef = 0.0f;

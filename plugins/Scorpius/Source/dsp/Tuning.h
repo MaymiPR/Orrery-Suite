@@ -28,6 +28,9 @@ struct Tuning
     double eqRampMs = 5.0;                 // a band's gain moves linearly to a new value over this time
     double switchMs = 5.0;                 // a module's power crossfades over this time
     double amountRampMs = 10.0;            // harmonics, compression and lift amounts move linearly over this time
+    // the rate converters' cutoffs (into and out of 48 kHz, shares of the lower rate's Nyquist), for hosts below and
+    // above 48 kHz (fitted by nulls with every module off: 44.1 kHz -42 dB; above 48 kHz still to fit)
+    double resampleCutoffIn = 1.0, resampleCutoffOut = 1.1, resampleCutoffInHigh = 0.92, resampleCutoffOutHigh = 0.92;
 
     // the expander (Expander.h): threshold (dBFS peak), gain slope below it, hold window, release time constant
     double expThresholdDb = -58.098, expSlope = 2.028, expHoldMs = 1133.8, expReleaseMs = 207.8;   // (nulltest/fit_exp.py)
@@ -59,7 +62,8 @@ struct Tuning
     std::vector<std::pair<const char*, double*>> entries()
     {
         std::vector<std::pair<const char*, double*>> e { { "eqCeiling", &eqCeiling }, { "eqKnee", &eqKnee }, { "eqRampMs", &eqRampMs },
-                                                         { "switchMs", &switchMs }, { "amountRampMs", &amountRampMs }, { "eqHpAfter", &eqHpAfter },
+                                                         { "switchMs", &switchMs }, { "amountRampMs", &amountRampMs }, { "resampleCutoffIn", &resampleCutoffIn }, { "resampleCutoffOut", &resampleCutoffOut },
+                                                         { "resampleCutoffInHigh", &resampleCutoffInHigh }, { "resampleCutoffOutHigh", &resampleCutoffOutHigh }, { "eqHpAfter", &eqHpAfter },
                                                          { "parRampMs", &parRampMs }, { "subGain", &subGain }, { "subLowPassHz", &subLowPassHz },
                                                          { "subHighPassHz", &subHighPassHz }, { "expThresholdDb", &expThresholdDb },
                                                          { "expSlope", &expSlope }, { "expHoldMs", &expHoldMs }, { "expReleaseMs", &expReleaseMs },
