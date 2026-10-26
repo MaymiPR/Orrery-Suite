@@ -216,6 +216,10 @@ Offline, one instance, 60 s of drums at 48 kHz (wall time less the ~1.2 s of loa
 8.3 s, i.e. **~14 % of a core**; everything on ~20 %. By module: drive 4.9 s (the most), compression 1.6, lift 1.7,
 harmonics 0.2 (the neural model is cheap), EQ 0. The target for Scorpius is well below this.
 
+Scorpius, measured the same way: the default preset 6.0 s (Orion 9.8 s in the same run), drive alone 3.8 s (5.7),
+lift 2.3 s (2.2), compression 0.4 s (2.1). Its learned parts run a block at a time in vector registers
+(`ScorpiusTests bench` times them separately).
+
 ## 14. What the fits found (Phase 4)
 
 Fitting our DSP to the reference (nulls on drums, a mastered track and tones; NULLTESTS.md for the numbers) pinned
@@ -248,9 +252,14 @@ down more of how it is built:
 - **Drive and lift** are learned models in the reference too, as harmonics is said to be: neither a filter and a
   shaper in any order (Wiener, Hammerstein, both, with learned FIR filters: −14 dB at best on held-out music) nor a
   short-memory network reproduces them; the drive's peaks wander irregularly far above full scale. Scorpius learns
-  its own models of them (`capture_nn.py`, `train_gru.py`): a small GRU between learned linear filters.
+  its own models of them from 174 s of program material per setting (`capture_nn.py`): the drive a small WaveNet
+  (8 channels, 12 layers of dilations 1 … 2048, `train_wn.py`), one per colour and hi-pass setting (the hi-pass
+  changes the drive's sound on music by more than its low cut suggests), lift's wet path a GRU of 16 units
+  (`train_gru.py`), each between a learned short FIR and a learned 8192-tap FIR. Trained on the GPU when there is
+  one. On held-out pieces up to +4 dBFS peak the drive's models null at −25 (colour a) to −33 dB (c), most of what
+  is left below 250 Hz; more channels or layers gain only ~1 dB (16 channels: −25.5 against −24.6 for colour a).
 
 ## Open
 
-- The drive's and lift's models (training continues), the low path's phase on music, grit with the compressor on
-  (the reference's grit then listens to the compressor), the converters above 48 kHz.
+- The drive's low-frequency error (colour a especially), the low path's phase on music, grit with the compressor
+  on (the reference's grit then listens to the compressor), the converters above 48 kHz.
