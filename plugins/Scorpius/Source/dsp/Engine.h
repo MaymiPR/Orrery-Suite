@@ -28,7 +28,8 @@ class Engine
 public:
     void prepare (double sampleRate, int maxBlock);
     void reset();
-    void process (float* l, float* r, int n, const Params&);
+    // key: the side-chain (EXT) for the compressor's detector, or null
+    void process (float* l, float* r, int n, const Params&, const float* keyL = nullptr, const float* keyR = nullptr);
 
 private:
     // a module's power: 0 ... 1 (the processed share), crossfading linearly
@@ -43,6 +44,8 @@ private:
     std::vector<double> bufL, bufR, wetL, wetR;
     bool first = true;
     Power eqPower, harmPower, compPower;
+    Ramp harmAmount, compAmount, liftAmount;   // the amounts move linearly over ~10 ms (MEASUREMENTS.md 12)
+    std::vector<double> keyBufL, keyBufR;
     Compressor comp;
 public:
     double compReduction = 0;              // the last block's largest gain reduction (dB), for the readout
@@ -54,5 +57,8 @@ private:
     std::vector<double> chainL, chainR;    // the chain's output, which the parallels listen to
     Ramp parWeight[4];
     SubPath sub;
+    LoudPath loud;
+    LowPath low;
+    GritPath grit;
 };
 }

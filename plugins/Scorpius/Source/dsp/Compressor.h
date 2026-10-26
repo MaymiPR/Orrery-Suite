@@ -1,6 +1,7 @@
 #pragma once
 #include <algorithm>
 #include <cmath>
+#include "Filters.h"
 #include "LinearFits.h"
 #include "Tuning.h"
 
@@ -50,8 +51,9 @@ public:
         for (auto& m : wet) for (auto& f : m) f.reset();
         env = 0; envSq = 0; gainDb = 0;
     }
-    // in place; mode 0 = a, 1 = b; amount 0 ... 1. Returns the largest gain reduction of the block (dB, positive).
-    double process (double* l, double* r, int n, int mode, double amount)
+    // in place; mode 0 = a, 1 = b; the amount (0 ... 1) moving per sample; key: the detector's input (the side-chain,
+    // EXT) or null (the signal itself). Returns the largest gain reduction of the block (dB, positive).
+    double process (double* l, double* r, int n, int mode, Ramp& amount, const double* keyL = nullptr, const double* keyR = nullptr)
     {
         const auto& t = tuning();
         const int m = mode ? 1 : 0;
@@ -62,7 +64,7 @@ public:
         double most = 0;
         for (int i = 0; i < n; ++i)
         {
-            const double mid = 0.5 * (l[i] + r[i]), a = std::abs (mid);
+            const double mid = keyL != nullptr ? 0.5 * (keyL[i] + keyR[i]) : 0.5 * (l[i] + r[i]), a = std::abs (mid);
             env = a > env ? a + (env - a) * att : a + (env - a) * rel;
             envSq = mid * mid > envSq ? mid * mid + (envSq - mid * mid) * att : mid * mid + (envSq - mid * mid) * rel;
             const double level = (1 - rms) * env + rms * std::sqrt (2.0 * envSq);      // (a sine's RMS x sqrt 2 reads its peak)
@@ -74,8 +76,9 @@ public:
             most = std::max (most, gainDb);
             const double g = std::pow (10.0, -gainDb / 20.0);
             const double wl = wet[m][0].process (l[i]) * g, wr = wet[m][1].process (r[i]) * g;
-            l[i] += amount * (wl - l[i]);
-            r[i] += amount * (wr - r[i]);
+            const double am = amount.next();
+            l[i] += am * (wl - l[i]);
+            r[i] += am * (wr - r[i]);
         }
         return most;
     }

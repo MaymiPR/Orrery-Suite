@@ -16,14 +16,16 @@ public:
     void reset() { for (int c = 0; c < 2; ++c) { bell[c].reset(); hp[c].reset(); } }
     void setMode (int freqHz) { if (freqHz != mode) design (freqHz); }
     // in place: the wet signal mixed with the dry one by the amount (0 ... 1)
-    void process (double* l, double* r, int n, double amount)
+    void process (double* l, double* r, int n, Ramp& amount)
     {
         const auto& t = tuning();
         const int m = mode == 50 ? 1 : 0;
-        const double c = t.harmCeiling[m], p = t.harmKnee[m], w = weight (amount);
+        const double c = t.harmCeiling[m], p = t.harmKnee[m];
         double* ch[2] { l, r };
-        for (int k = 0; k < 2; ++k)
-            for (int i = 0; i < n; ++i)
+        for (int i = 0; i < n; ++i)
+        {
+            const double w = weight (amount.next());
+            for (int k = 0; k < 2; ++k)
             {
                 const double x = ch[k][i];
                 const double boost = bell[k].process (x) - x;
@@ -31,6 +33,7 @@ public:
                 const double wetAdd = hp[k].process (c * u / std::pow (1.0 + std::pow (std::abs (u), p), 1.0 / p));
                 ch[k][i] = x + w * wetAdd;
             }
+        }
     }
     // the amount's weight of the wet signal (measured: 0.237, 0.483, 0.738 at 0.25, 0.5, 0.75)
     static double weight (double a)

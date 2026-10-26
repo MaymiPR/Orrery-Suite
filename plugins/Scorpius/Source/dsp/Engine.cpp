@@ -6,13 +6,17 @@ namespace sc::dsp
 void Engine::prepare (double sampleRate, int maxBlock)
 {
     fs = sampleRate;
-    for (auto* b : { &bufL, &bufR, &wetL, &wetR, &chainL, &chainR, &expGain }) b->assign ((size_t) std::max (1, maxBlock), 0.0);
+    for (auto* b : { &bufL, &bufR, &wetL, &wetR, &chainL, &chainR, &expGain, &keyBufL, &keyBufR }) b->assign ((size_t) std::max (1, maxBlock), 0.0);
     for (auto* p : { &eqPower, &harmPower, &compPower }) p->mix.setLength ((int) std::lround (tuning().switchMs * 0.001 * fs));
     eq.prepare (fs);
     sub.prepare (fs);
+    loud.prepare (fs);
+    low.prepare (fs);
+    grit.prepare (fs);
     harm.prepare (fs);
     comp.prepare (fs);
     expander.prepare (fs);
+    for (auto* a : { &harmAmount, &compAmount, &liftAmount }) a->setLength ((int) std::lround (tuning().amountRampMs * 0.001 * fs));
     for (auto& w : parWeight) w.setLength ((int) std::lround (tuning().parRampMs * 0.001 * fs));
     reset();
 }
@@ -21,6 +25,9 @@ void Engine::reset()
 {
     eq.reset();
     sub.reset();
+    loud.reset();
+    low.reset();
+    grit.reset();
     harm.reset();
     comp.reset();
     expander.reset();
@@ -48,8 +55,13 @@ void Engine::runModule (Power& power, bool on, int n, const std::function<void (
     }
 }
 
-void Engine::process (float* l, float* r, int n, const Params& p)
+void Engine::process (float* l, float* r, int n, const Params& p, const float* keyL, const float* keyR)
 {
+    const std::pair<Ramp*, double> amounts[] { { &harmAmount, p.harmAmount }, { &compAmount, p.compAmount }, { &liftAmount, p.liftAmount } };
+    for (auto& a : amounts)
+        if (first) a.first->jump (a.second); else a.first->set (a.second);
+    if (keyL != nullptr)
+        for (int i = 0; i < n; ++i) { keyBufL[(size_t) i] = keyL[i]; keyBufR[(size_t) i] = keyR[i]; }
     for (int i = 0; i < n; ++i) { bufL[(size_t) i] = l[i]; bufR[(size_t) i] = r[i]; }
     // the expander of the drive / harmonics / compression / lift group, at its input
     if (p.driveOn || p.harmOn || p.compOn || p.liftOn || harmPower.active() || compPower.active())
@@ -59,11 +71,12 @@ void Engine::process (float* l, float* r, int n, const Params& p)
     }
     else expander.reset();
     harm.setMode (p.harmFreq);
-    const double harmAmount = p.harmAmount;
-    runModule (harmPower, p.harmOn, n, [this, harmAmount] (double* a, double* b, int m) { harm.process (a, b, m, harmAmount); });
-    const int compMode = p.compMode; const double compAmount = p.compAmount;
+    runModule (harmPower, p.harmOn, n, [this] (double* a, double* b, int m) { harm.process (a, b, m, harmAmount); });
+    const int compMode = p.compMode;
+    const bool ext = keyL != nullptr;
     compReduction = 0;
-    runModule (compPower, p.compOn, n, [this, compMode, compAmount] (double* a, double* b, int m) { compReduction = comp.process (a, b, m, compMode, compAmount); });
+    runModule (compPower, p.compOn, n, [this, compMode, ext] (double* a, double* b, int m)
+               { compReduction = comp.process (a, b, m, compMode, compAmount, ext ? keyBufL.data() : nullptr, ext ? keyBufR.data() : nullptr); });
     eq.setGains (p.eq, first);
     runModule (eqPower, p.eqOn, n, [this] (double* a, double* b, int m) { eq.process (a, b, m); });
 
@@ -80,6 +93,12 @@ void Engine::process (float* l, float* r, int n, const Params& p)
         std::copy (bufR.begin(), bufR.begin() + n, chainR.begin());
         if (parWeight[0].value > 0 || parWeight[0].moving()) sub.process (chainL.data(), chainR.data(), bufL.data(), bufR.data(), n, parWeight[0]);
         else sub.reset();
+        if (parWeight[1].value > 0 || parWeight[1].moving()) low.process (chainL.data(), chainR.data(), bufL.data(), bufR.data(), n, parWeight[1]);
+        else low.reset();
+        if (parWeight[2].value > 0 || parWeight[2].moving()) loud.process (chainL.data(), chainR.data(), bufL.data(), bufR.data(), n, parWeight[2]);
+        else loud.reset();
+        if (parWeight[3].value > 0 || parWeight[3].moving()) grit.process (chainL.data(), chainR.data(), bufL.data(), bufR.data(), n, parWeight[3]);
+        else grit.reset();
     }
     first = false;
     for (int i = 0; i < n; ++i) { l[i] = (float) bufL[(size_t) i]; r[i] = (float) bufR[(size_t) i]; }

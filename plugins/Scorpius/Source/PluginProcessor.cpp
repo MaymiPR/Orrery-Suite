@@ -91,9 +91,11 @@ void ScorpiusProcessor::prepareToPlay (double sampleRate, int block)
     visuals.prepare (sampleRate);
     light.prepare (sampleRate);
     engine.prepare (sampleRate, jmax (1, block));
-    for (auto* s : { &inGain, &outGain }) s->reset (sampleRate, 0.01);
-    inGain.setCurrentAndTargetValue (Decibels::decibelsToGain (inGainRaw->load()));
-    outGain.setCurrentAndTargetValue (Decibels::decibelsToGain (outGainRaw->load()));
+    silence.assign ((size_t) jmax (1, block), 0.0f);
+    // the input and output gains glide exponentially (measured: 90 % of a step after 19 ms, tau ~8.3 ms)
+    gainCoef = (float) std::exp (-1.0 / (0.0083 * sampleRate));
+    inGainNow = Decibels::decibelsToGain (inGainRaw->load());
+    outGainNow = Decibels::decibelsToGain (outGainRaw->load());
 }
 
 void ScorpiusProcessor::processBlock (AudioBuffer<float>& buffer, MidiBuffer&)
@@ -113,11 +115,11 @@ void ScorpiusProcessor::processBlock (AudioBuffer<float>& buffer, MidiBuffer&)
     }
 
     const float inDb = inGainRaw->load(), outDb = ioLink.load() ? -inDb : outGainRaw->load();   // the I/O link: output = -input, always
-    inGain.setTargetValue (bypassed ? 1.0f : Decibels::decibelsToGain (inDb));
-    outGain.setTargetValue (bypassed ? 1.0f : Decibels::decibelsToGain (outDb));
+    const float inTarget = bypassed ? 1.0f : Decibels::decibelsToGain (inDb), outTarget = bypassed ? 1.0f : Decibels::decibelsToGain (outDb);
     for (int i = 0; i < n; ++i)
     {
-        const float g = inGain.getNextValue();
+        inGainNow = inTarget + (inGainNow - inTarget) * gainCoef;
+        const float g = inGainNow;
         main.getWritePointer (0)[i] *= g;
         main.getWritePointer (1)[i] *= g;
     }
@@ -131,18 +133,22 @@ void ScorpiusProcessor::processBlock (AudioBuffer<float>& buffer, MidiBuffer&)
         for (int pos = 0; pos < n; )
         {
             const int len = jmin (n - pos, jmax (1, meterBuf.getNumSamples()));
-            engine.process (main.getWritePointer (0) + pos, main.getWritePointer (1) + pos, len, params);
+            const bool key = external && side.getNumChannels() >= 2;
+            engine.process (main.getWritePointer (0) + pos, main.getWritePointer (1) + pos, len, params,
+                            key ? side.getReadPointer (0) + pos : (external ? silence.data() : nullptr),
+                            key ? side.getReadPointer (1) + pos : (external ? silence.data() : nullptr));
             pos += len;
         }
     }
     for (int i = 0; i < n; ++i)
     {
-        const float g = outGain.getNextValue();
+        outGainNow = outTarget + (outGainNow - outTarget) * gainCoef;
+        const float g = outGainNow;
         main.getWritePointer (0)[i] *= g;
         main.getWritePointer (1)[i] *= g;
     }
     outMeter.measure (main);
-    compGr = visuals.grEstimate.load();        // (a stand-in until the compressor exists: dsp/Visuals.h)
+    compGr = visuals.grEstimate.load();        // the readout's own quantity (measured on the reference, dsp/Visuals.h)
     ++blocksProcessed;
 }
 

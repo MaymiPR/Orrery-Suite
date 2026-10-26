@@ -75,7 +75,8 @@ private:
     sc::dsp::Params engineParams() const;
     std::atomic<float>* raw (const char* pid) const { return apvts.getRawParameterValue (pid); }
     juce::AudioBuffer<float> meterBuf;
-    juce::SmoothedValue<float> inGain, outGain;
+    float inGainNow = 1.0f, outGainNow = 1.0f, gainCoef = 0.0f;
+    std::vector<float> silence;            // the side-chain when EXT is chosen but the host leaves the bus off
     juce::ValueTree slots[2];
     bool slotUsed[2] { true, false };
     int slot = 0;

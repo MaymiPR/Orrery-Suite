@@ -117,6 +117,12 @@ static void testCompareFirstUse()
     CHECK_NEAR (real (q, sc::id::liftAmount), 0.5, 1e-4);
 }
 
+static void modulesOff (ScorpiusProcessor& p)
+{
+    for (auto* pid : { sc::id::driveOn, sc::id::harmOn, sc::id::compOn, sc::id::liftOn, sc::id::eqOn })
+        setReal (p, pid, 0.0f);
+}
+
 // the I/O link: the output gain follows the input gain inverted, in the audio whatever the output parameter says
 static void testIoLink()
 {
@@ -124,6 +130,7 @@ static void testIoLink()
     p.setPlayConfigDetails (2, 2, 48000.0, 512);
     p.prepareToPlay (48000.0, 512);
     p.ioLink = true;
+    modulesOff (p);
     setReal (p, sc::id::inputGain, 9.0f);
     setReal (p, sc::id::outputGain, 3.0f);
     AudioBuffer<float> b (2, 512);
@@ -143,17 +150,19 @@ static void testIoLink()
     CHECK (q.ioLink.load());
 }
 
+// with every module off only the gains act (the reference is bit-exact so, MEASUREMENTS.md 1)
 static void testPassThrough()
 {
     ScorpiusProcessor p;
     p.setPlayConfigDetails (2, 2, 48000.0, 512);
     p.prepareToPlay (48000.0, 512);
+    modulesOff (p);
     setReal (p, sc::id::inputGain, 6.0f);
     setReal (p, sc::id::outputGain, -12.0f);
     AudioBuffer<float> b (2, 512);
     MidiBuffer midi;
     float last = 0.0f;
-    for (int block = 0; block < 20; ++block)          // past the 10 ms gain smoothing
+    for (int block = 0; block < 20; ++block)          // past the gain smoothing
     {
         for (int c = 0; c < 2; ++c) for (int i = 0; i < 512; ++i) b.setSample (c, i, 0.25f);
         p.processBlock (b, midi);

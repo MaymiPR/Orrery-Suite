@@ -27,6 +27,7 @@ struct Tuning
     double eqHpAfter = 1;                  // 1: the high-pass after the soft clip (fitted: nulls 10 ... 16 dB deeper)
     double eqRampMs = 5.0;                 // a band's gain moves linearly to a new value over this time
     double switchMs = 5.0;                 // a module's power crossfades over this time
+    double amountRampMs = 10.0;            // harmonics, compression and lift amounts move linearly over this time
 
     // the expander (Expander.h): threshold (dBFS peak), gain slope below it, hold window, release time constant
     double expThresholdDb = -58.098, expSlope = 2.028, expHoldMs = 1133.8, expReleaseMs = 207.8;   // (nulltest/fit_exp.py)
@@ -45,14 +46,33 @@ struct Tuning
     double parRampMs = 2.0;
     // sub: gain x 6th-order Butterworth low-pass x high-pass (nulltest/fit_sub3.py)
     double subGain = 1.995, subLowPassHz = 140.207, subHighPassHz = 15.003;
+    // loud: the gain (dB) at detector levels -72, -66, ..., +12 dBFS, the detector's attack, release and RMS share
+    double loudCurve[15] { 8.994, 7.202, 6.544, 5.723, 5.030, 4.409, 3.839, 3.332, 2.879, 2.479, 1.845, 0.903, 0.473, -0.3, 0.197 };   // (nulltest/fit_loud.py)
+    double loudAttackMs = 0.6695, loudReleaseMs = 12.896, loudRms = 0.0096;
+    // grit: the envelopes' times (ms), boost per dB of fast over slow, its soft limit (dB), the fade-in threshold and range
+    double gritFastAttackMs = 2.2896, gritFastReleaseMs = 0.3183, gritSlowAttackMs = 72.285, gritSlowReleaseMs = 183.3;   // (nulltest/fit_grit.py)
+    double gritAmount = 0.28818, gritMaxDb = 6.0493, gritThresholdDb = -54.145, gritRangeDb = 39.807;
+    // low: the input low-pass (Hz, order), the output low-pass and its DC high-pass, gain, soft limit, flip hysteresis
+    double lowInHz = 152.155, lowInOrder = 2, lowOutHz = 55.129, lowOutOrder = 6, lowHpHz = 3.292, lowGain = -1.0338, lowCeiling = 0.5892,
+           lowHysteresis = 1.0e-4;
 
     std::vector<std::pair<const char*, double*>> entries()
     {
         std::vector<std::pair<const char*, double*>> e { { "eqCeiling", &eqCeiling }, { "eqKnee", &eqKnee }, { "eqRampMs", &eqRampMs },
-                                                         { "switchMs", &switchMs }, { "eqHpAfter", &eqHpAfter },
+                                                         { "switchMs", &switchMs }, { "amountRampMs", &amountRampMs }, { "eqHpAfter", &eqHpAfter },
                                                          { "parRampMs", &parRampMs }, { "subGain", &subGain }, { "subLowPassHz", &subLowPassHz },
                                                          { "subHighPassHz", &subHighPassHz }, { "expThresholdDb", &expThresholdDb },
-                                                         { "expSlope", &expSlope }, { "expHoldMs", &expHoldMs }, { "expReleaseMs", &expReleaseMs } };
+                                                         { "expSlope", &expSlope }, { "expHoldMs", &expHoldMs }, { "expReleaseMs", &expReleaseMs },
+                                                         { "loudAttackMs", &loudAttackMs }, { "loudReleaseMs", &loudReleaseMs }, { "loudRms", &loudRms },
+                                                         { "lowInHz", &lowInHz }, { "lowInOrder", &lowInOrder }, { "lowOutHz", &lowOutHz }, { "lowOutOrder", &lowOutOrder },
+                                                         { "lowHpHz", &lowHpHz }, { "lowGain", &lowGain }, { "lowCeiling", &lowCeiling }, { "lowHysteresis", &lowHysteresis },
+                                                         { "gritFastAttackMs", &gritFastAttackMs }, { "gritFastReleaseMs", &gritFastReleaseMs },
+                                                         { "gritSlowAttackMs", &gritSlowAttackMs }, { "gritSlowReleaseMs", &gritSlowReleaseMs },
+                                                         { "gritAmount", &gritAmount }, { "gritMaxDb", &gritMaxDb }, { "gritThresholdDb", &gritThresholdDb },
+                                                         { "gritRangeDb", &gritRangeDb } };
+        static const char* loudKeys[15] { "loud0", "loud1", "loud2", "loud3", "loud4", "loud5", "loud6", "loud7", "loud8", "loud9", "loud10",
+                                          "loud11", "loud12", "loud13", "loud14" };
+        for (int k = 0; k < 15; ++k) e.push_back ({ loudKeys[k], &loudCurve[k] });
         static const char* harmKeys[2][6] { { "harm80.hz", "harm80.q", "harm80.gain", "harm80.hp", "harm80.ceil", "harm80.knee" },
                                             { "harm50.hz", "harm50.q", "harm50.gain", "harm50.hp", "harm50.ceil", "harm50.knee" } };
         static const char* compKeys[2][8] { { "compA.thresh", "compA.ratio", "compA.knee", "compA.attack", "compA.release", "compA.rms", "compA.gAttack", "compA.gRelease" },
