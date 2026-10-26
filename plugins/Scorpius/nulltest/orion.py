@@ -9,7 +9,8 @@ build with tools/RefRender (an offline JUCE VST3 host). Renders stay local (null
 params: host parameters by the names hosts show, by displayed value (on/off switches 0 / 1, 'Harm Freq' 50 / 80,
 amounts 0 ... 1, gains in dB). hidden: the settings the host cannot see, by their path in the saved preset
 (orionstate.py): 'drive.driveMode' a / b / c, 'ids.compression.mode' 'Mode A' / 'Mode B'; they are written into a
-copy of the default state that is loaded before the parameters.
+copy of the default state that is loaded before the parameters. plugin='model' renders through our own processor
+with tools/ScRender (tune={'eqCeiling': 0.45} overrides DSP constants, Source/dsp/Tuning.h); 'ours' is the VST3 build.
 """
 import hashlib, os, subprocess, uuid, sys
 import numpy as np
@@ -18,6 +19,7 @@ HERE = os.path.dirname(os.path.abspath(__file__))
 PLUGIN = os.path.dirname(HERE)                                          # plugins/Scorpius
 ROOT = os.path.dirname(os.path.dirname(PLUGIN))                         # the repository
 EXE = os.path.join(ROOT, 'build', 'RefRender_artefacts', 'Release', 'RefRender.exe')
+SCEXE = os.path.join(ROOT, 'build', 'ScRender_artefacts', 'Release', 'ScRender.exe')   # our processor, tunable ('model')
 PLUGINS = {
     'ref': (r'C:\Program Files\Common Files\VST3\Cradle Orion.vst3', 'Orion'),
     'ours': (os.path.join(ROOT, 'build', 'Scorpius_artefacts', 'Release', 'VST3', 'Scorpius.vst3'), 'Scorpius'),
@@ -72,7 +74,7 @@ def state_for(hidden):
 
 def _key(j, plugin, fs, block):
     h = hashlib.sha1(_stereo(j['x']).tobytes())
-    for k in ('params', 'norm', 'auto', 'raw', 'hidden'): h.update(repr((k, j.get(k) if not isinstance(j.get(k), dict) else sorted(j[k].items()))).encode())
+    for k in ('params', 'norm', 'auto', 'raw', 'hidden', 'tune'): h.update(repr((k, j.get(k) if not isinstance(j.get(k), dict) else sorted(j[k].items()))).encode())
     h.update(repr((plugin, fs, block)).encode())
     return h.hexdigest()
 
@@ -80,7 +82,7 @@ def _key(j, plugin, fs, block):
 def render_many(jobs, plugin='ref', fs=FS, block=512, cache=False):
     """jobs: dicts with x, and optional params / norm / auto / raw / hidden. Returns a list of (2, n) arrays.
     cache=True keeps each output in renders/cache, keyed by input and settings."""
-    if cache:
+    if cache and plugin != 'model':          # our processor changes with every build and tuning: never cached
         os.makedirs(CACHE, exist_ok=True)
         keys = [_key(j, plugin, fs, block) for j in jobs]
         have = {i: np.load(os.path.join(CACHE, k + '.npy')) for i, k in enumerate(keys) if os.path.exists(os.path.join(CACHE, k + '.npy'))}
@@ -98,9 +100,16 @@ def render_many(jobs, plugin='ref', fs=FS, block=512, cache=False):
         fin = os.path.join(WORK, f'{tag}_{i}_in.f32'); fout = os.path.join(WORK, f'{tag}_{i}_out.f32')
         x.T.astype(np.float32).tofile(fin)
         parts = [f'"{fin}"', f'"{fout}"']
-        st = state_for(j.get('hidden'))
-        if st: parts.append(f'"state={st}"')
-        for k, v in (j.get('params') or {}).items(): parts.append(f'"param:{k}={v}"')
+        params = dict(j.get('params') or {})
+        if plugin == 'ref':
+            st = state_for(j.get('hidden'))
+            if st: parts.append(f'"state={st}"')
+        else:                                    # ours: the hidden settings are ordinary parameters
+            for k, v in (j.get('hidden') or {}).items():
+                if k == 'drive.driveMode': params['Drive Color'] = v
+                elif k == 'ids.compression.mode': params['Comp Mode'] = str(v)[-1].lower()
+        for k, v in (j.get('tune') or {}).items(): parts.append(f'"tune:{k}={float(v)!r}"')
+        for k, v in params.items(): parts.append(f'"param:{k}={v}"')
         for k, v in (j.get('norm') or {}).items(): parts.append(f'"norm:{k}={v}"')
         for k, s, v in (j.get('auto') or []): parts.append(f'"auto:{k}@{int(s)}={v}"')
         if j.get('raw'): parts.append('raw=1')
@@ -108,9 +117,13 @@ def render_many(jobs, plugin='ref', fs=FS, block=512, cache=False):
         lines.append(' '.join(parts)); outs.append((fin, fout))
     jobfile = os.path.join(WORK, f'{tag}_jobs.txt')
     open(jobfile, 'w').write('\n'.join(lines) + '\n')
-    path, name = PLUGINS[plugin]
-    r = subprocess.run([EXE, path, name, jobfile, f'fs={fs}', f'block={block}'], capture_output=True, text=True)
-    if 'no parameter' in r.stdout: raise RuntimeError(r.stdout)
+    if plugin == 'model':
+        cmd = [SCEXE, jobfile, f'fs={fs}', f'block={block}']
+    else:
+        path, name = PLUGINS[plugin]
+        cmd = [EXE, path, name, jobfile, f'fs={fs}', f'block={block}']
+    r = subprocess.run(cmd, capture_output=True, text=True)
+    if 'no parameter' in r.stdout or 'unknown tuning' in r.stdout: raise RuntimeError(r.stdout)
     res = []
     for fin, fout in outs:
         if not os.path.exists(fout): raise RuntimeError('render failed:\n' + r.stdout + r.stderr)

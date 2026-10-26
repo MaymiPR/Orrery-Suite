@@ -6,9 +6,10 @@
 #include "shared/dsp/LevelMeter.h"
 #include "dsp/Visuals.h"
 #include "dsp/Light.h"
+#include "dsp/Engine.h"
 
-// Scorpius: the recreation of Cradle's Orion (RESEARCH.md). Phase 2: the parameters, presets, the A / B compare and
-// the meters are complete; the audio passes through the input and output gains only (the modules follow in Phase 4).
+// Scorpius: the recreation of Cradle's Orion (RESEARCH.md, MEASUREMENTS.md). The audio runs input gain -> the modules
+// (dsp/Engine.h) -> output gain.
 class ScorpiusProcessor : public juce::AudioProcessor
 {
 public:
@@ -70,6 +71,9 @@ private:
     std::atomic<float>* inGainRaw = nullptr;
     std::atomic<float>* outGainRaw = nullptr;
     std::atomic<float>* compAmountRaw = nullptr;
+    sc::dsp::Engine engine;
+    sc::dsp::Params engineParams() const;
+    std::atomic<float>* raw (const char* pid) const { return apvts.getRawParameterValue (pid); }
     juce::AudioBuffer<float> meterBuf;
     juce::SmoothedValue<float> inGain, outGain;
     juce::ValueTree slots[2];

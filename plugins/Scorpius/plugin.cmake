@@ -5,6 +5,7 @@ set(SC_SOURCES
     ${SC_DIR}/Source/PluginProcessor.cpp
     ${SC_DIR}/Source/PluginEditor.cpp
     ${SC_DIR}/Source/Presets.cpp
+    ${SC_DIR}/Source/dsp/Engine.cpp
     ${SC_DIR}/Source/ui/Controls.cpp
     ${SC_DIR}/Source/ui/Stripe.cpp
     ${SUITE_UI_SOURCES})
@@ -58,4 +59,10 @@ if(AP_TOOLS)
     target_include_directories(ScorpiusSnapshot PRIVATE ${SC_DIR}/Source ${CMAKE_SOURCE_DIR})
     target_compile_definitions(ScorpiusSnapshot PRIVATE ${SC_APP_DEFS})
     target_link_libraries(ScorpiusSnapshot PRIVATE OrreryUiData juce::juce_audio_utils juce::juce_dsp juce::juce_recommended_config_flags)
+    # Offline renders through our processor with every DSP constant open to change (the fits: nulltest/orion.py, 'model')
+    juce_add_console_app(ScRender PRODUCT_NAME "ScRender")
+    target_sources(ScRender PRIVATE ${SC_DIR}/tools/ScRender.cpp ${SC_SOURCES})
+    target_include_directories(ScRender PRIVATE ${SC_DIR}/Source ${CMAKE_SOURCE_DIR})
+    target_compile_definitions(ScRender PRIVATE ${SC_APP_DEFS})
+    target_link_libraries(ScRender PRIVATE OrreryUiData juce::juce_audio_utils juce::juce_dsp juce::juce_recommended_config_flags)
 endif()

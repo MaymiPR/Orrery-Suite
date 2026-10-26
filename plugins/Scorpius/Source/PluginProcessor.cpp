@@ -90,6 +90,7 @@ void ScorpiusProcessor::prepareToPlay (double sampleRate, int block)
     outMeter.prepare (sampleRate);
     visuals.prepare (sampleRate);
     light.prepare (sampleRate);
+    engine.prepare (sampleRate, jmax (1, block));
     for (auto* s : { &inGain, &outGain }) s->reset (sampleRate, 0.01);
     inGain.setCurrentAndTargetValue (Decibels::decibelsToGain (inGainRaw->load()));
     outGain.setCurrentAndTargetValue (Decibels::decibelsToGain (outGainRaw->load()));
@@ -124,7 +125,16 @@ void ScorpiusProcessor::processBlock (AudioBuffer<float>& buffer, MidiBuffer&)
     inMeter.measure (main);
     visuals.process (main, compAmountRaw->load(), external ? &side : nullptr);
     light.process (main);
-    // (the modules: Phase 4)
+    if (! bypassed)
+    {
+        const auto params = engineParams();
+        for (int pos = 0; pos < n; )
+        {
+            const int len = jmin (n - pos, jmax (1, meterBuf.getNumSamples()));
+            engine.process (main.getWritePointer (0) + pos, main.getWritePointer (1) + pos, len, params);
+            pos += len;
+        }
+    }
     for (int i = 0; i < n; ++i)
     {
         const float g = outGain.getNextValue();
@@ -134,6 +144,21 @@ void ScorpiusProcessor::processBlock (AudioBuffer<float>& buffer, MidiBuffer&)
     outMeter.measure (main);
     compGr = visuals.grEstimate.load();        // (a stand-in until the compressor exists: dsp/Visuals.h)
     ++blocksProcessed;
+}
+
+sc::dsp::Params ScorpiusProcessor::engineParams() const
+{
+    using namespace sc;
+    sc::dsp::Params p;
+    auto on = [this] (const char* pid) { return raw (pid)->load() >= 0.5f; };
+    p.driveOn = on (id::driveOn); p.hiPass = on (id::driveHiPass); p.driveColor = (int) raw (id::driveColor)->load();
+    p.harmOn = on (id::harmOn); p.harmFreq = raw (id::harmFreq)->load() < 65.0f ? 50 : 80; p.harmAmount = raw (id::harmAmount)->load();
+    p.compOn = on (id::compOn); p.compMode = (int) raw (id::compMode)->load(); p.compAmount = raw (id::compAmount)->load();
+    p.liftOn = on (id::liftOn); p.liftAmount = raw (id::liftAmount)->load();
+    p.eqOn = on (id::eqOn);
+    for (int b = 0; b < 5; ++b) p.eq[b] = raw (eqIds[b])->load();
+    for (int k = 0; k < 4; ++k) { p.parOn[k] = on (parallels[k].on); p.parLevel[k] = raw (parallels[k].level)->load(); }
+    return p;
 }
 
 //==============================================================================
