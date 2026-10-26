@@ -31,8 +31,6 @@ reproduced with the scripts named in each section.
   After it, chaining modules through separate renders reproduces them to −85 … −115 dB.
 - **A noise floor.** A time-shifted input leaves a residual of −117 dBFS whatever the level: the reference adds a
   very low noise (or dither) while a module is on. It limits nulls on quiet signals only.
-- **State shared between instances** (seen once, not pinned down): in one host process, a run of very quiet renders
-  came out silent where single renders did not. Measurements of quiet signals use one render per process.
 
 ## 1. Structure (`order.py`)
 
@@ -143,18 +141,85 @@ signal; nulls in dB):
 - The loops of output against input are wide (filters with phase around the saturator); the full model is fitted in
   Phase 4.
 
-## 7. Harmonics, compression, lift, EQ, parallels (first look; details to come)
+## 7. Harmonics (the reference's neural model, `Harmonics - FULL WET … LSTM`)
 
-- **Harmonics** (the reference's neural model, `Harmonics - FULL WET … LSTM`): at small levels a bass boost
-  (+5.7 dB around 100 … 125 Hz at 80 Hz, a little lower at 50 Hz), at high levels odd harmonics only (h3 −80 dB at
-  −20 dBFS, −41 at 0, 100 Hz tone) and a little compression (+5.6 → +5.1 dB at 0 dBFS).
-- **Compression** (amount 1): +3.7 dB (mode b) / +3.4 dB (a) below −20 dBFS; above it, a tone's gain falls
-  (−12 dBFS: +2.9; −6: −1.3; 0: −6.1; +6: −10.9 for b): about 4.8 dB per 6 dB, i.e. a ratio near 5:1 on the wet path.
-- **Lift** (1): saturation that grows from −30 dBFS (h2 −48, h3 −69 at 1 kHz) to strong at 0 dBFS (h3 −12).
-- **Harmonic EQ:** each boosted band saturates symmetrically (odd harmonics: h3 −48 dB at −20 dBFS, −22 at 0; its
-  boost shrinks from +7.0 to +3.5 dB at 0 dBFS).
-- **Sub:** linear (its lift around 40 … 60 Hz at every level).
-- **Low:** even harmonics of the lows (50 Hz: h2 −65 dB at −40 dBFS, −30 at −6).
-- **Loud:** upward compression: +5.1 dB at −50 dBFS falling to +0.3 at +6 dBFS (100 Hz and 1 kHz alike), with odd
-  harmonics at low level (h3 −34 dB at 100 Hz): a fast gain.
-- **Grit:** no change to steady tones at any level: it acts on transients.
+- Small signal: a bass boost, +5.7 dB around 100 … 125 Hz at 80 Hz (around 80 … 100 Hz at 50 Hz), Section 4.
+- **Odd harmonics only, as from a cubic term:** h3 rises exactly 2 dB per dB (100 Hz at amount 1: −97 dB at
+  −30 dBFS, −74 at −18, −62 at −12, −50 at −6, −39 at 0), h5 4 dB per dB (−66 at 0 dBFS). Nearly the same from 30
+  to 400 Hz (−39 … −45 dB at 0 dBFS), much less at 1 kHz (−64): the shaper works on the lows.
+- Little compression: the boost at 120 Hz is +5.8 dB up to −12 dBFS, +5.3 at 0, +4.3 at +6.
+- The amount is almost a wet / dry mix (Section 5).
+- A filter → odd saturator → filter structure looks close enough to try before training a model of our own (Phase 4).
+
+## 8. Compression (`comp.py`)
+
+Amount 1 (the wet path; the amount mixes it with the dry signal exactly):
+- **Static curve** (1 kHz): make-up **+3.4 dB (mode a), +3.7 dB (mode b)** below −16 dBFS; a soft knee from about
+  −14 dBFS; above it **0.8 dB of gain reduction per dB (ratio 5:1)**: −8 dBFS 0.0 / +0.3, −6 −1.6 / −1.3, 0 −6.4 /
+  −6.1, +12 −16.0 / −15.7 dB (a / b). The curves of the two modes are the same but for the make-up.
+- **Detector:** the same at every frequency (30 Hz … 15 kHz: 4.9 … 5.0 dB of reduction at −6 dBFS); a fast envelope
+  between peak and RMS (noise of the tone's RMS is reduced 4.1 dB more than the tone, noise of the tone's peak 1.7 dB
+  less); **stereo-linked on the mid signal** (one channel at −6 dBFS reduces the other, quiet one, by 0.9 dB, as
+  (L + R) / 2 at −12 dBFS would).
+- **Fast:** after a step from −30 to +6 dBFS the reduction reaches 90 % in ~2 ms (−9 dB of −11 after 2 ms); it
+  recovers in ~20 ms (the make-up back after 30 … 40 ms). Gain modulation within the cycle gives odd harmonics at
+  low frequencies (40 Hz at 0 dBFS: h3 −27 dB).
+- **The modes** agree in every tone test (static, steps, bursts, low frequencies) but for the 0.33 dB of make-up,
+  yet on drums they differ (null −23 dB after the make-up): a difference in the fine dynamics, to be found by fitting
+  both to program material (Phase 4).
+
+## 9. Lift
+
+- Amount 0 is not the dry signal: a fixed gentle lift, +0.3 dB at 100 Hz, +0.5 at 1 kHz, 0 above 5 kHz (linear).
+- Amount 1: a saturator with both even and odd harmonics (1 kHz: h2 −48 / h3 −69 dB at −30 dBFS, h2 −28 / h3 −12
+  at 0 dBFS) between fixed filters: the gain curve has the same shape at 100 Hz, 1, 5 and 10 kHz (+3.5 / +4.3 /
+  +4.1 / +3.5 dB small-signal, about 7 dB less at 0 dBFS).
+- No oversampling (aliases at −18 … −44 dB from a 9 kHz tone at 0 dBFS).
+
+## 10. Harmonic EQ
+
+- Linear below about −20 dBFS (Section 4 for the band shapes).
+- Each boosted band **saturates symmetrically**: odd harmonics (1 kHz +6 dB: h3 −88 dB at −40 dBFS, −48 at −20,
+  −22 at 0) and its boost shrinks (+7.1 → +6.2 at −10 dBFS, +3.6 at 0). The 10 kHz shelf compresses too (+3.9 →
+  +2.0 dB at 0 dBFS) with its harmonics above the band.
+
+## 11. Parallels
+
+Each path is mixed in with the faders' taper (Section 5); levels below at level 1.
+- **Sub:** linear at every level (+9.5 dB at 50 Hz from −40 to 0 dBFS); the response of Section 4 (a lift around
+  40 … 60 Hz, a notch near 125 Hz).
+- **Low:** works on the deep lows (below ~80 Hz) and grows faster than the signal: its contribution at 50 Hz is
+  −36 dB re the input at −30 dBFS and −12 dB at −6 dBFS (about 2 dB per dB), with a second harmonic 19 dB under it;
+  less again at 0 dBFS (−18 dB): a level-dependent, even-harmonic bass path.
+- **Loud:** upward compression, the same at every frequency: +6.6 dB at −60 dBFS, +5.1 at −48, +3.4 at −30, +1.9
+  at −12, +0.5 at 0, +0.3 at +6 (1 kHz). Fast: down within 4 ms when the level jumps, back up over ~20 ms. The fast
+  gain gives odd harmonics at low frequencies (h3 −34 dB at 100 Hz).
+- **Grit:** no change to steady tones. On a kick-like hit it adds a burst 3 … 18 dB under the hit for its first
+  ~20 ms, decaying to −50 dB by 40 ms. Its amount changes the processing, not only the mix (Section 5), and its
+  detector listens inside the chain (Section 1).
+
+## 12. Smoothing and switching
+
+Changes at a block boundary (64-sample blocks), a 1 kHz tone at −20 dBFS:
+
+| Change | Time to 90 % |
+|---|---|
+| a module's power (compression, lift) | ~5 ms crossfade |
+| compression amount 0 → 1 | ~10 ms ramp |
+| EQ gain 0 → 6 | ~5 ms |
+| input gain 0 → +6 dB | 19 ms, exponential (τ ≈ 8 ms) |
+| a parallel's power | within 2 ms |
+
+## 13. CPU
+
+Offline, one instance, 60 s of drums at 48 kHz (wall time less the ~1.2 s of loading): the default preset takes
+8.3 s, i.e. **~14 % of a core**; everything on ~20 %. By module: drive 4.9 s (the most), compression 1.6, lift 1.7,
+harmonics 0.2 (the neural model is cheap), EQ 0. The target for Scorpius is well below this.
+
+## Open for Phase 4
+
+- Fit each module's model (filters around its saturator; the compressor's and the parallels' dynamics) against
+  program material, as for The Antiparticle; the two compression modes on drums.
+- The low-level expander's exact hold and release curve.
+- The GR readout's quantity against the compressor's real reduction (UI round 4 measured the readout).
+- Whether to run at a fixed 48 kHz with the reference's resampler (needed for nulls at 44.1 kHz) or at the host rate.
