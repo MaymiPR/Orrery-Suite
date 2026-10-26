@@ -27,6 +27,11 @@ public:
         hist.assign (w.pre.size(), 0.0f);
         h.assign ((size_t) w.hidden, 0.0f);
         gi.assign ((size_t) (3 * w.hidden), 0.0f); gh = gi;
+        // the recurrent weights by column (input unit), so each update runs over contiguous outputs (no reduction)
+        const int H = w.hidden;
+        whhT.assign ((size_t) (3 * H * H), 0.0f);
+        for (int r = 0; r < 3 * H; ++r)
+            for (int c = 0; c < H; ++c) whhT[(size_t) (c * 3 * H + r)] = w.whh[(size_t) (r * H + c)];
         reset();
     }
     void reset()
@@ -46,30 +51,31 @@ public:
         for (int k = 0; k < K; ++k) { u += w.pre[(size_t) k] * hist[(size_t) j]; j = j == 0 ? K - 1 : j - 1; }
         hpos = (hpos + 1) % K;
         // the GRU step
-        for (int r = 0; r < 3 * H; ++r)
-        {
-            gi[(size_t) r] = w.wih[(size_t) r] * u + w.bih[(size_t) r];
-            float s = w.bhh[(size_t) r];
-            const float* row = w.whh.data() + (size_t) r * (size_t) H;
-            for (int c = 0; c < H; ++c) s += row[c] * h[(size_t) c];
-            gh[(size_t) r] = s;
-        }
-        float out = w.bout;
+        float* gip = gi.data(); float* ghp = gh.data(); float* hp = h.data();
+        const float* wih = w.wih.data(); const float* bih = w.bih.data(); const float* bhh = w.bhh.data();
+        for (int r = 0; r < 3 * H; ++r) { gip[r] = wih[r] * u + bih[r]; ghp[r] = bhh[r]; }
         for (int c = 0; c < H; ++c)
         {
-            const float rg = fastSigmoid (gi[(size_t) c] + gh[(size_t) c]);
-            const float zg = fastSigmoid (gi[(size_t) (H + c)] + gh[(size_t) (H + c)]);
-            const float ng = fastTanh (gi[(size_t) (2 * H + c)] + rg * gh[(size_t) (2 * H + c)]);
-            h[(size_t) c] = (1 - zg) * ng + zg * h[(size_t) c];
-            out += w.wout[(size_t) c] * h[(size_t) c];
+            const float hc = hp[c];
+            const float* col = whhT.data() + (size_t) c * 3 * (size_t) H;
+            for (int r = 0; r < 3 * H; ++r) ghp[r] += col[r] * hc;
         }
+        for (int c = 0; c < H; ++c)
+        {
+            const float rg = fastSigmoid (gip[c] + ghp[c]);
+            const float zg = fastSigmoid (gip[H + c] + ghp[H + c]);
+            const float ng = fastTanh (gip[2 * H + c] + rg * ghp[2 * H + c]);
+            hp[c] = (1 - zg) * ng + zg * hp[c];
+        }
+        float out = w.bout;
+        for (int c = 0; c < H; ++c) out += w.wout[(size_t) c] * hp[c];
         return post.process (u + out);
     }
 
 private:
     const LearnedWeights* weights = nullptr;
     Convolver post;
-    std::vector<float> hist, h, gi, gh;
+    std::vector<float> hist, h, gi, gh, whhT;
     int hpos = 0;
 };
 }

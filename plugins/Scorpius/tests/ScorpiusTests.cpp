@@ -1,10 +1,11 @@
 // Unit tests for Scorpius: parameters, presets, the A / B compare, state, the pass-through of Phase 2 and the
 // side-chain switch. Run:
-// ScorpiusTests (exit code 0 = all passed).
+// ScorpiusTests (exit code 0 = all passed);  ScorpiusTests bench: the learned models' CPU, part by part.
 #include <cmath>
 #include <cstdio>
 #include "PluginProcessor.h"
 #include "dsp/Convolver.h"
+#include "dsp/LearnedModules.h"
 
 static int failures = 0, checks = 0;
 #define CHECK(cond) do { ++checks; if (! (cond)) { ++failures; std::printf ("FAIL %s:%d  %s\n", __FILE__, __LINE__, #cond); } } while (0)
@@ -344,9 +345,44 @@ static void testEngine()
     CHECK (gainWith (true) < gainWith (false) - 6.0);
 }
 
-int main()
+// seconds of CPU per 60 s of stereo at 48 kHz, in blocks of 512
+static void bench()
+{
+    using namespace sc::dsp;
+    const int n = 60 * 48000, B = 512;
+    std::vector<double> x ((size_t) n);
+    Random rng (1);
+    for (auto& v : x) v = 0.3 * (rng.nextDouble() * 2 - 1);
+    auto time = [&] (const char* name, auto&& run)
+    {
+        std::vector<double> buf = x;
+        const auto t0 = Time::getHighResolutionTicks();
+        for (int c = 0; c < 2; ++c)
+            for (int i = 0; i < n; i += B) run (buf.data() + i, std::min (B, n - i));
+        std::printf ("%-24s %6.2f s\n", name, Time::highResolutionTicksToSeconds (Time::getHighResolutionTicks() - t0));
+    };
+    {
+        Convolver conv; conv.prepare (models::driveAhp.post);
+        time ("convolver (8192 taps)", [&] (double* p, int m) { for (int i = 0; i < m; ++i) p[i] = conv.process ((float) p[i]); });
+    }
+    {
+        LearnedWaveNet wn; wn.prepare (models::driveAhp);
+        time ("drive WaveNet (whole)", [&] (double* p, int m) { wn.process (p, p, m); });
+    }
+    {
+        Learned gru; gru.prepare (models::lift);
+        time ("lift GRU (whole)", [&] (double* p, int m) { for (int i = 0; i < m; ++i) p[i] = gru.process ((float) p[i]); });
+    }
+    {
+        ParallelFilter dry; dry.set (fits::liftDry);
+        time ("lift dry filter", [&] (double* p, int m) { for (int i = 0; i < m; ++i) p[i] = dry.process (p[i]); });
+    }
+}
+
+int main (int argc, char** argv)
 {
     ScopedJuceInitialiser_GUI init;
+    if (argc > 1 && String (argv[1]) == "bench") { bench(); return 0; }
     testParameters();
     testPresets();
     testCompareAndState();

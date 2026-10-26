@@ -105,4 +105,4 @@ if __name__ == '__main__':
     model, xs, ys, valid, keep = train(case, steps, irname_of(case), ch, layers)
     n = evaluate(model, xs, ys, valid, keep)
     print(case, f'ch {ch} layers {layers}', 'validation nulls', ' '.join('%d:%.1f' % v for v in n), 'mean %.1f' % np.mean([v for _, v in n]))
-    torch.save(dict(state={k: v.cpu() for k, v in model.state_dict().items()}, ch=ch, layers=layers), os.path.join(NN, case + '_wn.pt'))
+    torch.save(dict(state={k: v.cpu() for k, v in model.state_dict().items()}, ch=ch, layers=layers), os.path.join(NN, case + '_wn' + os.environ.get('TAG', '') + '.pt'))

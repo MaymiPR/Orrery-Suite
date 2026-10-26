@@ -23,7 +23,7 @@ public:
     {
         const int k = (colour < 0 ? 0 : colour > 2 ? 2 : colour) + (hiPass ? 3 : 0);
         if (k != current) { model[k][0].reset(); model[k][1].reset(); current = k; }
-        for (int i = 0; i < n; ++i) { l[i] = model[k][0].process ((float) l[i]); r[i] = model[k][1].process ((float) r[i]); }
+        model[k][0].process (l, l, n); model[k][1].process (r, r, n);
     }
 
 private:
