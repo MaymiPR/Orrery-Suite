@@ -5,6 +5,7 @@
 #include "Parallels.h"
 #include "Harmonics.h"
 #include "Expander.h"
+#include "Compressor.h"
 #include "Filters.h"
 
 // Scorpius's processing between the input and output gains (MEASUREMENTS.md 1): drive -> harmonics -> compression ->
@@ -41,7 +42,11 @@ private:
     double fs = 48000.0;
     std::vector<double> bufL, bufR, wetL, wetR;
     bool first = true;
-    Power eqPower, harmPower;
+    Power eqPower, harmPower, compPower;
+    Compressor comp;
+public:
+    double compReduction = 0;              // the last block's largest gain reduction (dB), for the readout
+private:
     Harmonics harm;
     Expander expander;
     std::vector<double> expGain;

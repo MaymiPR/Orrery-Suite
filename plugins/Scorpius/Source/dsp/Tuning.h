@@ -35,6 +35,12 @@ struct Tuning
     double harmHz[2] { 111.5166, 69.9423 }, harmQ[2] { 0.3174, 0.3127 }, harmGainDb[2] { 5.8189, 5.843 };
     double harmHpHz[2] { 20.6772, 20.4059 }, harmCeiling[2] { 1.6403, 1.4107 }, harmKnee[2] { 1.9678, 2.2203 };
 
+    // compression (Compressor.h), [0] mode a, [1] mode b: threshold (dBFS of the detector's level), ratio, knee width
+    // (dB), detector attack / release (ms), RMS share of the detector (0 = peak follower), gain smoothing (ms, 0 = none)
+    double compThresholdDb[2] { -12.818, -12.827 }, compRatio[2] { 4.987, 4.969 }, compKneeDb[2] { 7.391, 7.341 };   // (nulltest/fit_comp.py)
+    double compAttackMs[2] { 1.026, 1.043 }, compReleaseMs[2] { 20.54, 19.746 }, compRms[2] { 0.039, 0.047 };
+    double compGainAttackMs[2] { 0.0, 0.0 }, compGainReleaseMs[2] { 0.0, 0.0 };
+
     // parallels (Parallels.h): each path's weight (its power times its fader's taper) moves linearly over this time
     double parRampMs = 2.0;
     // sub: gain x 6th-order Butterworth low-pass x high-pass (nulltest/fit_sub3.py)
@@ -49,6 +55,14 @@ struct Tuning
                                                          { "expSlope", &expSlope }, { "expHoldMs", &expHoldMs }, { "expReleaseMs", &expReleaseMs } };
         static const char* harmKeys[2][6] { { "harm80.hz", "harm80.q", "harm80.gain", "harm80.hp", "harm80.ceil", "harm80.knee" },
                                             { "harm50.hz", "harm50.q", "harm50.gain", "harm50.hp", "harm50.ceil", "harm50.knee" } };
+        static const char* compKeys[2][8] { { "compA.thresh", "compA.ratio", "compA.knee", "compA.attack", "compA.release", "compA.rms", "compA.gAttack", "compA.gRelease" },
+                                            { "compB.thresh", "compB.ratio", "compB.knee", "compB.attack", "compB.release", "compB.rms", "compB.gAttack", "compB.gRelease" } };
+        for (int m = 0; m < 2; ++m)
+        {
+            double* v[8] { &compThresholdDb[m], &compRatio[m], &compKneeDb[m], &compAttackMs[m], &compReleaseMs[m], &compRms[m],
+                           &compGainAttackMs[m], &compGainReleaseMs[m] };
+            for (int k = 0; k < 8; ++k) e.push_back ({ compKeys[m][k], v[k] });
+        }
         for (int m = 0; m < 2; ++m)
         {
             double* v[6] { &harmHz[m], &harmQ[m], &harmGainDb[m], &harmHpHz[m], &harmCeiling[m], &harmKnee[m] };

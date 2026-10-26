@@ -7,10 +7,11 @@ void Engine::prepare (double sampleRate, int maxBlock)
 {
     fs = sampleRate;
     for (auto* b : { &bufL, &bufR, &wetL, &wetR, &chainL, &chainR, &expGain }) b->assign ((size_t) std::max (1, maxBlock), 0.0);
-    for (auto* p : { &eqPower, &harmPower }) p->mix.setLength ((int) std::lround (tuning().switchMs * 0.001 * fs));
+    for (auto* p : { &eqPower, &harmPower, &compPower }) p->mix.setLength ((int) std::lround (tuning().switchMs * 0.001 * fs));
     eq.prepare (fs);
     sub.prepare (fs);
     harm.prepare (fs);
+    comp.prepare (fs);
     expander.prepare (fs);
     for (auto& w : parWeight) w.setLength ((int) std::lround (tuning().parRampMs * 0.001 * fs));
     reset();
@@ -21,6 +22,7 @@ void Engine::reset()
     eq.reset();
     sub.reset();
     harm.reset();
+    comp.reset();
     expander.reset();
     first = true;
 }
@@ -50,7 +52,7 @@ void Engine::process (float* l, float* r, int n, const Params& p)
 {
     for (int i = 0; i < n; ++i) { bufL[(size_t) i] = l[i]; bufR[(size_t) i] = r[i]; }
     // the expander of the drive / harmonics / compression / lift group, at its input
-    if (p.driveOn || p.harmOn || p.compOn || p.liftOn || harmPower.active())
+    if (p.driveOn || p.harmOn || p.compOn || p.liftOn || harmPower.active() || compPower.active())
     {
         expander.gains (bufL.data(), bufR.data(), expGain.data(), n);
         for (int i = 0; i < n; ++i) { bufL[(size_t) i] *= expGain[(size_t) i]; bufR[(size_t) i] *= expGain[(size_t) i]; }
@@ -59,6 +61,9 @@ void Engine::process (float* l, float* r, int n, const Params& p)
     harm.setMode (p.harmFreq);
     const double harmAmount = p.harmAmount;
     runModule (harmPower, p.harmOn, n, [this, harmAmount] (double* a, double* b, int m) { harm.process (a, b, m, harmAmount); });
+    const int compMode = p.compMode; const double compAmount = p.compAmount;
+    compReduction = 0;
+    runModule (compPower, p.compOn, n, [this, compMode, compAmount] (double* a, double* b, int m) { compReduction = comp.process (a, b, m, compMode, compAmount); });
     eq.setGains (p.eq, first);
     runModule (eqPower, p.eqOn, n, [this] (double* a, double* b, int m) { eq.process (a, b, m); });
 
