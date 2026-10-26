@@ -7,7 +7,7 @@ void Engine::prepare (double sampleRate, int maxBlock)
 {
     fs = sampleRate;
     for (auto* b : { &bufL, &bufR, &wetL, &wetR, &chainL, &chainR, &expGain, &keyBufL, &keyBufR }) b->assign ((size_t) std::max (1, maxBlock), 0.0);
-    for (auto* p : { &eqPower, &harmPower, &compPower }) p->mix.setLength ((int) std::lround (tuning().switchMs * 0.001 * fs));
+    for (auto* p : { &eqPower, &harmPower, &compPower, &drivePower, &liftPower }) p->mix.setLength ((int) std::lround (tuning().switchMs * 0.001 * fs));
     eq.prepare (fs);
     sub.prepare (fs);
     loud.prepare (fs);
@@ -15,6 +15,8 @@ void Engine::prepare (double sampleRate, int maxBlock)
     grit.prepare (fs);
     harm.prepare (fs);
     comp.prepare (fs);
+    drive.prepare();
+    lift.prepare();
     expander.prepare (fs);
     for (auto* a : { &harmAmount, &compAmount, &liftAmount }) a->setLength ((int) std::lround (tuning().amountRampMs * 0.001 * fs));
     for (auto& w : parWeight) w.setLength ((int) std::lround (tuning().parRampMs * 0.001 * fs));
@@ -30,6 +32,8 @@ void Engine::reset()
     grit.reset();
     harm.reset();
     comp.reset();
+    drive.reset();
+    lift.reset();
     expander.reset();
     first = true;
 }
@@ -64,12 +68,14 @@ void Engine::process (float* l, float* r, int n, const Params& p, const float* k
         for (int i = 0; i < n; ++i) { keyBufL[(size_t) i] = keyL[i]; keyBufR[(size_t) i] = keyR[i]; }
     for (int i = 0; i < n; ++i) { bufL[(size_t) i] = l[i]; bufR[(size_t) i] = r[i]; }
     // the expander of the drive / harmonics / compression / lift group, at its input
-    if (p.driveOn || p.harmOn || p.compOn || p.liftOn || harmPower.active() || compPower.active())
+    if (p.driveOn || p.harmOn || p.compOn || p.liftOn || harmPower.active() || compPower.active() || drivePower.active() || liftPower.active())
     {
         expander.gains (bufL.data(), bufR.data(), expGain.data(), n);
         for (int i = 0; i < n; ++i) { bufL[(size_t) i] *= expGain[(size_t) i]; bufR[(size_t) i] *= expGain[(size_t) i]; }
     }
     else expander.reset();
+    const int colour = p.driveColor; const bool hiPass = p.hiPass;
+    runModule (drivePower, p.driveOn, n, [this, colour, hiPass] (double* a, double* b, int m) { drive.process (a, b, m, colour, hiPass); });
     harm.setMode (p.harmFreq);
     runModule (harmPower, p.harmOn, n, [this] (double* a, double* b, int m) { harm.process (a, b, m, harmAmount); });
     const int compMode = p.compMode;
@@ -77,6 +83,7 @@ void Engine::process (float* l, float* r, int n, const Params& p, const float* k
     compReduction = 0;
     runModule (compPower, p.compOn, n, [this, compMode, ext] (double* a, double* b, int m)
                { compReduction = comp.process (a, b, m, compMode, compAmount, ext ? keyBufL.data() : nullptr, ext ? keyBufR.data() : nullptr); });
+    runModule (liftPower, p.liftOn, n, [this] (double* a, double* b, int m) { lift.process (a, b, m, liftAmount); });
     eq.setGains (p.eq, first);
     runModule (eqPower, p.eqOn, n, [this] (double* a, double* b, int m) { eq.process (a, b, m); });
 

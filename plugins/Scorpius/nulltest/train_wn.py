@@ -15,7 +15,7 @@ from train_wh import fftconv, NN, IR, load
 FS = 48000
 KPRE, KPOST, SEG, BATCH = 64, 8192, 4096, 16
 MAXPEAK = 4.0          # dBFS: training and validation pieces up to this peak
-torch.set_num_threads(max(1, os.cpu_count() // 2))
+torch.set_num_threads(int(os.environ.get("THREADS", max(1, os.cpu_count() // 2))))
 
 
 class WaveNet(torch.nn.Module):

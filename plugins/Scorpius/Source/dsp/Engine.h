@@ -6,6 +6,7 @@
 #include "Harmonics.h"
 #include "Expander.h"
 #include "Compressor.h"
+#include "LearnedModules.h"
 #include "Filters.h"
 
 // Scorpius's processing between the input and output gains (MEASUREMENTS.md 1): drive -> harmonics -> compression ->
@@ -43,7 +44,9 @@ private:
     double fs = 48000.0;
     std::vector<double> bufL, bufR, wetL, wetR;
     bool first = true;
-    Power eqPower, harmPower, compPower;
+    Power eqPower, harmPower, compPower, drivePower, liftPower;
+    Drive drive;
+    Lift lift;
     Ramp harmAmount, compAmount, liftAmount;   // the amounts move linearly over ~10 ms (MEASUREMENTS.md 12)
     std::vector<double> keyBufL, keyBufR;
     Compressor comp;
