@@ -2,6 +2,7 @@
 #include <cmath>
 #include <vector>
 #include "Convolver.h"
+#include "FastMath.h"
 
 // A learned module (nulltest/train_gru.py): y = Post(u + W GRU(u)), u = Pre(x). Pre a short FIR, the GRU a small
 // recurrent network (PyTorch's equations), Post a long FIR (Convolver.h). The weights are ours, trained on the
@@ -56,9 +57,9 @@ public:
         float out = w.bout;
         for (int c = 0; c < H; ++c)
         {
-            const float rg = sigmoid (gi[(size_t) c] + gh[(size_t) c]);
-            const float zg = sigmoid (gi[(size_t) (H + c)] + gh[(size_t) (H + c)]);
-            const float ng = std::tanh (gi[(size_t) (2 * H + c)] + rg * gh[(size_t) (2 * H + c)]);
+            const float rg = fastSigmoid (gi[(size_t) c] + gh[(size_t) c]);
+            const float zg = fastSigmoid (gi[(size_t) (H + c)] + gh[(size_t) (H + c)]);
+            const float ng = fastTanh (gi[(size_t) (2 * H + c)] + rg * gh[(size_t) (2 * H + c)]);
             h[(size_t) c] = (1 - zg) * ng + zg * h[(size_t) c];
             out += w.wout[(size_t) c] * h[(size_t) c];
         }
@@ -66,7 +67,6 @@ public:
     }
 
 private:
-    static float sigmoid (float v) { return 1.0f / (1.0f + std::exp (-v)); }
     const LearnedWeights* weights = nullptr;
     Convolver post;
     std::vector<float> hist, h, gi, gh;

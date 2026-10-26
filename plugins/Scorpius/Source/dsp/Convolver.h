@@ -33,6 +33,8 @@ public:
             for (int k = 0; k <= B; ++k) spectra[(size_t) p][(size_t) k] = { buf[(size_t) (2 * k)], buf[(size_t) (2 * k + 1)] };
         }
         inputSpectra.assign ((size_t) std::max (1, parts), std::vector<std::complex<float>> ((size_t) B + 1));
+        work.assign ((size_t) 2 * N, 0.0f);
+        acc.assign ((size_t) B + 1, {});
         reset();
     }
     void reset()
@@ -67,18 +69,25 @@ private:
     void runBlock()
     {
         if (parts == 0) { std::fill (tail.begin(), tail.end(), 0.0f); return; }
-        std::vector<float> buf ((size_t) 2 * N, 0.0f);
+        auto& buf = work;                                                // (no allocation on the audio thread)
+        std::fill (buf.begin(), buf.end(), 0.0f);
         std::copy (block.begin(), block.end(), buf.begin());
         fft.performRealOnlyForwardTransform (buf.data(), true);
         newest = (newest + 1) % parts;
         auto& spec = inputSpectra[(size_t) newest];
         for (int k = 0; k <= B; ++k) spec[(size_t) k] = { buf[(size_t) (2 * k)], buf[(size_t) (2 * k + 1)] };
-        std::vector<std::complex<float>> acc ((size_t) B + 1);
+        std::fill (acc.begin(), acc.end(), std::complex<float> {});
         for (int p = 0; p < parts; ++p)
         {
-            const auto& in = inputSpectra[(size_t) ((newest - p + parts) % parts)];
-            const auto& h = spectra[(size_t) p];
-            for (int k = 0; k <= B; ++k) acc[(size_t) k] += in[(size_t) k] * h[(size_t) k];
+            const float* in = reinterpret_cast<const float*> (inputSpectra[(size_t) ((newest - p + parts) % parts)].data());
+            const float* h = reinterpret_cast<const float*> (spectra[(size_t) p].data());
+            float* a = reinterpret_cast<float*> (acc.data());
+            for (int k = 0; k <= B; ++k)
+            {
+                const float ir = in[2 * k], ii = in[2 * k + 1], hr = h[2 * k], hi = h[2 * k + 1];
+                a[2 * k] += ir * hr - ii * hi;
+                a[2 * k + 1] += ir * hi + ii * hr;
+            }
         }
         for (int k = 0; k <= B; ++k) { buf[(size_t) (2 * k)] = acc[(size_t) k].real(); buf[(size_t) (2 * k + 1)] = acc[(size_t) k].imag(); }
         fft.performRealOnlyInverseTransform (buf.data());
@@ -87,7 +96,8 @@ private:
     }
 
     juce::dsp::FFT fft { order };
-    std::vector<float> head, hist, block, tail;
+    std::vector<float> head, hist, block, tail, work;
+    std::vector<std::complex<float>> acc;
     std::vector<std::vector<std::complex<float>>> spectra, inputSpectra;
     int parts = 0, pos = 0, newest = 0, hpos = 0;
 };

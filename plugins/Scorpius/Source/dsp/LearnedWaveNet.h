@@ -2,6 +2,7 @@
 #include <cmath>
 #include <vector>
 #include "Convolver.h"
+#include "FastMath.h"
 
 // A learned module as a small WaveNet (nulltest/train_wn.py): y = Post(u + WaveNet(u)), u = Pre(x). Pre a short FIR,
 // the WaveNet dilated causal convolutions (kernel 2) with gated activations, residual and skip connections, Post a
@@ -33,6 +34,25 @@ public:
         for (int d : w.dilations) rings.push_back (std::vector<float> ((size_t) (d + 1) * (size_t) C, 0.0f));
         ringPos.assign (w.dilations.size(), 0);
         h.assign ((size_t) C, 0.0f); skip = h; z.assign ((size_t) (2 * C), 0.0f); g = h;
+        // the weights by input channel (columns), so each update runs over contiguous outputs
+        colOld.clear(); colNow.clear(); colRes.clear(); colSkip.clear();
+        for (size_t l = 0; l < w.dilations.size(); ++l)
+        {
+            std::vector<float> o ((size_t) (2 * C * C)), n ((size_t) (2 * C * C)), r ((size_t) (C * C)), k ((size_t) (C * C));
+            for (int out = 0; out < 2 * C; ++out)
+                for (int c = 0; c < C; ++c)
+                {
+                    o[(size_t) (c * 2 * C + out)] = w.convW[l][(size_t) (out * C * 2 + 2 * c)];
+                    n[(size_t) (c * 2 * C + out)] = w.convW[l][(size_t) (out * C * 2 + 2 * c + 1)];
+                }
+            for (int out = 0; out < C; ++out)
+                for (int c = 0; c < C; ++c)
+                {
+                    r[(size_t) (c * C + out)] = w.resW[l][(size_t) (out * C + c)];
+                    k[(size_t) (c * C + out)] = w.skipW[l][(size_t) (out * C + c)];
+                }
+            colOld.push_back (o); colNow.push_back (n); colRes.push_back (r); colSkip.push_back (k);
+        }
         reset();
     }
     void reset()
@@ -46,52 +66,63 @@ public:
     float process (float x)
     {
         const auto& w = *weights;
-        const int C = w.channels, K = (int) w.pre.size();
+        const int K = (int) w.pre.size();
         pre[(size_t) prePos] = x;
         float u = 0;
         int j = prePos;
         for (int k = 0; k < K; ++k) { u += w.pre[(size_t) k] * pre[(size_t) j]; j = j == 0 ? K - 1 : j - 1; }
         prePos = (prePos + 1) % K;
+        const float out = w.channels == 8 ? network<8> (u) : network<0> (u);
+        return post.process (u + out);
+    }
 
-        for (int c = 0; c < C; ++c) { h[(size_t) c] = w.inW[(size_t) c] * u + w.inB[(size_t) c]; skip[(size_t) c] = 0; }
+private:
+    // the network for a sample; N > 0: the channel count known at compile time (the loops vectorise)
+    template <int N>
+    float network (float u)
+    {
+        const auto& w = *weights;
+        const int C = N > 0 ? N : w.channels;
+        float* hp = h.data(); float* sk = skip.data(); float* zp = z.data(); float* gp = g.data();
+        for (int c = 0; c < C; ++c) { hp[c] = w.inW[(size_t) c] * u + w.inB[(size_t) c]; sk[c] = 0; }
         for (size_t l = 0; l < w.dilations.size(); ++l)
         {
             const int d = w.dilations[l];
             auto& ring = rings[l];
             int& rp = ringPos[l];
-            // store this layer's input, read the one d samples ago
             float* now = ring.data() + (size_t) rp * (size_t) C;
-            for (int c = 0; c < C; ++c) now[c] = h[(size_t) c];
-            const int past = (rp - d + d + 1) % (d + 1);
-            const float* old = ring.data() + (size_t) past * (size_t) C;
+            for (int c = 0; c < C; ++c) now[c] = hp[c];
+            const float* old = ring.data() + (size_t) ((rp + 1) % (d + 1)) * (size_t) C;
             rp = (rp + 1) % (d + 1);
-            const auto& W = w.convW[l]; const auto& B = w.convB[l];
-            for (int o = 0; o < 2 * C; ++o)
+            const float* B = w.convB[l].data();
+            const float* WO = colOld[l].data(); const float* WN = colNow[l].data();
+            for (int o = 0; o < 2 * C; ++o) zp[o] = B[o];
+            for (int c = 0; c < C; ++c)
             {
-                float s = B[(size_t) o];
-                const float* row = W.data() + (size_t) o * (size_t) C * 2;
-                for (int c = 0; c < C; ++c) s += row[2 * c] * old[c] + row[2 * c + 1] * now[c];
-                z[(size_t) o] = s;
+                const float xo = old[c], xn = now[c];
+                const float* co = WO + (size_t) c * 2 * (size_t) C; const float* cn = WN + (size_t) c * 2 * (size_t) C;
+                for (int o = 0; o < 2 * C; ++o) zp[o] += co[o] * xo + cn[o] * xn;
             }
-            for (int c = 0; c < C; ++c) g[(size_t) c] = std::tanh (z[(size_t) c]) / (1.0f + std::exp (-z[(size_t) (C + c)]));
-            const auto& RW = w.resW[l]; const auto& RB = w.resB[l]; const auto& SW = w.skipW[l]; const auto& SB = w.skipB[l];
-            for (int o = 0; o < C; ++o)
+            for (int c = 0; c < C; ++c) gp[c] = fastTanh (zp[c]) * fastSigmoid (zp[C + c]);
+            const float* RB = w.resB[l].data(); const float* SB = w.skipB[l].data();
+            const float* RW = colRes[l].data(); const float* SW = colSkip[l].data();
+            for (int o = 0; o < C; ++o) { hp[o] += RB[o]; sk[o] += SB[o]; }
+            for (int c = 0; c < C; ++c)
             {
-                float r = RB[(size_t) o], s = SB[(size_t) o];
-                for (int c = 0; c < C; ++c) { r += RW[(size_t) (o * C + c)] * g[(size_t) c]; s += SW[(size_t) (o * C + c)] * g[(size_t) c]; }
-                h[(size_t) o] += r; skip[(size_t) o] += s;
+                const float gc = gp[c];
+                const float* cr = RW + (size_t) c * (size_t) C; const float* cs = SW + (size_t) c * (size_t) C;
+                for (int o = 0; o < C; ++o) { hp[o] += cr[o] * gc; sk[o] += cs[o] * gc; }
             }
         }
         float out = w.outB;
-        for (int c = 0; c < C; ++c) out += w.outW[(size_t) c] * std::max (0.0f, skip[(size_t) c]);
-        return post.process (u + out);
+        for (int c = 0; c < C; ++c) out += w.outW[(size_t) c] * std::max (0.0f, sk[c]);
+        return out;
     }
 
-private:
     const WaveNetWeights* weights = nullptr;
     Convolver post;
     std::vector<float> pre, h, skip, z, g;
-    std::vector<std::vector<float>> rings;
+    std::vector<std::vector<float>> rings, colOld, colNow, colRes, colSkip;
     std::vector<int> ringPos;
     int prePos = 0;
 };
