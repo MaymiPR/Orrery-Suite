@@ -216,10 +216,41 @@ Offline, one instance, 60 s of drums at 48 kHz (wall time less the ~1.2 s of loa
 8.3 s, i.e. **~14 % of a core**; everything on ~20 %. By module: drive 4.9 s (the most), compression 1.6, lift 1.7,
 harmonics 0.2 (the neural model is cheap), EQ 0. The target for Scorpius is well below this.
 
-## Open for Phase 4
+## 14. What the fits found (Phase 4)
 
-- Fit each module's model (filters around its saturator; the compressor's and the parallels' dynamics) against
-  program material, as for The Antiparticle; the two compression modes on drums.
-- The low-level expander's exact hold and release curve.
-- The GR readout's quantity against the compressor's real reduction (UI round 4 measured the readout).
-- Whether to run at a fixed 48 kHz with the reference's resampler (needed for nulls at 44.1 kHz) or at the host rate.
+Fitting our DSP to the reference (nulls on drums, a mastered track and tones; NULLTESTS.md for the numbers) pinned
+down more of how it is built:
+- **Harmonic EQ** (`fit_eqfinal.py`, `fit_eqsat.py`, `fit_eqnull.py`, `fit_eqlaw.py`): the bands are RBJ-cookbook
+  filters, all fed from the same input and summed in parallel (two bands on equal the sum of their contributions to
+  −142 dB): a low shelf at 43.8 Hz (Q 0.70), bells with Q ≈ 2/3 at 100 Hz, 983 Hz and 3.01 kHz, a high shelf at
+  9.66 kHz (Q 0.71). Each band's boost, (H − 1) x, is soft-clipped, u / (1 + |u|^2.15)^(1/2.15) with ceiling 0.47,
+  and then high-passed at 20 Hz (Butterworth): the high-pass after the clip, not before, is worth 10 … 16 dB of null
+  on the low bands. A knob's dB sets the filter's gain a little higher (+0.62 dB at 0.5, +3.65 at 3, +7.12 at 6).
+- **Sub** (`fit_sub3.py`): the path is the chain's output doubled, through a 6th-order Butterworth low-pass at 140 Hz
+  and high-pass at 15 Hz.
+- **Harmonics** (`fit_harmlin.py`, `fit_harm.py`): the same pattern as an EQ band: a wide bell (Q 0.32, +5.8 dB) at
+  1.4 times the chosen frequency (112 / 70 Hz), its boost soft-clipped and then high-passed at 20 Hz.
+- **Compression** (`fit_comp.py`): a feed-forward compressor on the mid signal: threshold −12.8 dBFS (detector level),
+  ratio 5.0, knee 7.3 dB, detector attack 1.0 ms and release 20 ms (nearly a peak follower: 4 % RMS); the wet path's
+  fixed shelving is a vector fit. Modes a and b fit the same constants; they differ in their wet filters (make-up).
+- **Low** (`fit_low.py` and bursts): a subharmonic synthesizer, an octave below the bass. A flip-flop that starts
+  silent, switches on at the first falling zero crossing of the low-passed input and flips at each one after; its
+  square wave times that input (plus a little of its square: louder bass lifts the positive lobes), through a steep
+  low-pass (~52 Hz) and a soft limit. Its phase on music depends on details not pinned down yet.
+- **Grit** (`fit_grit.py`): a transient shaper on the mid signal (a fast and a slow envelope; the boost in dB grows
+  with the fast one's lead, fades in above ~−54 dBFS, limited to ~6 dB).
+- **Loud** (`fit_loud.py`): its gain against a fast mid-signal detector (attack 0.7 ms, release 13 ms) as a table.
+- **The expander** (`fit_exp.py`): threshold −58.1 dBFS (peak of the last 1.13 s), 2.03 dB of gain per dB below,
+  closing with a 208 ms time constant; at the start of playback it takes the signal's own level.
+- **Rates** (`Resampler.h`): the reference's round trip delays 27.0 / 31.0 / 48.742 / 51.1 / 81.461 / 87.085 samples
+  at 32 / 44.1 / 88.2 / 96 / 176.4 / 192 kHz (phase slope of white noise), reporting 27 / 31 / 46 / 48 / 75 / 80; at
+  44.1 kHz it is flat to 22 kHz (−0.3 dB).
+- **Drive and lift** are learned models in the reference too, as harmonics is said to be: neither a filter and a
+  shaper in any order (Wiener, Hammerstein, both, with learned FIR filters: −14 dB at best on held-out music) nor a
+  short-memory network reproduces them; the drive's peaks wander irregularly far above full scale. Scorpius learns
+  its own models of them (`capture_nn.py`, `train_gru.py`): a small GRU between learned linear filters.
+
+## Open
+
+- The drive's and lift's models (training continues), the low path's phase on music, grit with the compressor on
+  (the reference's grit then listens to the compressor), the converters above 48 kHz.

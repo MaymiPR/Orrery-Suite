@@ -13,7 +13,7 @@ import orion as o
 FS = 48000
 NN = os.path.join(o.ROOT, 'measurements', 'scorpius', 'nn')
 IR = os.path.join(o.ROOT, 'measurements', 'scorpius', 'ir')
-KPRE, KPOST, SEG, BATCH = 256, 8192, 8192, 12
+KPRE, KPOST, SEG, BATCH = int(os.environ.get("KPRE", 256)), 8192, 8192, 12
 torch.set_num_threads(max(1, os.cpu_count() // 2))
 
 

@@ -21,7 +21,7 @@ torch.set_num_threads(max(1, os.cpu_count() // 2))
 class WaveNet(torch.nn.Module):
     def __init__(self, ch=8, layers=10):
         super().__init__()
-        self.dil = [2 ** (i % 10) for i in range(layers)]
+        self.dil = [2 ** (i % 12) for i in range(layers)]
         self.inp = torch.nn.Conv1d(1, ch, 1)
         self.conv = torch.nn.ModuleList([torch.nn.Conv1d(ch, 2 * ch, 2, dilation=d) for d in self.dil])
         self.res = torch.nn.ModuleList([torch.nn.Conv1d(ch, ch, 1) for _ in self.dil])

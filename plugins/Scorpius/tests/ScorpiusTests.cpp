@@ -286,6 +286,64 @@ static void testConvolver()
     CHECK (10 * std::log10 (err / ref) < -100.0);
 }
 
+// the DSP: every preset's processing stays finite and bounded on loud noise; the latency at 44.1 kHz is the reference's
+// (31 samples); EXT takes the compressor's detector from the side-chain
+static void testEngine()
+{
+    for (double fs : { 48000.0, 44100.0 })
+    {
+        ScorpiusProcessor p;
+        p.setRateAndBufferSizeDetails (fs, 512);
+        p.prepareToPlay (fs, 512);
+        if (fs == 44100.0) CHECK (p.getLatencySamples() == 31);
+        for (auto* pid : { sc::id::eqOn, sc::id::subOn, sc::id::lowOn, sc::id::loudOn, sc::id::gritOn }) setReal (p, pid, 1.0f);
+        for (auto* pid : { sc::id::subLevel, sc::id::lowLevel, sc::id::loudLevel, sc::id::gritLevel }) setReal (p, pid, 1.0f);
+        setReal (p, sc::id::eq100, 6.0f);
+        AudioBuffer<float> b (2, 512);
+        MidiBuffer midi;
+        juce::Random rng (9);
+        bool finite = true; float most = 0;
+        for (int block = 0; block < 200; ++block)
+        {
+            for (int c = 0; c < 2; ++c) for (int i = 0; i < 512; ++i) b.setSample (c, i, 2.0f * (rng.nextFloat() - 0.5f));
+            p.processBlock (b, midi);
+            for (int c = 0; c < 2; ++c) for (int i = 0; i < 512; ++i) { finite = finite && std::isfinite (b.getSample (c, i)); most = std::max (most, std::abs (b.getSample (c, i))); }
+        }
+        CHECK (finite);
+        CHECK (most < 16.0f);
+    }
+    // EXT: a loud side-chain makes the compressor reduce a quiet main signal
+    auto gainWith = [] (bool ext)
+    {
+        ScorpiusProcessor p;
+        auto layout = p.getBusesLayout();
+        layout.inputBuses.getReference (1) = AudioChannelSet::stereo();
+        p.setBusesLayout (layout);
+        p.sidechainExternal = ext;
+        p.setRateAndBufferSizeDetails (48000.0, 512);
+        p.prepareToPlay (48000.0, 512);
+        for (auto* pid : { sc::id::driveOn, sc::id::harmOn, sc::id::liftOn }) setReal (p, pid, 0.0f);
+        setReal (p, sc::id::compAmount, 1.0f);
+        AudioBuffer<float> b (4, 512);
+        MidiBuffer midi;
+        double acc = 0;
+        for (int block = 0; block < 60; ++block)
+        {
+            for (int i = 0; i < 512; ++i)
+            {
+                const double t = (block * 512 + i) / 48000.0;
+                const float m = 0.03f * (float) std::sin (MathConstants<double>::twoPi * 1000.0 * t);
+                const float k = 0.9f * (float) std::sin (MathConstants<double>::twoPi * 900.0 * t);
+                b.setSample (0, i, m); b.setSample (1, i, m); b.setSample (2, i, k); b.setSample (3, i, k);
+            }
+            p.processBlock (b, midi);
+            if (block >= 40) for (int i = 0; i < 512; ++i) acc += (double) b.getSample (0, i) * b.getSample (0, i);
+        }
+        return 10 * std::log10 (acc / (20 * 512) / (0.03 * 0.03 / 2));
+    };
+    CHECK (gainWith (true) < gainWith (false) - 6.0);
+}
+
 int main()
 {
     ScopedJuceInitialiser_GUI init;
@@ -298,6 +356,7 @@ int main()
     testSidechain();
     testLight();
     testConvolver();
+    testEngine();
     std::printf ("%d checks, %d failed\n", checks, failures);
     return failures == 0 ? 0 : 1;
 }
