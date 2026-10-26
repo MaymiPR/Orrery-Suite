@@ -10,7 +10,7 @@ tones = [o.tone(f, 2.0, lv) for f in (40, 60, 90) for lv in (-20, -6, 0)]
 xs = list(sig.values()) + tones
 P = {**o.ONLY('low'), 'Par Low Level': 1}
 refs = o.render_many([dict(x=x, params=P) for x in xs], cache=True)
-KEYS = ['lowInHz', 'lowOutHz', 'lowHpHz', 'lowGain', 'lowCeiling']
+KEYS = ['lowInHz', 'lowOutHz', 'lowHpHz', 'lowGain', 'lowCeiling', 'lowSquare']
 best = [None, 0]
 
 def cost(v, orders):
@@ -23,5 +23,5 @@ def cost(v, orders):
 
 if __name__ == '__main__':
     for orders in ((2, 6), (2, 8)):
-        minimize(lambda v: cost(v, orders), [150, 50, 10, -1.2, 0.8], method='Nelder-Mead', options=dict(maxiter=120, xatol=0.01, fatol=0.05))
+        minimize(lambda v: cost(v, orders), [150, 55, 5, 1.0, 0.8, 0.5], method='Nelder-Mead', options=dict(maxiter=120, xatol=0.01, fatol=0.05))
     print('best', best)

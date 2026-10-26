@@ -11,9 +11,9 @@
 //     (nulltest/fit_sub3.py);
 //   - loud: upward compression, the gain read from a table against a fast detector on the mid signal; its
 //     contribution is (gain - 1) x (nulltest/fit_loud.py).
-//   - low: a subharmonic synthesizer: a square wave that flips at each rising zero crossing of the low-passed input
-//     (half its frequency) times that input, through a steep low-pass, soft-limited: an octave below the bass
-//     (nulltest/fit_low.py).
+//   - low: a subharmonic synthesizer: a square wave that flips at each falling zero crossing of the low-passed input
+//     (half its frequency) times that input, plus a little of its square, through a steep low-pass, soft-limited: an
+//     octave below the bass (nulltest/fit_low.py).
 //   - grit: a transient shaper: a fast and a slow envelope of the mid signal, the boost (dB) growing with how far the
 //     fast one is above the slow one, faded in above a threshold and soft-limited (nulltest/fit_grit.py).
 namespace sc::dsp
@@ -88,7 +88,7 @@ public:
     }
     void reset()
     {
-        for (int c = 0; c < 2; ++c) { for (auto& b : inLp[c]) b.reset(); for (auto& b : outLp[c]) b.reset(); last[c] = 0; sign[c] = 1; }
+        for (int c = 0; c < 2; ++c) { for (auto& b : inLp[c]) b.reset(); for (auto& b : outLp[c]) b.reset(); last[c] = 0; sign[c] = 0; }
     }
     void process (const double* inL, const double* inR, double* outL, double* outR, int n, Ramp& w)
     {
@@ -102,9 +102,10 @@ public:
             {
                 double u = in[c][i];
                 for (auto& b : inLp[c]) u = b.process (u);
-                if (last[c] <= t.lowHysteresis && u > t.lowHysteresis) sign[c] = -sign[c];
+                // the flip-flop: off until the first falling zero crossing, then flipping at each one (measured with bursts)
+                if (last[c] >= t.lowHysteresis && u < -t.lowHysteresis) sign[c] = sign[c] == 0 ? 1 : -sign[c];
                 if (std::abs (u) > t.lowHysteresis) last[c] = u;
-                double s = sign[c] * u;
+                double s = sign[c] * u + t.lowSquare * u * u;
                 for (auto& b : outLp[c]) s = b.process (s);
                 out[c][i] += m * t.lowCeiling * std::tanh (t.lowGain * s / t.lowCeiling);
             }
@@ -112,7 +113,7 @@ public:
     }
 
 private:
-    double fs = 48000.0, last[2] {}, sign[2] { 1, 1 };
+    double fs = 48000.0, last[2] {}, sign[2] {};
     std::vector<Biquad> inLp[2], outLp[2];
 };
 

@@ -4,6 +4,7 @@
 #include <cmath>
 #include <cstdio>
 #include "PluginProcessor.h"
+#include "dsp/Convolver.h"
 
 static int failures = 0, checks = 0;
 #define CHECK(cond) do { ++checks; if (! (cond)) { ++failures; std::printf ("FAIL %s:%d  %s\n", __FILE__, __LINE__, #cond); } } while (0)
@@ -265,6 +266,26 @@ static void testLight()
     CHECK_NEAR (light.levelDb(), -20.0 - 50.0 * 0.2, 1.0);
 }
 
+// the long-filter convolver (no latency) against plain convolution
+static void testConvolver()
+{
+    juce::Random rng (3);
+    std::vector<float> taps (3000), x (6000);
+    for (size_t k = 0; k < taps.size(); ++k) taps[k] = (rng.nextFloat() - 0.5f) * std::exp (-(float) k / 600.0f);
+    for (auto& v : x) v = rng.nextFloat() - 0.5f;
+    sc::dsp::Convolver c;
+    c.prepare (taps);
+    double err = 0, ref = 0;
+    for (size_t n = 0; n < x.size(); ++n)
+    {
+        const float y = c.process (x[n]);
+        double d = 0;
+        for (size_t k = 0; k < taps.size() && k <= n; ++k) d += (double) taps[k] * x[n - k];
+        err += (y - d) * (y - d); ref += d * d;
+    }
+    CHECK (10 * std::log10 (err / ref) < -100.0);
+}
+
 int main()
 {
     ScopedJuceInitialiser_GUI init;
@@ -276,6 +297,7 @@ int main()
     testPassThrough();
     testSidechain();
     testLight();
+    testConvolver();
     std::printf ("%d checks, %d failed\n", checks, failures);
     return failures == 0 ? 0 : 1;
 }

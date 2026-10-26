@@ -56,8 +56,8 @@ struct Tuning
     double gritFastAttackMs = 2.2896, gritFastReleaseMs = 0.3183, gritSlowAttackMs = 72.285, gritSlowReleaseMs = 183.3;   // (nulltest/fit_grit.py)
     double gritAmount = 0.28818, gritMaxDb = 6.0493, gritThresholdDb = -54.145, gritRangeDb = 39.807;
     // low: the input low-pass (Hz, order), the output low-pass and its DC high-pass, gain, soft limit, flip hysteresis
-    double lowInHz = 152.155, lowInOrder = 2, lowOutHz = 55.129, lowOutOrder = 6, lowHpHz = 3.292, lowGain = -1.0338, lowCeiling = 0.5892,
-           lowHysteresis = 1.0e-4;
+    double lowInHz = 152.327, lowInOrder = 2, lowOutHz = 51.567, lowOutOrder = 8, lowHpHz = 4.956, lowGain = 1.0742, lowCeiling = 0.7003,
+           lowHysteresis = 1.0e-4, lowSquare = 0.4884;   // (nulltest/fit_low.py)
 
     std::vector<std::pair<const char*, double*>> entries()
     {
@@ -69,7 +69,7 @@ struct Tuning
                                                          { "expSlope", &expSlope }, { "expHoldMs", &expHoldMs }, { "expReleaseMs", &expReleaseMs },
                                                          { "loudAttackMs", &loudAttackMs }, { "loudReleaseMs", &loudReleaseMs }, { "loudRms", &loudRms },
                                                          { "lowInHz", &lowInHz }, { "lowInOrder", &lowInOrder }, { "lowOutHz", &lowOutHz }, { "lowOutOrder", &lowOutOrder },
-                                                         { "lowHpHz", &lowHpHz }, { "lowGain", &lowGain }, { "lowCeiling", &lowCeiling }, { "lowHysteresis", &lowHysteresis },
+                                                         { "lowHpHz", &lowHpHz }, { "lowGain", &lowGain }, { "lowCeiling", &lowCeiling }, { "lowHysteresis", &lowHysteresis }, { "lowSquare", &lowSquare },
                                                          { "gritFastAttackMs", &gritFastAttackMs }, { "gritFastReleaseMs", &gritFastReleaseMs },
                                                          { "gritSlowAttackMs", &gritSlowAttackMs }, { "gritSlowReleaseMs", &gritSlowReleaseMs },
                                                          { "gritAmount", &gritAmount }, { "gritMaxDb", &gritMaxDb }, { "gritThresholdDb", &gritThresholdDb },
