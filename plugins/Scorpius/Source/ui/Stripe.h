@@ -2,6 +2,7 @@
 #include <juce_gui_basics/juce_gui_basics.h>
 #include <functional>
 #include <vector>
+#include <array>
 #include "Sky.h"
 
 // The visualiser stripe's light, over the dark tube the editor paints: a glow and a field of small coloured particles,
@@ -26,8 +27,9 @@ class Stripe : public juce::Component
 public:
     Stripe();
     void paint (juce::Graphics&) override;
-    // the input's peak level (dBFS) on the editor's clock; whether audio runs; whether the animation is on
-    void setInput (float peakDb, bool running, bool animated);
+    // the input's peak level (dBFS) on the editor's clock; whether audio runs; whether the animation is on; the
+    // spectrum's bands for our style (Sky::numBands, linear; nullptr when there are none)
+    void setInput (float peakDb, bool running, bool animated, const float* bands = nullptr);
     // the snapshot tool: one still frame at a brightness (0 ... 1)
     void freeze (float level);
     // the reference's particles, or ours (Sky.h)
@@ -35,6 +37,8 @@ public:
     void setStyle (Style);
     // paints what is under the stripe (in the editor's design coordinates), drawn once per scale
     std::function<void (juce::Graphics&)> paintBackground;
+    // the clock (seconds; the snapshot tool's films run on their own)
+    std::function<double()> clock = [] { return juce::Time::getMillisecondCounterHiRes() * 0.001; };
 
     // bounds in design px (the tube's inside)
     static constexpr float left = 10.0f, top = 272.0f, width = 868.0f, height = 36.0f;
@@ -59,7 +63,9 @@ private:
     float envelope = 0.0f, target = -200.0f, detector = -200.0f, lastLevel = -200.0f;
     float recent[2] { -200.0f, -200.0f };
     bool wasSounding = false;
-    double lastTime = 0.0, clock = 0.0;
+    double lastTime = 0.0, elapsed = 0.0;
+    std::array<float, Sky::numBands> bandsIn {};
+    bool haveBands = false;
     bool animated = true, frozen = false, moving = false, beat = false;
     Style style = Style::orion;
     Sky sky;

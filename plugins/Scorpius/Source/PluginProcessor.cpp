@@ -59,7 +59,8 @@ AudioProcessorValueTreeState::ParameterLayout createLayout()
 ScorpiusProcessor::ScorpiusProcessor()
     : AudioProcessor (BusesProperties()
                           .withInput ("Input", AudioChannelSet::stereo(), true)
-                          .withOutput ("Output", AudioChannelSet::stereo(), true)),
+                          .withOutput ("Output", AudioChannelSet::stereo(), true)
+                          .withInput ("Sidechain", AudioChannelSet::stereo(), false)),
       apvts (*this, nullptr, "Scorpius", sc::createLayout())
 {
     bypassParam = apvts.getParameter (sc::id::bypass);
@@ -71,8 +72,15 @@ ScorpiusProcessor::ScorpiusProcessor()
 
 bool ScorpiusProcessor::isBusesLayoutSupported (const BusesLayout& l) const
 {
-    // stereo only, like the reference (mono -> mono is refused; no side-chain)
-    return l.getMainInputChannelSet() == AudioChannelSet::stereo() && l.getMainOutputChannelSet() == AudioChannelSet::stereo();
+    // stereo only, like the reference (mono -> mono is refused); the side-chain bus (ours) is stereo or off
+    if (l.getMainInputChannelSet() != AudioChannelSet::stereo() || l.getMainOutputChannelSet() != AudioChannelSet::stereo())
+        return false;
+    if (l.inputBuses.size() > 1)
+    {
+        const auto side = l.inputBuses[1];
+        if (! side.isDisabled() && side != AudioChannelSet::stereo()) return false;
+    }
+    return true;
 }
 
 void ScorpiusProcessor::prepareToPlay (double sampleRate, int block)
@@ -93,6 +101,14 @@ void ScorpiusProcessor::processBlock (AudioBuffer<float>& buffer, MidiBuffer&)
     const int n = main.getNumSamples();
     if (main.getNumChannels() < 2) return;
     const bool bypassed = bypassParam->getValue() >= 0.5f;
+    // EXT: the compressor listens to the side-chain bus (silence when the host leaves the bus off)
+    const bool external = sidechainExternal.load();
+    AudioBuffer<float> side;
+    if (external && getBusCount (true) > 1 && getBus (true, 1)->isEnabled())
+    {
+        auto bus = getBusBuffer (buffer, true, 1);
+        if (bus.getNumChannels() >= 2) side = AudioBuffer<float> (bus.getArrayOfWritePointers(), 2, n);
+    }
 
     const float inDb = inGainRaw->load(), outDb = ioLink.load() ? -inDb : outGainRaw->load();   // the I/O link: output = -input, always
     inGain.setTargetValue (bypassed ? 1.0f : Decibels::decibelsToGain (inDb));
@@ -105,7 +121,7 @@ void ScorpiusProcessor::processBlock (AudioBuffer<float>& buffer, MidiBuffer&)
     }
     // the input meters read the signal after the input gain
     inMeter.measure (main);
-    visuals.process (main, compAmountRaw->load());
+    visuals.process (main, compAmountRaw->load(), external ? &side : nullptr);
     // (the modules: Phase 4)
     for (int i = 0; i < n; ++i)
     {
@@ -168,6 +184,7 @@ void ScorpiusProcessor::getStateInformation (MemoryBlock& dest)
     state.setProperty ("preset", presets.currentName(), nullptr);
     state.setProperty ("compare", slot, nullptr);
     state.setProperty ("ioLink", ioLink.load() ? 1 : 0, nullptr);
+    state.setProperty ("sidechain", sidechainExternal.load() ? 1 : 0, nullptr);
     // the inactive compare slot (the active one is the parameters themselves), if it was ever used
     state.removeChild (state.getChildWithName ("SLOT"), nullptr);
     if (slotUsed[1 - slot]) state.appendChild (slots[1 - slot].createCopy(), nullptr);
@@ -186,6 +203,7 @@ void ScorpiusProcessor::setStateInformation (const void* data, int size)
             presets.setCurrentName (tree.getProperty ("preset", sc::PresetManager::defaultName()).toString());
             slot = jlimit (0, 1, (int) tree.getProperty ("compare", 0));
             ioLink = (int) tree.getProperty ("ioLink", 0) != 0;
+            sidechainExternal = (int) tree.getProperty ("sidechain", 0) != 0;
             auto other = tree.getChildWithName ("SLOT");
             tree.removeChild (other, nullptr);
             apvts.replaceState (tree);

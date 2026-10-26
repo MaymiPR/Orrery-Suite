@@ -58,7 +58,7 @@ ScorpiusEditor::ScorpiusEditor (ScorpiusProcessor& p) : AudioProcessorEditor (p)
     addAndMakeVisible (content);
     content.setBounds (0, 0, (int) std::ceil (designW), (int) std::ceil (designH));
 
-    for (auto* c : std::initializer_list<Component*> { &logo, &presetBox, &prevButton, &nextButton, &saveButton, &compare, &ioLinkButton, &scaleBox, &gear,
+    for (auto* c : std::initializer_list<Component*> { &logo, &presetBox, &prevButton, &nextButton, &saveButton, &compare, &sidechain, &ioLinkButton, &scaleBox, &gear,
                                                        &drivePower, &sparks, &hiPass, &color, &harmPower, &compPower, &liftPower, &harmBlob,
                                                        &liftBlob, &grReadout, &freq, &mode, &harmKnob, &compKnob, &liftKnob, &eqPower,
                                                        &eqCurve, &inputKnob, &outputKnob })
@@ -70,14 +70,16 @@ ScorpiusEditor::ScorpiusEditor (ScorpiusProcessor& p) : AudioProcessorEditor (p)
     content.addChildComponent (toast);                // over everything else (shown by Compare's arrow)
     content.addMouseListener (&hoverTracker, true);
 
-    // top bar (the same as The God Particle's, with Compare where it has the side-chain switch)
+    // top bar: the same as The Antiparticle's (ours: Compare left of "Preset" and the side-chain switch where The God
+    // Particle has it, so the suite's top bars match; the reference has Compare at x 604 ... 734 and no side-chain)
     logo.setBounds (6, 7, 17, 17);
     presetBox.setBounds (176, 3, 193, 25);
     prevButton.setBounds (375, 3, 24, 25);
     nextButton.setBounds (405, 3, 24, 25);
     saveButton.setBounds (439, 3, 24, 25);
-    compare.setBounds (660, 3, 74, 25);
-    ioLinkButton.setBounds (502, 3, 64, 25);       // ours: centred between the save button (ends 463) and "Compare" (604)
+    compare.setBounds (52, 3, 74, 25);
+    sidechain.setBounds (560, 3, 85, 25);
+    ioLinkButton.setBounds (664, 3, 64, 25);       // centred between the side-chain switch (ends 645) and "UI Scale" (747.5)
     scaleBox.setBounds (794, 3, 66, 25);
     gear.setBounds (866, 7, 16, 17);
 
@@ -175,6 +177,8 @@ ScorpiusEditor::ScorpiusEditor (ScorpiusProcessor& p) : AudioProcessorEditor (p)
     freq.onChange = [choose] (int i) { choose (sc::id::harmFreq, i, 2); };
     for (auto* pid : sc::presetIds()) s.addParameterListener (pid, this);
 
+    sidechain.external = proc.sidechainExternal.load();
+    sidechain.onChange = [this] (bool ext) { proc.sidechainExternal = ext; };
     compare.slot = proc.compareSlot();
     compare.onSelect = [this] (int slot)
     {
@@ -448,7 +452,9 @@ void ScorpiusEditor::timerCallback()
     harmBlob.update (running ? proc.visuals.takeLows() : 0.0f, dt);
     liftBlob.update (running ? proc.visuals.takeMids() : 0.0f, dt);
     stripe.setStyle (proc.particleStyle.load() == 0 ? sc::Stripe::Style::orion : sc::Stripe::Style::scorpius);
-    stripe.setInput (pk, running, proc.animation.load());
+    float bands[sc::Sky::numBands];
+    proc.visuals.takeBands (bands);
+    stripe.setInput (pk, running, proc.animation.load(), bands);
     // only the meters change on this clock (the rest repaints when it changes)
     content.repaint (0, 36, (int) columnX[0], 236);
     content.repaint ((int) columnX[4] + 1, 36, (int) (designW - columnX[4]), 236);
@@ -466,6 +472,15 @@ void ScorpiusEditor::sampleReadouts()
     const bool running = blocks != readoutBlocks;
     readoutBlocks = blocks;
     for (int i = 0; i < 4; ++i) meters[i]->sampleRms (*taps[i], running);
+}
+
+void ScorpiusEditor::filmStep (double now, float inputPeakDb)
+{
+    stripe.clock = [now] { return now; };
+    float bands[sc::Sky::numBands];
+    proc.visuals.takeBands (bands);
+    stripe.setStyle (proc.particleStyle.load() == 0 ? sc::Stripe::Style::orion : sc::Stripe::Style::scorpius);
+    stripe.setInput (inputPeakDb, true, proc.animation.load(), bands);
 }
 
 void ScorpiusEditor::setTestLevels (float inDb, float outDb, bool audio)
@@ -512,7 +527,7 @@ void ScorpiusEditor::paintTopBar (Graphics& g)
     g.setColour (theme::text);
     g.setFont (theme::font (12.0f));
     theme::textAt (g, "Preset", 136.0f, 19.5f);
-    theme::textAt (g, "Compare", 604.0f, 19.5f);
+    theme::textAt (g, "Sidechain", 500.5f, 19.5f);
     theme::textAt (g, "UI Scale", 747.5f, 19.5f);
 }
 

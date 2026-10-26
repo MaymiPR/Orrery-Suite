@@ -1,4 +1,5 @@
-// Unit tests for Scorpius: parameters, presets, the A / B compare, state and the pass-through of Phase 2. Run:
+// Unit tests for Scorpius: parameters, presets, the A / B compare, state, the pass-through of Phase 2 and the
+// side-chain switch. Run:
 // ScorpiusTests (exit code 0 = all passed).
 #include <cmath>
 #include <cstdio>
@@ -162,6 +163,52 @@ static void testPassThrough()
     CHECK (p.blocksProcessed.load() == 20);
 }
 
+// Sidechain EXT (ours): the compressor listens to the side-chain bus. A loud main signal with a silent side-chain is
+// not compressed; a loud side-chain compresses a quiet one; INT ignores the side-chain. The switch is saved with the
+// session and is not part of a compare setting.
+static void testSidechain()
+{
+    auto runCase = [] (bool external, float mainDb, float sideDb)
+    {
+        ScorpiusProcessor p;
+        auto layout = p.getBusesLayout();
+        CHECK (layout.inputBuses.size() == 2);
+        layout.inputBuses.getReference (1) = AudioChannelSet::stereo();
+        CHECK (p.setBusesLayout (layout));
+        p.sidechainExternal = external;
+        p.setRateAndBufferSizeDetails (48000.0, 512);
+        p.prepareToPlay (48000.0, 512);
+        AudioBuffer<float> b (4, 512);
+        MidiBuffer midi;
+        for (int block = 0; block < 40; ++block)
+        {
+            for (int i = 0; i < 512; ++i)
+            {
+                const double t = (block * 512 + i) / 48000.0;
+                const float m = Decibels::decibelsToGain (mainDb) * (float) std::sin (MathConstants<double>::twoPi * 1000.0 * t);
+                const float k = Decibels::decibelsToGain (sideDb) * (float) std::sin (MathConstants<double>::twoPi * 900.0 * t);
+                b.setSample (0, i, m); b.setSample (1, i, m); b.setSample (2, i, k); b.setSample (3, i, k);
+            }
+            p.processBlock (b, midi);
+        }
+        return p.compGr.load();
+    };
+    CHECK (runCase (false, -6.0f, -100.0f) > 1.0f);              // INT: the main signal is compressed
+    CHECK_NEAR (runCase (true, -6.0f, -100.0f), 0.0, 1e-6);      // EXT, silent side-chain: nothing
+    CHECK (runCase (true, -60.0f, -6.0f) > 1.0f);                // EXT, loud side-chain: compressed
+    CHECK_NEAR (runCase (false, -60.0f, -6.0f), 0.0, 1e-6);      // INT ignores the side-chain
+
+    ScorpiusProcessor a;
+    a.sidechainExternal = true;
+    a.selectCompareSlot (1);
+    CHECK (a.sidechainExternal.load());                          // not a compare setting
+    MemoryBlock mb;
+    a.getStateInformation (mb);
+    ScorpiusProcessor q;
+    q.setStateInformation (mb.getData(), (int) mb.getSize());
+    CHECK (q.sidechainExternal.load());
+}
+
 int main()
 {
     ScopedJuceInitialiser_GUI init;
@@ -171,6 +218,7 @@ int main()
     testCompareFirstUse();
     testIoLink();
     testPassThrough();
+    testSidechain();
     std::printf ("%d checks, %d failed\n", checks, failures);
     return failures == 0 ? 0 : 1;
 }

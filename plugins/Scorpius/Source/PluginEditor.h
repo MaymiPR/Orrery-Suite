@@ -24,6 +24,8 @@ public:
 
     // snapshot tool: freeze meters and animations at a given state
     void setTestLevels (float inDb, float outDb, bool audio);
+    // the snapshot tool's films: moves the stripe on to a time of its own clock (after the processor ran up to it)
+    void filmStep (double now, float inputPeakDb);
 
 private:
     class Content : public juce::Component
@@ -110,6 +112,7 @@ private:
     orrery::IconButton prevButton { orrery::IconButton::Icon::left }, nextButton { orrery::IconButton::Icon::right },
         saveButton { orrery::IconButton::Icon::save };
     orrery::CompareToggle compare;
+    orrery::SegmentToggle sidechain;
     orrery::LinkButton ioLinkButton;
     orrery::GearButton gear;
 

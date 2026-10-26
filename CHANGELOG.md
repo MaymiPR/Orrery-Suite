@@ -8,6 +8,8 @@ In **The Antiparticle**:
   the arrow copies the active one over the other.
 - Fine adjustment of the knobs is Shift only, as on The God Particle (Ctrl now drags at the normal speed).
 
+The suite's top bars now match: A / B left of the preset menu, then the side-chain switch and I/O LINK.
+
 ## 1.0.1
 
 Fixes in **The Antiparticle**:

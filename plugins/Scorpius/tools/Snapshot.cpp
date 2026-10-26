@@ -1,6 +1,8 @@
 // Renders the Scorpius editor to a PNG for the visual comparison with the reference (tools/compare_ui.py):
 //   ScorpiusSnapshot out.png [--scale=2] [paramID=value ...] [--levels=inDb,outDb] [--audio] [--preset=name] [--slot=1]
-//                   [--style=orion|scorpius] [--bench]
+//                   [--style=orion|scorpius] [--bench] [--film=audio.f32,seconds,every]
+// --film plays a file (float32, interleaved stereo, 48 kHz) through the processor and writes the stripe every
+// <every> frames of the editor's 40 Hz clock as out_NNNN.png (out without its extension).
 // Parameter values are in real units (dB, 0 ... 1, Hz; driveColor 0 1 2, compMode 0 1); --levels freezes the I/O
 // meters, --audio sets the animations as for that input level.
 #include <juce_audio_processors/juce_audio_processors.h>
@@ -59,6 +61,46 @@ int main (int argc, char** argv)
             time ("input meters", juce::Rectangle<float> (0, 36, 86, 236).transformedBy (juce::AffineTransform::scale (s)).toNearestInt(), 100);
             time ("harmonics circle", juce::Rectangle<float> (195, 74, 50, 50).transformedBy (juce::AffineTransform::scale (s)).toNearestInt(), 100);
             time ("stripe", juce::Rectangle<float> (10, 272, 868, 36).transformedBy (juce::AffineTransform::scale (s)).toNearestInt(), 100);
+            return 0;
+        }
+    for (int i = 2; i < argc; ++i)
+        if (juce::String (argv[i]).startsWith ("--film="))
+        {
+            const auto spec = juce::StringArray::fromTokens (juce::String (argv[i]).fromFirstOccurrenceOf ("=", false, false), ",", "");
+            juce::MemoryBlock raw;
+            juce::File (spec[0]).loadFileAsData (raw);
+            const auto* audio = static_cast<const float*> (raw.getData());
+            const int frames = (int) (raw.getSize() / 8);
+            const float seconds = spec[1].getFloatValue();
+            const int every = juce::jmax (1, spec[2].getIntValue());
+            proc->setRateAndBufferSizeDetails (48000.0, 300);
+            proc->prepareToPlay (48000.0, 300);
+            juce::AudioBuffer<float> buf (2, 300);
+            juce::MidiBuffer midi;
+            const auto base = juce::File::getCurrentWorkingDirectory().getChildFile (argv[1]).withFileExtension ("");
+            int pos = 0;
+            const juce::Rectangle<int> area = juce::Rectangle<float> (10, 272, 868, 36).transformedBy (juce::AffineTransform::scale (scale)).toNearestInt();
+            for (int tick = 0; tick < (int) (seconds * 40.0f) && pos + 1200 <= frames; ++tick)
+            {
+                float peak = 0.0f;
+                for (int b = 0; b < 4; ++b, pos += 300)
+                {
+                    for (int k = 0; k < 300; ++k)
+                    {
+                        buf.setSample (0, k, audio[2 * (pos + k)]);
+                        buf.setSample (1, k, audio[2 * (pos + k) + 1]);
+                    }
+                    proc->processBlock (buf, midi);
+                    peak = juce::jmax (peak, buf.getMagnitude (0, 300));
+                }
+                ed->filmStep (tick / 40.0, juce::Decibels::gainToDecibels (peak, -200.0f));
+                if (tick % every != 0) continue;
+                auto img = ed->createComponentSnapshot (ed->getLocalBounds(), true, 1.0f).getClippedImage (area);
+                auto f = base.getSiblingFile (base.getFileName() + juce::String::formatted ("_%04d.png", tick));
+                f.deleteFile();
+                juce::FileOutputStream os (f);
+                juce::PNGImageFormat().writeImageToStream (img, os);
+            }
             return 0;
         }
     auto img = ed->createComponentSnapshot (ed->getLocalBounds(), true, 1.0f);

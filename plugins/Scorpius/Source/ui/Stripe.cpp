@@ -137,7 +137,7 @@ void Stripe::spawn (Particle& p, double now, bool anyAge)
     p.rate = uniform (rng, 15.0f, 45.0f);
 }
 
-void Stripe::setInput (float peakDb, bool running, bool anim)
+void Stripe::setInput (float peakDb, bool running, bool anim, const float* bands)
 {
     if (frozen) return;
     animated = anim;
@@ -159,11 +159,13 @@ void Stripe::setInput (float peakDb, bool running, bool anim)
         detector = lastLevel;                        // (fading from the last level, also after a ramp it ignored)
         target = -200.0f;
     }
+    haveBands = sounding && bands != nullptr;
+    if (haveBands) std::copy (bands, bands + Sky::numBands, bandsIn.begin());
     recent[1] = recent[0];
     recent[0] = sounding ? peakDb : -200.0f;
     wasSounding = sounding;
     // (moved on by the editor's clock, so the whole editor repaints once per frame)
-    const double now = Time::getMillisecondCounterHiRes() * 0.001;
+    const double now = clock();
     if (envelope > 0.0f || brightness (target) > 0.0f || detector > -100.0f)
     {
         if (! moving) lastTime = now;
@@ -183,8 +185,21 @@ void Stripe::freeze (float b)
     frozen = true;
     envelope = b;
     // a moment well into the animation, so ages and flares are spread as while it runs
-    for (int i = 0; i < 60; ++i) { clock += 1.0 / 60.0; for (auto& p : particles) if (clock - p.born > p.life) spawn (p, clock, false); }
-    for (int i = 0; i < 90; ++i) sky.advance (1.0f / 40.0f, b, i % 20 == 0);
+    for (int i = 0; i < 60; ++i) { elapsed += 1.0 / 60.0; for (auto& p : particles) if (elapsed - p.born > p.life) spawn (p, elapsed, false); }
+    // (and a spectrum like music's: a kick every half second, a snare between, the hi-hats on eighths)
+    for (int i = 0; i < 90; ++i)
+    {
+        float spectrum[Sky::numBands];
+        for (int k = 0; k < Sky::numBands; ++k)
+        {
+            float db = -20.0f - 0.9f * (float) k + 3.0f * std::sin (0.7f * (float) i + (float) k);
+            if (i % 20 == 0 && k < 6) db += 12.0f;
+            if (i % 20 == 10 && k >= 9 && k < 19) db += 10.0f;
+            if (i % 5 == 0 && k >= 20) db += 9.0f;
+            spectrum[k] = std::pow (10.0f, db / 20.0f);
+        }
+        sky.advance (1.0f / 40.0f, b, false, spectrum);
+    }
     repaint();
 }
 
@@ -199,15 +214,15 @@ void Stripe::advance (double now)
 {
     const double dt = jlimit (0.0, 0.1, now - lastTime);
     lastTime = now;
-    clock += dt;
+    elapsed += dt;
     // the level the light follows: up at once, down at a steady rate (in dB)
     detector = target >= detector ? target : jmax (target, detector - (float) (releaseDbPerSec * dt));
     envelope = animated ? brightness (detector) : 0.0f;
-    sky.advance ((float) dt, envelope, beat);
+    sky.advance ((float) dt, envelope, beat, haveBands ? bandsIn.data() : nullptr);
     beat = false;
     for (auto& p : particles)
     {
-        if (clock - p.born > p.life) spawn (p, clock, false);
+        if (elapsed - p.born > p.life) spawn (p, elapsed, false);
         p.x += p.vx * (float) dt;
         p.y += p.vy * (float) dt;
     }
@@ -246,7 +261,7 @@ void Stripe::splat (const Particle& p, float level, float s)
     float hw = p.w * 0.5f * s, hh = p.h * 0.5f * s;
     if (p.kind == Kind::flare)
     {
-        const float u = (float) ((clock - p.born) / p.life);
+        const float u = (float) ((elapsed - p.born) / p.life);
         hh = p.h * 0.5f * s * std::sin (MathConstants<float>::pi * jlimit (0.0f, 1.0f, u));
     }
     // the small ones (measured on isolated particles): a box with a pixel of soft edge and a faint halo ~1.5 px wide at
@@ -334,7 +349,7 @@ void Stripe::render (int w, int h, float s)
         for (size_t k = 0; k < glow.size(); ++k) light[k] = glow[k] * envelope;
         for (auto& p : particles)
         {
-            const float age = (float) (clock - p.born);
+            const float age = (float) (elapsed - p.born);
             if (age < 0.0f || age > p.life) continue;
             float a = 1.0f;
             if (p.kind != Kind::flare)

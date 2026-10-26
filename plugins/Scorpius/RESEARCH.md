@@ -89,7 +89,8 @@ Nine presets. Settings that differ from "start me up" (drive a, hi-pass on, harm
 
 ### Host-level facts (L1, L2)
 - One effect class, `Orion`, vendor Cradle, plug-in code `Orio`, manufacturer code `Crdl` (L3).
-- Buses: stereo in, stereo out, **no side-chain**. Mono → mono is not supported.
+- Buses: stereo in, stereo out, **no side-chain**. Mono → mono is not supported. (Scorpius adds a side-chain: UI
+  round 5.)
 - **Latency: 0 samples at 48 kHz, 31 at 44.1 kHz, 48 at 96 kHz** (L2). The DSP appears to run at a fixed 48 kHz and
   resample other rates (L4: `ResampledAudioGraph<FixedSampleRatePolicy>`, and the neural model below is trained at
   48 kHz). Phase 3 confirms this, and checks other rates (88.2, 192 kHz).
@@ -297,3 +298,26 @@ run on the reference and on ours, and compared.
 Ours, not the reference's: a second particle style, **SCORPIUS** (settings page; Source/ui/Sky.cpp): the constellation
 from its star positions (east to the left), twinkling, Antares swelling on each beat, the tail in a band of the Milky
 Way, venom running like meteors from the head to the stinger.
+
+## UI round 5 (ours)
+
+- **Top bar shared with The Antiparticle:** Compare's A / B switch moved left of `Preset` (no label) and a `Sidechain`
+  INT / EXT switch sits where The God Particle has it, with I/O LINK between it and `UI Scale`. The two top bars are
+  now the same pixel for pixel (only the preset's name differs). The reference has Compare at x 604 … 734.
+- **Side-chain (ours; the reference has none):** a stereo side-chain bus (off unless the host enables it). EXT feeds
+  the compressor's detector from it instead of the signal it compresses; with the bus off, EXT hears silence. The
+  switch is saved with the session and is not part of a preset or a compare setting (as The Antiparticle's). Until
+  the compressor exists (Phase 4) it drives the gain-reduction stand-in (`dsp/Visuals.h`).
+- **SCORPIUS style, played by the music:** the processor now also reads 24 bands (30 Hz … 16 kHz, log-spaced) from
+  the circles' spectrum. Each band's level is taken against its own recent loudest (falling 4 dB/s, held within 24 dB
+  of the loudest band), so quiet mixes play too; hits are detected in three groups (kick 30 … 144 Hz, snare
+  315 Hz … 4.3 kHz, hi-hats 5.6 … 16 kHz: 3 dB over their 0.35 s average and rising). What they drive:
+  - an aurora spreading both ways from Antares, lows next to it in crimson out to highs in gold at the ends (magenta,
+    violet, blue, cyan, mint between): each part as tall and bright as its band, waving, in shimmering rays,
+    flaring when its band jumps 5 dB over its average;
+  - kick: Antares swells, a ring spreads from it, a pulse of light runs out along the body; the Milky Way breathes;
+  - snare: venom from the head to the stinger, which flares and bursts into coloured sparks;
+  - hi-hats: dust stars glint in colour; each main star brightens and flashes with the band at its place.
+  The brightness still follows the reference's rules (the same as the ORION style). Filmed offline with
+  `ScorpiusSnapshot --film=audio.f32,seconds,every` (the stripe every n frames of the 40 Hz clock). Cost at 200 %:
+  3.5 ms a frame (the ORION style 2.8).

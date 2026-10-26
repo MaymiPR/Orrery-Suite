@@ -50,6 +50,9 @@ public:
     std::atomic<bool> animation { true };
     std::atomic<int> particleStyle { 1 };    // the stripe: 0 the reference's particles, 1 ours (Scorpius)
     std::atomic<bool> ioLink { false };      // I/O link (ours, as in The Antiparticle): the output gain mirrors the input gain
+    // Sidechain INT / EXT (ours, as The Antiparticle's top bar; the reference has no side-chain): EXT takes the
+    // compressor's detector from the side-chain bus instead of the signal it compresses
+    std::atomic<bool> sidechainExternal { false };
 
     // meters: input (after the input gain) and output, L R; the compression module's gain reduction (positive dB)
     orrery::LevelMeter inMeter, outMeter;
