@@ -62,6 +62,6 @@ private:
     SubPath sub;
     LoudPath loud;
     LowPath low;
-    GritPath grit;
+    Grit grit;
 };
 }

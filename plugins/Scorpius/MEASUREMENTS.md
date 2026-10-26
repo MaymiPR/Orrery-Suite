@@ -127,7 +127,7 @@ signal; nulls in dB):
 | lift | 0.250 / 0.500 / 0.750 | −137: an exact mix |
 | harmonics | 0.237 / 0.483 / 0.738 | −48 … −51: almost a mix |
 | sub, low, loud levels | 0.092 / 0.251 / 0.526 | −139 … −156: an exact mix, with the faders' taper (e^(2.188 L) − 1) / (e^2.188 − 1) (UI round 2) |
-| grit level | 0.088 / 0.241 / 0.505 | −36 … −51: the level also changes the processing |
+| grit level | 0.088 / 0.241 / 0.505 | −36 … −51 here; later probes (Section 14) find grit's contribution an exact mix too (−100 … −126 dB re the contribution at 0.088 / 0.5 / 0.731 on drums and the track), except once (drums at 0.189: −10) |
 
 ## 6. Drive
 
@@ -216,8 +216,8 @@ Offline, one instance, 60 s of drums at 48 kHz (wall time less the ~1.2 s of loa
 8.3 s, i.e. **~14 % of a core**; everything on ~20 %. By module: drive 4.9 s (the most), compression 1.6, lift 1.7,
 harmonics 0.2 (the neural model is cheap), EQ 0. The target for Scorpius is well below this.
 
-Scorpius, measured the same way: the default preset 6.0 s (Orion 9.8 s in the same run), drive alone 3.8 s (5.7),
-lift 2.3 s (2.2), compression 0.4 s (2.1). Its learned parts run a block at a time in vector registers
+Scorpius, measured the same way: the default preset 6.0 s (Orion 9.2 … 9.8 s in the same runs), drive alone 3.8 s
+(5.7), lift 2.3 s (2.3), compression 0.4 s (2.1), grit alone 3.8 s (4.0). Its learned parts run a block at a time in vector registers
 (`ScorpiusTests bench` times them separately).
 
 ## 14. What the fits found (Phase 4)
@@ -237,12 +237,35 @@ down more of how it is built:
 - **Compression** (`fit_comp.py`): a feed-forward compressor on the mid signal: threshold −12.8 dBFS (detector level),
   ratio 5.0, knee 7.3 dB, detector attack 1.0 ms and release 20 ms (nearly a peak follower: 4 % RMS); the wet path's
   fixed shelving is a vector fit. Modes a and b fit the same constants; they differ in their wet filters (make-up).
-- **Low** (`fit_low.py` and bursts): a subharmonic synthesizer, an octave below the bass. A flip-flop that starts
-  silent, switches on at the first falling zero crossing of the low-passed input and flips at each one after; its
-  square wave times that input (plus a little of its square: louder bass lifts the positive lobes), through a steep
-  low-pass (~52 Hz) and a soft limit. Its phase on music depends on details not pinned down yet.
-- **Grit** (`fit_grit.py`): a transient shaper on the mid signal (a fast and a slow envelope; the boost in dB grows
-  with the fast one's lead, fades in above ~−54 dBFS, limited to ~6 dB).
+- **Low** (`fit_low2.py`): a subharmonic synthesizer, an octave below the bass: an **octave divider times an
+  envelope**. On a steady tone its contribution is a square wave at half the frequency whose height follows the
+  tone's level (at 25 Hz: −0.9 x the tone's amplitude for one cycle, +0.9 for the next), not the input times ±1 (the
+  first model, `fit_low.py`, which nulled tones at only −1 … −10 dB). A flip-flop toggles at each falling zero
+  crossing of the input through a 6th-order low-pass at 217 Hz (silent until the first, starting negative, keeping
+  its state through silence: a reset makes bursts worse); its square wave times the peak envelope of that signal
+  (attack 0.05 ms, release 50 ms) times 0.89 goes through a **4th-order Butterworth low-pass at 46.4 Hz** (a tone
+  sweep 25 … 160 Hz at −30 dBFS follows it to 0.5 dB), then v + 0.91 v² (the DC it makes is kept: no high-pass) and
+  a soft limit. Tones and chords null at −35 … −46 dB re the contribution (60 + 90 Hz gives 45 and 15 Hz, 40 + 60
+  + 100 Hz gives 50 and 10 Hz). On music the octave's shape matches (correlation ±0.99 … 1.00 in most 50 ms
+  windows of the drums) but its polarity slips against the reference's now and then, so the null is about 0 dB:
+  some crossings count differently (not a fixed or level-relative hysteresis, not a minimum interval between
+  flips, not a reset in silence). Loud tones (−3 dBFS) null at only −10 dB (the soft limit). No factory preset uses
+  it.
+- **Grit** works on **each channel by itself**: the left channel's gain is the same whatever the right one holds
+  (silent, half, inverted), except when both are exactly equal and near full scale (the same drums at +0.4 dBFS
+  peak: then it differs by −10 dB; at 0.7 of that, or with the right channel at 0.999 of the left, it does not).
+  It adds nothing to steady tones; at an onset it adds a burst within the first 10 ms that decays by ~20 dB per
+  20 … 25 ms, band-limited (at −24 dBFS: −5 … −8 dB re the tone at 300 Hz … 1 kHz, −14 at 3 kHz, −25 at 100 Hz),
+  mostly at the tone's own frequency and in phase with it, with odd harmonics once it saturates (−12 dBFS: up to
+  +2 dB over the tone at 1 kHz). Its contribution has nothing below 100 Hz, no linear filter of the input explains
+  it (−1 dB), nor a gain on a filtered copy updated every millisecond (−4 … −10 dB). The level fader scales the
+  contribution exactly (above). A transient shaper on the full band (`fit_grit.py`, the first attempt) did not
+  correlate with it at all; Scorpius now learns it (`capture_nn.py grit`, left channel only, the right silent; a
+  WaveNet as the drive's), nulling the parallel at −24 … −27 dB at level 1 (leaving it out: −20 … −25) and the
+  preset "top of the morning" at −30 … −33.5 (−25 … −28.5 before).
+- **Grit after compression:** on stereo material grit inside the chain is not the reference's grit applied to the
+  compressor's output (−6 … −11 dB re its contribution; exact for identical channels), nor to its input, nor to
+  its mid or swapped channels. Matters little: the factory presets with both use grit at 0.189.
 - **Loud** (`fit_loud.py`): its gain against a fast mid-signal detector (attack 0.7 ms, release 13 ms) as a table.
 - **The expander** (`fit_exp.py`): threshold −58.1 dBFS (peak of the last 1.13 s), 2.03 dB of gain per dB below,
   closing with a 208 ms time constant; at the start of playback it takes the signal's own level.
@@ -261,5 +284,7 @@ down more of how it is built:
 
 ## Open
 
-- The drive's low-frequency error (colour a especially), the low path's phase on music, grit with the compressor
-  on (the reference's grit then listens to the compressor), the converters above 48 kHz.
+- The drive's low-frequency error (colour a especially: after a level step its output's slow swing differs for
+  ~100 ms; a longer pre-filter (1024 / 4096 taps) does not help: −24.2 dB), which crossings the low path's flip-flop
+  counts on music, its soft limit on loud bass, grit after the compressor on stereo material, the converters above
+  48 kHz.

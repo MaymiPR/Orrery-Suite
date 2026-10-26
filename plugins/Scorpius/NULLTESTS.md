@@ -25,7 +25,7 @@ local (git-ignored).
 | louder | -21.4 | -30.1 | -16.0 | -24.3 |
 | low end theory | -22.4 | -32.0 | -16.6 | -25.5 |
 | parallel me in | -21.2 | -31.1 | -15.9 | -24.5 |
-| top of the morning | -24.8 | -28.5 | -24.5 | -25.0 |
+| top of the morning | -32.9 | -36.6 | -33.4 | -35.1 |
 | all off, 48 kHz | exact | exact | exact | exact |
 | all off, 44.1 kHz | -51.5 | -51.5 | -63.7 | -63.7 |
 
@@ -44,8 +44,9 @@ Each module alone (the others off with the reference's own power buttons), on th
 | lift (learned) | -31 … -48 |
 | drive colour c (learned) | -21 … -34 |
 | drive colour a (learned) | -16 … -31 |
-| grit | about -24 |
-| low | -1 … -3 on program (its subharmonic's phase differs) |
+| grit (learned), level 1 / 0.731 | -27 … -31 / -33 … -37 |
+| low, tones and chords | -38 … -46 |
+| low, music | about 0 (the octave's polarity slips against the reference's) |
 
 The learned drive models on held-out pieces of their training material (up to +4 dBFS peak): colour a -24.6 / -24.8
 dB (hi-pass on / off), colour b -31.7 / -31.4, colour c -33.4 / -32.9.
@@ -58,10 +59,12 @@ dB (hi-pass on / off), colour b -31.7 / -31.4, colour c -33.4 / -32.9.
   Scorpius learns from the reference's input and output: on loud program material the default preset nulls at about
   -16 to -21 dB, 12 dB lower at -25 to -31 dB. Colour c, which Scorpius models best, takes the chain to -21 … -39.
   What is left of the drive is mostly below 250 Hz; wider or deeper models gain only about 1 dB.
-- **Grit and low** are approximations: grit listens to the compressor in the reference ("top of the morning" has grit
-  on), and low's subharmonic follows the zero crossings of the bass with a phase not yet matched on music.
+- **Grit** is learned too (a transient shaper of the mids, each channel by itself), 5 … 9 dB better than a
+  hand-made transient shaper; after the compressor on stereo material the reference's grit still differs a little.
+- **Low** matches on tones and chords; on music its octave keeps the right shape and level but its polarity drifts
+  against the reference's (which crossings its flip-flop counts is not pinned down).
 
 ## CPU
 
 60 s of the drum loop, stereo, 48 kHz, one instance, offline: the default preset takes 6.0 s of CPU against the
-reference's 9.8 s in the same run (drive alone 3.8 s against 5.7).
+reference's 9.2 s in the same run (drive alone 3.8 s against 5.7, grit alone 3.8 s against 4.0).

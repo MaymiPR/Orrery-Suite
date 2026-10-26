@@ -2,7 +2,9 @@
 demo track, pink noise and log sweeps at many levels, rendered through the reference with only that module on.
 Saved (local, git-ignored) to measurements/scorpius/nn/<case>.npz: x (input, mono), y (output), and which pieces
 are held out for validation.
-    python capture_nn.py [case ...]      cases: drive_a drive_b drive_c drive_a_hp ... lift"""
+    python capture_nn.py [case ...]      cases: drive_a drive_b drive_c drive_a_hp ... lift grit
+Grit is captured on the left channel alone (the right silent): it works on each channel by itself, except that on
+input whose channels are exactly equal and near full scale it behaves differently (MEASUREMENTS.md 9)."""
 import os, sys
 import numpy as np
 import orion as o
@@ -38,11 +40,14 @@ def pieces():
 
 CASES = {f'drive_{c}{"_hp" if hp else ""}': dict(params=o.ONLY('drive', hipass=hp), hidden={'drive.driveMode': c}) for c in 'abc' for hp in (0, 1)}
 CASES['lift'] = dict(params={**o.ONLY('lift'), 'Lift Amount': 1})
+CASES['grit'] = dict(params={**o.NONE, 'Par Grit On/Off': 1, 'Par Grit Level': 1.0}, left=True)
 
 if __name__ == '__main__':
     P = pieces()
     for case in sys.argv[1:] or list(CASES):
-        ys = o.render_many([dict(x=x, **CASES[case]) for _, x in P], cache=True)
+        spec = {k: v for k, v in CASES[case].items() if k != 'left'}
+        stereo = (lambda x: np.stack([x, 0 * x])) if CASES[case].get('left') else (lambda x: x)
+        ys = o.render_many([dict(x=stereo(x), **spec) for _, x in P], cache=True)
         np.savez_compressed(os.path.join(OUT, case + '.npz'), x=np.array([x for _, x in P], dtype=object),
                             y=np.array([y[0] for y in ys], dtype=object), kind=np.array([k for k, _ in P]),
                             valid=np.array([i % 7 == 3 for i in range(len(P))]))

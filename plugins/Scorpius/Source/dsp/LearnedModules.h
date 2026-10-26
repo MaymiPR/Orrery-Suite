@@ -7,7 +7,7 @@
 // The modules the reference runs as trained models of its own, ours learned from its input and output
 // (MEASUREMENTS.md 6, 9, 14): the drive (a WaveNet per colour and hi-pass setting, nulltest/train_wn.py) and lift's wet
 // path (a GRU, nulltest/train_gru.py;
-// lift at amount 0 is a fixed filter, fitted; the amount mixes the two exactly).
+// lift at amount 0 is a fixed filter, fitted; the amount mixes the two exactly) and the grit parallel (a WaveNet).
 namespace sc::dsp
 {
 class Drive
@@ -58,5 +58,42 @@ public:
 private:
     Learned wet[2];
     ParallelFilter dry[2];
+};
+
+// The grit parallel: a transient shaper of the mids (MEASUREMENTS.md 9), learned at level 1 on each channel by
+// itself (the reference's grit works per channel); its contribution, the model's output less its input, scales
+// exactly with the level's fader taper (w).
+class Grit
+{
+public:
+    void prepare (int maxBlock)
+    {
+        for (auto& m : model) m.prepare (models::grit);
+        for (auto& b : tmp) b.assign ((size_t) std::max (1, maxBlock), 0.0);
+        dirty = true; reset();
+    }
+    void reset()
+    {
+        if (! dirty) return;
+        for (auto& m : model) m.reset();
+        dirty = false;
+    }
+    void process (const double* inL, const double* inR, double* outL, double* outR, int n, Ramp& w)
+    {
+        dirty = true;
+        model[0].process (inL, tmp[0].data(), n);
+        model[1].process (inR, tmp[1].data(), n);
+        for (int i = 0; i < n; ++i)
+        {
+            const double m = w.next();
+            outL[i] += m * (tmp[0][(size_t) i] - inL[i]);
+            outR[i] += m * (tmp[1][(size_t) i] - inR[i]);
+        }
+    }
+
+private:
+    LearnedWaveNet model[2];
+    std::vector<double> tmp[2];
+    bool dirty = true;
 };
 }

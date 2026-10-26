@@ -13,7 +13,7 @@ import orion as o
 from train_wh import fftconv, NN, IR, load
 
 FS = 48000
-KPRE, KPOST, SEG, BATCH = 64, 8192, 4096, 16
+KPRE, KPOST, SEG, BATCH = int(os.environ.get("KPRE", 64)), 8192, 4096, 16
 MAXPEAK = 4.0          # dBFS: training and validation pieces up to this peak
 torch.set_num_threads(int(os.environ.get("THREADS", max(1, os.cpu_count() // 2))))
 DEV = torch.device("cuda" if torch.cuda.is_available() else "cpu")
@@ -58,7 +58,10 @@ class Model(torch.nn.Module):
 def train(case, steps, irname, ch, layers):
     xs, ys, valid = load(case)
     keep = [i for i, x in enumerate(xs) if 20 * np.log10(np.abs(x).max() + 1e-9) <= MAXPEAK]
-    h = np.load(os.path.join(IR, irname + '.npy'))[0].astype(np.float32)
+    if irname is None:                  # (grit: steady signals pass unchanged, so the filters start as the identity)
+        h = np.zeros(KPOST, np.float32); h[0] = 1.0
+    else:
+        h = np.load(os.path.join(IR, irname + '.npy'))[0].astype(np.float32)
     model = Model(h, ch, layers).to(DEV)
     train_idx = [i for i in keep if not valid[i]]
     opt = torch.optim.Adam([{'params': [model.pre, model.post], 'lr': 1e-4}, {'params': model.wn.parameters(), 'lr': 2e-3}])
@@ -96,6 +99,7 @@ def evaluate(model, xs, ys, valid, keep, all_=False):
 
 def irname_of(case):
     if case == 'lift': return 'lift_1.0'
+    if case == 'grit': return None
     return f'drive_{case[6]}_hp{1 if case.endswith("_hp") else 0}'
 
 

@@ -370,6 +370,10 @@ static void bench()
         time ("drive WaveNet (whole)", [&] (double* p, int m) { wn.process (p, p, m); });
     }
     {
+        LearnedWaveNet wn; wn.prepare (models::grit);
+        time ("grit WaveNet (whole)", [&] (double* p, int m) { wn.process (p, p, m); });
+    }
+    {
         Learned gru; gru.prepare (models::lift);
         time ("lift GRU (whole)", [&] (double* p, int m) { for (int i = 0; i < m; ++i) p[i] = gru.process ((float) p[i]); });
     }

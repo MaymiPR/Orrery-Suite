@@ -52,12 +52,10 @@ struct Tuning
     // loud: the gain (dB) at detector levels -72, -66, ..., +12 dBFS, the detector's attack, release and RMS share
     double loudCurve[15] { 8.994, 7.202, 6.544, 5.723, 5.030, 4.409, 3.839, 3.332, 2.879, 2.479, 1.845, 0.903, 0.473, -0.3, 0.197 };   // (nulltest/fit_loud.py)
     double loudAttackMs = 0.6695, loudReleaseMs = 12.896, loudRms = 0.0096;
-    // grit: the envelopes' times (ms), boost per dB of fast over slow, its soft limit (dB), the fade-in threshold and range
-    double gritFastAttackMs = 2.2896, gritFastReleaseMs = 0.3183, gritSlowAttackMs = 72.285, gritSlowReleaseMs = 183.3;   // (nulltest/fit_grit.py)
-    double gritAmount = 0.28818, gritMaxDb = 6.0493, gritThresholdDb = -54.145, gritRangeDb = 39.807;
-    // low: the input low-pass (Hz, order), the output low-pass and its DC high-pass, gain, soft limit, flip hysteresis
-    double lowInHz = 152.327, lowInOrder = 2, lowOutHz = 51.567, lowOutOrder = 8, lowHpHz = 4.956, lowGain = 1.0742, lowCeiling = 0.7003,
-           lowHysteresis = 1.0e-4, lowSquare = 0.4884;   // (nulltest/fit_low.py)
+    // low: the detector low-pass (Hz, order), the flip-flop's hysteresis, its envelope (attack / release, ms), gain, the
+    // output low-pass (Hz, order), the square term after it and the soft limit (nulltest/fit_low2.py)
+    double lowDetHz = 216.7, lowDetOrder = 6, lowHysteresis = 1.0e-7, lowAttackMs = 0.05347, lowReleaseMs = 49.633,
+           lowGain = 0.89365, lowOutHz = 46.4, lowOutOrder = 4, lowSquare = 0.90778, lowCeiling = 1.37852;
 
     std::vector<std::pair<const char*, double*>> entries()
     {
@@ -68,12 +66,9 @@ struct Tuning
                                                          { "subHighPassHz", &subHighPassHz }, { "expThresholdDb", &expThresholdDb },
                                                          { "expSlope", &expSlope }, { "expHoldMs", &expHoldMs }, { "expReleaseMs", &expReleaseMs },
                                                          { "loudAttackMs", &loudAttackMs }, { "loudReleaseMs", &loudReleaseMs }, { "loudRms", &loudRms },
-                                                         { "lowInHz", &lowInHz }, { "lowInOrder", &lowInOrder }, { "lowOutHz", &lowOutHz }, { "lowOutOrder", &lowOutOrder },
-                                                         { "lowHpHz", &lowHpHz }, { "lowGain", &lowGain }, { "lowCeiling", &lowCeiling }, { "lowHysteresis", &lowHysteresis }, { "lowSquare", &lowSquare },
-                                                         { "gritFastAttackMs", &gritFastAttackMs }, { "gritFastReleaseMs", &gritFastReleaseMs },
-                                                         { "gritSlowAttackMs", &gritSlowAttackMs }, { "gritSlowReleaseMs", &gritSlowReleaseMs },
-                                                         { "gritAmount", &gritAmount }, { "gritMaxDb", &gritMaxDb }, { "gritThresholdDb", &gritThresholdDb },
-                                                         { "gritRangeDb", &gritRangeDb } };
+                                                         { "lowDetHz", &lowDetHz }, { "lowDetOrder", &lowDetOrder }, { "lowHysteresis", &lowHysteresis },
+                                                         { "lowAttackMs", &lowAttackMs }, { "lowReleaseMs", &lowReleaseMs }, { "lowGain", &lowGain },
+                                                         { "lowOutHz", &lowOutHz }, { "lowOutOrder", &lowOutOrder }, { "lowSquare", &lowSquare }, { "lowCeiling", &lowCeiling } };
         static const char* loudKeys[15] { "loud0", "loud1", "loud2", "loud3", "loud4", "loud5", "loud6", "loud7", "loud8", "loud9", "loud10",
                                           "loud11", "loud12", "loud13", "loud14" };
         for (int k = 0; k < 15; ++k) e.push_back ({ loudKeys[k], &loudCurve[k] });

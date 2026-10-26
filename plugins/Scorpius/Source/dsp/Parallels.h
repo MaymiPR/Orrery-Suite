@@ -11,11 +11,10 @@
 //     (nulltest/fit_sub3.py);
 //   - loud: upward compression, the gain read from a table against a fast detector on the mid signal; its
 //     contribution is (gain - 1) x (nulltest/fit_loud.py).
-//   - low: a subharmonic synthesizer: a square wave that flips at each falling zero crossing of the low-passed input
-//     (half its frequency) times that input, plus a little of its square, through a steep low-pass, soft-limited: an
-//     octave below the bass (nulltest/fit_low.py).
-//   - grit: a transient shaper: a fast and a slow envelope of the mid signal, the boost (dB) growing with how far the
-//     fast one is above the slow one, faded in above a threshold and soft-limited (nulltest/fit_grit.py).
+//   - low: a subharmonic synthesizer, an octave below the bass: a square wave that flips at each falling zero
+//     crossing of the low-passed input (half its frequency), times that input's peak envelope, through a 4th-order
+//     low-pass at 46 Hz, then v + a v^2 (its DC kept) and a soft limit (nulltest/fit_low2.py).
+//   - grit: a learned model (LearnedModules.h).
 namespace sc::dsp
 {
 // Butterworth low- or high-pass of an even order as a cascade of RBJ-cookbook biquads (the same as the bilinear,
@@ -79,70 +78,53 @@ public:
         const auto& t = tuning();
         for (int c = 0; c < 2; ++c)
         {
-            inLp[c] = butterworth (2 * (int) std::lround (t.lowInOrder / 2), t.lowInHz, fs, false);
+            detLp[c] = butterworth (2 * (int) std::lround (t.lowDetOrder / 2), t.lowDetHz, fs, false);
             outLp[c] = butterworth (2 * (int) std::lround (t.lowOutOrder / 2), t.lowOutHz, fs, false);
-            const auto hp = butterworth (2, t.lowHpHz, fs, true);
-            outLp[c].insert (outLp[c].end(), hp.begin(), hp.end());
         }
         reset();
     }
     void reset()
     {
-        for (int c = 0; c < 2; ++c) { for (auto& b : inLp[c]) b.reset(); for (auto& b : outLp[c]) b.reset(); last[c] = 0; sign[c] = 0; }
+        for (int c = 0; c < 2; ++c)
+        {
+            for (auto& b : detLp[c]) b.reset();
+            for (auto& b : outLp[c]) b.reset();
+            armed[c] = false; state[c] = 0; env[c] = 0;
+        }
     }
     void process (const double* inL, const double* inR, double* outL, double* outR, int n, Ramp& w)
     {
         const auto& t = tuning();
         const double* in[2] { inL, inR };
         double* out[2] { outL, outR };
+        const double ka = std::exp (-1.0 / (std::max (0.01, t.lowAttackMs) * 0.001 * fs));
+        const double kr = std::exp (-1.0 / (std::max (0.01, t.lowReleaseMs) * 0.001 * fs));
+        const double h = t.lowHysteresis;
         for (int i = 0; i < n; ++i)
         {
             const double m = w.next();
             for (int c = 0; c < 2; ++c)
             {
-                double u = in[c][i];
-                for (auto& b : inLp[c]) u = b.process (u);
-                // the flip-flop: off until the first falling zero crossing, then flipping at each one (measured with bursts)
-                if (last[c] >= t.lowHysteresis && u < -t.lowHysteresis) sign[c] = sign[c] == 0 ? 1 : -sign[c];
-                if (std::abs (u) > t.lowHysteresis) last[c] = u;
-                double s = sign[c] * u + t.lowSquare * u * u;
+                double d = in[c][i];
+                for (auto& b : detLp[c]) d = b.process (d);
+                // the flip-flop: silent until the first falling zero crossing, then flipping at each one (it keeps its
+                // state through silence); the reference's first state is the negative one
+                if (d > h) armed[c] = true;
+                if (armed[c] && d < -h) { state[c] = state[c] == 0 ? -1.0 : -state[c]; armed[c] = false; }
+                const double a = std::abs (d);
+                env[c] = a > env[c] ? a + (env[c] - a) * ka : a + (env[c] - a) * kr;
+                double s = t.lowGain * state[c] * env[c];
                 for (auto& b : outLp[c]) s = b.process (s);
-                out[c][i] += m * t.lowCeiling * std::tanh (t.lowGain * s / t.lowCeiling);
+                s += t.lowSquare * s * s;
+                out[c][i] += m * t.lowCeiling * std::tanh (s / t.lowCeiling);
             }
         }
     }
 
 private:
-    double fs = 48000.0, last[2] {}, sign[2] {};
-    std::vector<Biquad> inLp[2], outLp[2];
-};
-
-class GritPath
-{
-public:
-    void prepare (double sampleRate) { fs = sampleRate; reset(); }
-    void reset() { fast = slow = 0; }
-    void process (const double* inL, const double* inR, double* outL, double* outR, int n, Ramp& w)
-    {
-        const auto& t = tuning();
-        auto coef = [this] (double ms) { return std::exp (-1.0 / (std::max (0.01, ms) * 0.001 * fs)); };
-        const double fa = coef (t.gritFastAttackMs), fr = coef (t.gritFastReleaseMs), sa = coef (t.gritSlowAttackMs), sr = coef (t.gritSlowReleaseMs);
-        for (int i = 0; i < n; ++i)
-        {
-            const double a = std::abs (0.5 * (inL[i] + inR[i]));
-            fast = a > fast ? a + (fast - a) * fa : a + (fast - a) * fr;
-            slow = a > slow ? a + (slow - a) * sa : a + (slow - a) * sr;
-            const double fastDb = 20.0 * std::log10 (std::max (fast, 1.0e-9)), slowDb = 20.0 * std::log10 (std::max (slow, 1.0e-9));
-            const double fade = std::clamp ((fastDb - t.gritThresholdDb) / std::max (0.1, t.gritRangeDb), 0.0, 1.0);
-            const double boostDb = t.gritMaxDb * std::tanh (t.gritAmount * std::max (0.0, fastDb - slowDb) * fade / t.gritMaxDb);
-            const double m = w.next() * (std::pow (10.0, boostDb / 20.0) - 1.0);
-            outL[i] += m * inL[i];
-            outR[i] += m * inR[i];
-        }
-    }
-
-private:
-    double fs = 48000.0, fast = 0, slow = 0;
+    double fs = 48000.0, state[2] {}, env[2] {};
+    bool armed[2] {};
+    std::vector<Biquad> detLp[2], outLp[2];
 };
 
 class SubPath
