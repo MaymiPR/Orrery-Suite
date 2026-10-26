@@ -9,6 +9,8 @@
 //   sc=file.f32          side-chain input (stereo interleaved)
 //   raw=1                no latency compensation (the output is the plug-in's output sample for sample)
 //   reset=0              keep the instance of the previous job (default: a fresh instance per job)
+//   settle=ms            run the message loop this long after setting the parameters (a plug-in that applies them
+//                        asynchronously, as Orion does, would otherwise take them partway through the render)
 // Prints the latency and, per job, the number of frames written.
 #include <juce_audio_processors/juce_audio_processors.h>
 #include <cstdio>
@@ -128,6 +130,7 @@ int main (int argc, char** argv)
         for (auto& t : tok) t = t.unquoted();
         String scPath, statePath;
         bool raw = false, reset = true;
+        int settle = 0;
         std::multimap<int, std::pair<AudioProcessorParameter*, float>> autom;
         for (int i = 2; i < tok.size(); ++i)
         {
@@ -136,6 +139,7 @@ int main (int argc, char** argv)
             else if (a.startsWith ("state=")) statePath = a.substring (6);
             else if (a == "raw=1") raw = true;
             else if (a == "reset=0") reset = false;
+            else if (a.startsWith ("settle=")) settle = a.substring (7).getIntValue();
         }
         if (reset)
         {
@@ -168,6 +172,7 @@ int main (int argc, char** argv)
             else p->setValueNotifyingHost (v);
         }
         if (reset) plugin->prepareToPlay (fs, block);
+        if (settle > 0) pumpMessages (settle);
 
         const auto in = readF32 (tok[0]);
         const auto sc = scPath.isNotEmpty() ? readF32 (scPath) : std::vector<float>();
