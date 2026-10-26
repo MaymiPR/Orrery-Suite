@@ -8,6 +8,15 @@
 #if defined (__SSE2__) || defined (_M_X64) || defined (_M_AMD64) || (defined (_M_IX86_FP) && _M_IX86_FP >= 2)
  #include <emmintrin.h>
  #define SC_V4_SSE 1
+ #if defined (_M_X64) || defined (_M_AMD64) || defined (__x86_64__)
+  #include <immintrin.h>
+  #define SC_AVX 1               // 8-wide tiles where the processor has AVX (chosen at run time)
+  #if defined (_MSC_VER) && ! defined (__clang__)
+   #define SC_AVX_FN
+  #else
+   #define SC_AVX_FN __attribute__ ((target ("avx")))
+  #endif
+ #endif
 #elif defined (__ARM_NEON) || defined (__ARM_NEON__)
  #include <arm_neon.h>
  #define SC_V4_NEON 1
@@ -19,10 +28,69 @@
 // LearnedModels.h by nulltest/export_models.py).
 // No layer feeds back on itself, so the network runs a block at a time, layer by layer, each loop over time (the
 // loops vectorise); each layer keeps its last `dilation` inputs for the next block. The two matrix products run in
-// tiles of 4 or 2 outputs by 8 samples held in registers (V4), each input loaded once per tile, summing over the
-// inputs in the same order as the plain loops (the same results).
+// tiles of 4 or 2 outputs by 8 samples held in registers (V4; with AVX, by 16 samples in 8-wide registers), each
+// input loaded once per tile, summing over the inputs in the same order as the plain loops (the same results: no
+// fused multiply-adds).
 namespace sc::dsp
 {
+#if SC_AVX
+// the two matrix products of a layer in 8-wide registers (see LearnedWaveNet::block), over nT (a multiple of 16) samples
+SC_AVX_FN inline void waveNetConvAvx (const float* rows, int rowLen, int d, const float* W, const float* B, float* zp, int C, int N, int nT)
+{
+    for (int o = 0; o < 2 * C; o += 4)
+        for (int t = 0; t < nT; t += 16)
+        {
+            __m256 acc[4][2];
+            for (int k = 0; k < 4; ++k) acc[k][0] = acc[k][1] = _mm256_set1_ps (B[o + k]);
+            for (int c = 0; c < C; ++c)
+            {
+                const float* old = rows + c * rowLen + t; const float* now = old + d;
+                const __m256 o0 = _mm256_loadu_ps (old), o1 = _mm256_loadu_ps (old + 8), n0 = _mm256_loadu_ps (now), n1 = _mm256_loadu_ps (now + 8);
+                for (int k = 0; k < 4; ++k)
+                {
+                    const __m256 wo = _mm256_broadcast_ss (W + ((o + k) * C + c) * 2), wn = _mm256_broadcast_ss (W + ((o + k) * C + c) * 2 + 1);
+                    acc[k][0] = _mm256_add_ps (acc[k][0], _mm256_add_ps (_mm256_mul_ps (wo, o0), _mm256_mul_ps (wn, n0)));
+                    acc[k][1] = _mm256_add_ps (acc[k][1], _mm256_add_ps (_mm256_mul_ps (wo, o1), _mm256_mul_ps (wn, n1)));
+                }
+            }
+            for (int k = 0; k < 4; ++k) { _mm256_storeu_ps (zp + (o + k) * N + t, acc[k][0]); _mm256_storeu_ps (zp + (o + k) * N + t + 8, acc[k][1]); }
+        }
+    _mm256_zeroupper();
+}
+
+SC_AVX_FN inline void waveNetResAvx (const float* gp, const float* RW, const float* RB, const float* SW, const float* SB, float* hp, float* sk, int C, int N, int nT)
+{
+    for (int o = 0; o < C; o += 2)
+        for (int t = 0; t < nT; t += 16)
+        {
+            __m256 hacc[2][2], sacc[2][2];
+            for (int k = 0; k < 2; ++k)
+                for (int q = 0; q < 2; ++q)
+                {
+                    hacc[k][q] = _mm256_add_ps (_mm256_loadu_ps (hp + (o + k) * N + t + 8 * q), _mm256_set1_ps (RB[o + k]));
+                    sacc[k][q] = _mm256_add_ps (_mm256_loadu_ps (sk + (o + k) * N + t + 8 * q), _mm256_set1_ps (SB[o + k]));
+                }
+            for (int c = 0; c < C; ++c)
+            {
+                const __m256 g0 = _mm256_loadu_ps (gp + c * N + t), g1 = _mm256_loadu_ps (gp + c * N + t + 8);
+                for (int k = 0; k < 2; ++k)
+                {
+                    const __m256 rw = _mm256_broadcast_ss (RW + (o + k) * C + c), sw = _mm256_broadcast_ss (SW + (o + k) * C + c);
+                    hacc[k][0] = _mm256_add_ps (hacc[k][0], _mm256_mul_ps (rw, g0)); hacc[k][1] = _mm256_add_ps (hacc[k][1], _mm256_mul_ps (rw, g1));
+                    sacc[k][0] = _mm256_add_ps (sacc[k][0], _mm256_mul_ps (sw, g0)); sacc[k][1] = _mm256_add_ps (sacc[k][1], _mm256_mul_ps (sw, g1));
+                }
+            }
+            for (int k = 0; k < 2; ++k)
+                for (int q = 0; q < 2; ++q)
+                {
+                    _mm256_storeu_ps (hp + (o + k) * N + t + 8 * q, hacc[k][q]);
+                    _mm256_storeu_ps (sk + (o + k) * N + t + 8 * q, sacc[k][q]);
+                }
+        }
+    _mm256_zeroupper();
+}
+#endif
+
 // four floats: SSE, NEON, or plain
 struct V4
 {
@@ -109,7 +177,13 @@ private:
     {
         const auto& w = *weights;
         const int C = w.channels, K = (int) w.pre.size(), N = maxBlock;
-        const int n8 = (n + 7) & ~7;        // the tiles run past n to a multiple of 8 (on stale, finite values; unused)
+#if SC_AVX
+        static const bool avx = juce::SystemStats::hasAVX();
+#else
+        constexpr bool avx = false;
+#endif
+        // the tiles run past n to a multiple of their width (on stale, finite values; unused)
+        const int n8 = avx ? (n + 15) & ~15 : (n + 7) & ~7;
         float* up = u.data(); float* hp = h.data(); float* sk = skip.data(); float* zp = z.data(); float* gp = g.data();
         for (int t = 0; t < n; ++t)
         {
@@ -133,6 +207,10 @@ private:
             // the layer's input after its last `d` inputs: row c = [x(t - d) ... x(t - 1) | this block]
             for (int c = 0; c < C; ++c) std::memcpy (rows + c * rowLen + d, hp + c * N, sizeof (float) * (size_t) n);
             const float* W = convS[l].data(); const float* B = w.convB[l].data();
+#if SC_AVX
+            if (avx) waveNetConvAvx (rows, rowLen, d, w.convW[l].data(), B, zp, C, N, n8);
+            else
+#endif
             for (int o = 0; o < 2 * C; o += 4)
                 for (int t = 0; t < n8; t += 8)
                 {
@@ -158,6 +236,10 @@ private:
             }
             const float* RW = resS[l].data(); const float* RB = w.resB[l].data();
             const float* SW = skipS[l].data(); const float* SB = w.skipB[l].data();
+#if SC_AVX
+            if (avx) waveNetResAvx (gp, w.resW[l].data(), RB, w.skipW[l].data(), SB, hp, sk, C, N, n8);
+            else
+#endif
             for (int o = 0; o < C; o += 2)
                 for (int t = 0; t < n8; t += 8)
                 {

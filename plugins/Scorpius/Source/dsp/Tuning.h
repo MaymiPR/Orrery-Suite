@@ -34,16 +34,13 @@ struct Tuning
 
     // the expander (Expander.h): threshold (dBFS peak), gain slope below it, hold window, release time constant
     double expThresholdDb = -58.098, expSlope = 2.028, expHoldMs = 1133.8, expReleaseMs = 207.8;   // (nulltest/fit_exp.py)
-    // harmonics (Harmonics.h), [0] 80 Hz, [1] 50 Hz: the bell's frequency, Q, gain, the high-pass after the clip, the
-    // clip's ceiling and knee (nulltest/fit_harm.py)
-    double harmHz[2] { 111.5166, 69.9423 }, harmQ[2] { 0.3174, 0.3127 }, harmGainDb[2] { 5.8189, 5.843 };
-    double harmHpHz[2] { 20.6772, 20.4059 }, harmCeiling[2] { 1.6403, 1.4107 }, harmKnee[2] { 1.9678, 2.2203 };
 
     // compression (Compressor.h), [0] mode a, [1] mode b: threshold (dBFS of the detector's level), ratio, knee width
     // (dB), detector attack / release (ms), RMS share of the detector (0 = peak follower), gain smoothing (ms, 0 = none)
     double compThresholdDb[2] { -12.818, -12.827 }, compRatio[2] { 4.987, 4.969 }, compKneeDb[2] { 7.391, 7.341 };   // (nulltest/fit_comp.py)
-    double compAttackMs[2] { 1.026, 1.043 }, compReleaseMs[2] { 20.54, 19.746 }, compRms[2] { 0.039, 0.047 };
+    double compAttackMs[2] { 1.027, 1.022 }, compReleaseMs[2] { 19.330, 19.263 }, compRms[2] { 0.0536, 0.050 };   // (timing: fit_comp_hold.py on music)
     double compGainAttackMs[2] { 0.0, 0.0 }, compGainReleaseMs[2] { 0.0, 0.0 };
+    double compGainFirst = 1;                // 1: the gain before the wet filters (the reference), 0: after
 
     // parallels (Parallels.h): each path's weight (its power times its fader's taper) moves linearly over this time
     double parRampMs = 2.0;
@@ -51,7 +48,7 @@ struct Tuning
     double subGain = 1.995, subLowPassHz = 140.207, subHighPassHz = 15.003;
     // loud: the gain (dB) at detector levels -72, -66, ..., +12 dBFS, the detector's attack, release and RMS share
     double loudCurve[15] { 8.994, 7.202, 6.544, 5.723, 5.030, 4.409, 3.839, 3.332, 2.879, 2.479, 1.845, 0.903, 0.473, -0.3, 0.197 };   // (nulltest/fit_loud.py)
-    double loudAttackMs = 0.6695, loudReleaseMs = 12.896, loudRms = 0.0096;
+    double loudAttackMs = 0.0031, loudReleaseMs = 9.938, loudRms = 0.0008;   // (timing: nulltest/fit_loud_timing.py)
     // low: the detector low-pass (Hz, order), the flip-flop's hysteresis, its envelope (attack / release, ms), gain, the
     // output low-pass (Hz, order), the square term after it and the soft limit (nulltest/fit_low2.py)
     double lowDetHz = 216.7, lowDetOrder = 6, lowHysteresis = 1.0e-7, lowAttackMs = 0.05347, lowReleaseMs = 49.633,
@@ -68,12 +65,10 @@ struct Tuning
                                                          { "loudAttackMs", &loudAttackMs }, { "loudReleaseMs", &loudReleaseMs }, { "loudRms", &loudRms },
                                                          { "lowDetHz", &lowDetHz }, { "lowDetOrder", &lowDetOrder }, { "lowHysteresis", &lowHysteresis },
                                                          { "lowAttackMs", &lowAttackMs }, { "lowReleaseMs", &lowReleaseMs }, { "lowGain", &lowGain },
-                                                         { "lowOutHz", &lowOutHz }, { "lowOutOrder", &lowOutOrder }, { "lowSquare", &lowSquare }, { "lowCeiling", &lowCeiling } };
+                                                         { "compGainFirst", &compGainFirst }, { "lowOutHz", &lowOutHz }, { "lowOutOrder", &lowOutOrder }, { "lowSquare", &lowSquare }, { "lowCeiling", &lowCeiling } };
         static const char* loudKeys[15] { "loud0", "loud1", "loud2", "loud3", "loud4", "loud5", "loud6", "loud7", "loud8", "loud9", "loud10",
                                           "loud11", "loud12", "loud13", "loud14" };
         for (int k = 0; k < 15; ++k) e.push_back ({ loudKeys[k], &loudCurve[k] });
-        static const char* harmKeys[2][6] { { "harm80.hz", "harm80.q", "harm80.gain", "harm80.hp", "harm80.ceil", "harm80.knee" },
-                                            { "harm50.hz", "harm50.q", "harm50.gain", "harm50.hp", "harm50.ceil", "harm50.knee" } };
         static const char* compKeys[2][8] { { "compA.thresh", "compA.ratio", "compA.knee", "compA.attack", "compA.release", "compA.rms", "compA.gAttack", "compA.gRelease" },
                                             { "compB.thresh", "compB.ratio", "compB.knee", "compB.attack", "compB.release", "compB.rms", "compB.gAttack", "compB.gRelease" } };
         for (int m = 0; m < 2; ++m)
@@ -81,11 +76,6 @@ struct Tuning
             double* v[8] { &compThresholdDb[m], &compRatio[m], &compKneeDb[m], &compAttackMs[m], &compReleaseMs[m], &compRms[m],
                            &compGainAttackMs[m], &compGainReleaseMs[m] };
             for (int k = 0; k < 8; ++k) e.push_back ({ compKeys[m][k], v[k] });
-        }
-        for (int m = 0; m < 2; ++m)
-        {
-            double* v[6] { &harmHz[m], &harmQ[m], &harmGainDb[m], &harmHpHz[m], &harmCeiling[m], &harmKnee[m] };
-            for (int k = 0; k < 6; ++k) e.push_back ({ harmKeys[m][k], v[k] });
         }
         static const char* bandKeys[5][7] { { "eq0.hz", "eq0.q", "eq0.kind", "eq0.scale", "eq0.hp", "eq0.hpq", "eq0.ceil" },
                                             { "eq1.hz", "eq1.q", "eq1.kind", "eq1.scale", "eq1.hp", "eq1.hpq", "eq1.ceil" },

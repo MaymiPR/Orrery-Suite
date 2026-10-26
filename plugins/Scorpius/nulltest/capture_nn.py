@@ -2,7 +2,7 @@
 demo track, pink noise and log sweeps at many levels, rendered through the reference with only that module on.
 Saved (local, git-ignored) to measurements/scorpius/nn/<case>.npz: x (input, mono), y (output), and which pieces
 are held out for validation.
-    python capture_nn.py [case ...]      cases: drive_a drive_b drive_c drive_a_hp ... lift grit
+    python capture_nn.py [case ...]      cases: drive_a drive_b drive_c drive_a_hp ... lift harm80 harm50 grit
 Grit is captured on the left channel alone (the right silent): it works on each channel by itself, except that on
 input whose channels are exactly equal and near full scale it behaves differently (MEASUREMENTS.md 9)."""
 import os, sys
@@ -40,6 +40,8 @@ def pieces():
 
 CASES = {f'drive_{c}{"_hp" if hp else ""}': dict(params=o.ONLY('drive', hipass=hp), hidden={'drive.driveMode': c}) for c in 'abc' for hp in (0, 1)}
 CASES['lift'] = dict(params={**o.ONLY('lift'), 'Lift Amount': 1})
+CASES['harm80'] = dict(params={**o.ONLY('harm'), 'Harm Amount': 1.0, 'Harm Freq': 80})
+CASES['harm50'] = dict(params={**o.ONLY('harm'), 'Harm Amount': 1.0, 'Harm Freq': 50})
 CASES['grit'] = dict(params={**o.NONE, 'Par Grit On/Off': 1, 'Par Grit Level': 1.0}, left=True)
 
 if __name__ == '__main__':

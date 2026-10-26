@@ -27,6 +27,7 @@ local (git-ignored).
 | parallel me in | -21.2 | -31.1 | -15.9 | -24.5 |
 | top of the morning | -32.9 | -36.6 | -33.4 | -35.1 |
 | all off, 48 kHz | exact | exact | exact | exact |
+| start me up with the drive off (the rest of the chain) | -43.8 | -47.4 | -41.4 | -44.4 |
 | all off, 44.1 kHz | -51.5 | -51.5 | -63.7 | -63.7 |
 
 ## Module by module
@@ -38,10 +39,10 @@ Each module alone (the others off with the reference's own power buttons), on th
 | EQ, one band at +6 dB | -55 … -67 |
 | EQ, all bands at +4 dB | -46 … -48 |
 | sub | -65 … -72 |
-| harmonics | -41 … -50 |
-| compression | -44 (drums) / -46 (track), mean |
-| loud | -41, mean |
-| lift (learned) | -31 … -48 |
+| harmonics (learned), amount 0.8 / 1 | -46 … -52 / -51 … -68 |
+| compression, mode b / a | -47.5 … -58 / -40 … -50 |
+| loud, level 1 | -31 … -39 |
+| lift (learned) | -41 … -50 |
 | drive colour c (learned) | -21 … -34 |
 | drive colour a (learned) | -16 … -31 |
 | grit (learned), level 1 / 0.731 | -27 … -31 / -33 … -37 |
@@ -55,6 +56,8 @@ dB (hi-pass on / off), colour b -31.7 / -31.4, colour c -33.4 / -32.9.
 
 - **The fixed parts are close to exact** (EQ, sub, the rate converters: -50 to -70 dB): these are the reference's own
   filters, identified from its responses.
+- **Everything but the drive** nulls at -41 … -47 dB together (the default preset with the drive off): the
+  compressor applies its gain before its filters (as the reference), lift and harmonics are learned.
 - **The whole plug-in is limited by the drive**, which the reference runs as a learned model of its own and which
   Scorpius learns from the reference's input and output: on loud program material the default preset nulls at about
   -16 to -21 dB, 12 dB lower at -25 to -31 dB. Colour c, which Scorpius models best, takes the chain to -21 … -39.

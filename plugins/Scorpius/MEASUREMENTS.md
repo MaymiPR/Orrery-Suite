@@ -233,10 +233,19 @@ down more of how it is built:
 - **Sub** (`fit_sub3.py`): the path is the chain's output doubled, through a 6th-order Butterworth low-pass at 140 Hz
   and high-pass at 15 Hz.
 - **Harmonics** (`fit_harmlin.py`, `fit_harm.py`): the same pattern as an EQ band: a wide bell (Q 0.32, +5.8 dB) at
-  1.4 times the chosen frequency (112 / 70 Hz), its boost soft-clipped and then high-passed at 20 Hz.
+  1.4 times the chosen frequency (112 / 70 Hz), its boost soft-clipped and then high-passed at 20 Hz. That structure
+  nulls at −43 … −48 dB; Scorpius now learns the fully wet process instead (`capture_nn.py harm80 / harm50`, amount
+  1; a WaveNet as the drive's: −62 / −63 dB on held-out pieces, against −50 for an LSTM of the reference's own size,
+  24 units) and mixes it by the measured amount weights. The amount is not quite a mix: the output at amount a is
+  (1 − w) x + w wet (+0.4 % of x) with w = 0.105 / 0.21 / 0.37 / 0.52 / 0.72 / 0.86 at a = 0.9 … 0.15, leaving
+  −31 … −53 dB re the contribution that no filters on the two terms explain (the amount changes the processing).
 - **Compression** (`fit_comp.py`): a feed-forward compressor on the mid signal: threshold −12.8 dBFS (detector level),
   ratio 5.0, knee 7.3 dB, detector attack 1.0 ms and release 20 ms (nearly a peak follower: 4 % RMS); the wet path's
   fixed shelving is a vector fit. Modes a and b fit the same constants; they differ in their wet filters (make-up).
+  **The gain comes before the wet filters**, not after (`fit_comp_timing.py`): the two agree on steady tones but
+  not when the gain moves fast through the filters' low cut (a kick's attack): loud drums −30.5 → −47.5 dB (mode
+  b), −29.7 → −40.2 (a). Neither a hold before the release, a detector low shelf, feedback from the output nor a
+  detector high-pass helps further.
 - **Low** (`fit_low2.py`): a subharmonic synthesizer, an octave below the bass: an **octave divider times an
   envelope**. On a steady tone its contribution is a square wave at half the frequency whose height follows the
   tone's level (at 25 Hz: −0.9 x the tone's amplitude for one cycle, +0.9 for the next), not the input times ±1 (the
@@ -266,7 +275,9 @@ down more of how it is built:
 - **Grit after compression:** on stereo material grit inside the chain is not the reference's grit applied to the
   compressor's output (−6 … −11 dB re its contribution; exact for identical channels), nor to its input, nor to
   its mid or swapped channels. Matters little: the factory presets with both use grit at 0.189.
-- **Loud** (`fit_loud.py`): its gain against a fast mid-signal detector (attack 0.7 ms, release 13 ms) as a table.
+- **Loud** (`fit_loud.py`): its gain against a fast mid-signal detector as a table; the detector is a peak follower
+  with an instant attack and a 9.9 ms release (`fit_loud_timing.py`, on level steps and music: the parallel's
+  error re its contribution −9 … −16 → −19 dB).
 - **The expander** (`fit_exp.py`): threshold −58.1 dBFS (peak of the last 1.13 s), 2.03 dB of gain per dB below,
   closing with a 208 ms time constant; at the start of playback it takes the signal's own level.
 - **Rates** (`Resampler.h`): the reference's round trip delays 27.0 / 31.0 / 48.742 / 51.1 / 81.461 / 87.085 samples
@@ -277,14 +288,21 @@ down more of how it is built:
   short-memory network reproduces them; the drive's peaks wander irregularly far above full scale. Scorpius learns
   its own models of them from 174 s of program material per setting (`capture_nn.py`): the drive a small WaveNet
   (8 channels, 12 layers of dilations 1 … 2048, `train_wn.py`), one per colour and hi-pass setting (the hi-pass
-  changes the drive's sound on music by more than its low cut suggests), lift's wet path a GRU of 16 units
-  (`train_gru.py`), each between a learned short FIR and a learned 8192-tap FIR. Trained on the GPU when there is
-  one. On held-out pieces up to +4 dBFS peak the drive's models null at −25 (colour a) to −33 dB (c), most of what
-  is left below 250 Hz; more channels or layers gain only ~1 dB (16 channels: −25.5 against −24.6 for colour a).
+  changes the drive's sound on music by more than its low cut suggests), lift's wet path a WaveNet too (−46.4 dB on held-out pieces, a GRU of 16 units
+  −39.8), each between a learned short FIR and a learned 8192-tap FIR. Trained on the GPU when there is one. On
+  held-out pieces up to +4 dBFS peak the drive's models null at −25 (colour a) to −33 dB (c). On the loud mastered
+  track the drive's error is broadband (−11 … −20 dB in every band), the same in loud and quiet passages, as large as
+  the signal in its quietest samples: dense intermodulation the model gets slightly wrong. The reference's drive is
+  time-invariant (a time-shifted input nulls at −67 dB) and does not depend on the block size, so better is
+  possible. What does not help colour a: more channels or layers (16 channels −25.5 against −24.6), a longer
+  memory (dilations to 8192 or 32768, 0.34 / 1.4 s: −24.1 / −24.0), slow envelopes of the input as extra inputs
+  (10 ms … 1 s: −23.8), a long pre-filter (−24.2), LSTMs (1 x 24: −19.7; 3 x 16 / 3 x 24: −20.5 / −21.0 after 20k
+  steps). The reference's binary names its neural models (RESEARCH.md: "NLS Buss Drive A … LSTM_3_LAYER", other "NLS
+  Buss" LSTMs of 2 layers, "Black Box", "Decapitator", "Shadow Hills" of 1): drive colour a is very likely a 3-layer
+  LSTM; ours do not train as well as the WaveNet yet.
 
 ## Open
 
-- The drive's low-frequency error (colour a especially: after a level step its output's slow swing differs for
-  ~100 ms; a longer pre-filter (1024 / 4096 taps) does not help: −24.2 dB), which crossings the low path's flip-flop
-  counts on music, its soft limit on loud bass, grit after the compressor on stereo material, the converters above
-  48 kHz.
+- The drive (colour a especially; all of the default preset's error), harmonics' amount law, compression mode a on
+  drums (−40 against b's −48), which crossings the low path's flip-flop counts on music, its soft limit on loud
+  bass, grit after the compressor on stereo material, the converters above 48 kHz.

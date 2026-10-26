@@ -34,9 +34,10 @@ private:
     std::vector<std::array<double, 2>> state;
 };
 
-// Compression (MEASUREMENTS.md 8): the wet path is the input through a fixed filter (its make-up and gentle shelving,
-// fitted) times a gain from a fast detector on the mid signal: a soft knee, ratio ~5:1. The amount mixes it with the
-// dry signal exactly. Modes a and b have their own constants (nulltest/fit_comp.py).
+// Compression (MEASUREMENTS.md 8, 14): the wet path is the input times a gain from a fast detector on the mid signal
+// (a soft knee, ratio ~5:1), then a fixed filter (its make-up and gentle shelving, fitted): the gain before the filter,
+// as the reference. The amount mixes it with the dry signal exactly. Modes a and b have their own constants
+// (nulltest/fit_comp.py, fit_comp_timing.py).
 class Compressor
 {
 public:
@@ -61,6 +62,7 @@ public:
         const double gAtt = t.compGainAttackMs[m] > 0 ? std::exp (-1.0 / (t.compGainAttackMs[m] * 0.001 * fs)) : 0.0;
         const double gRel = t.compGainReleaseMs[m] > 0 ? std::exp (-1.0 / (t.compGainReleaseMs[m] * 0.001 * fs)) : 0.0;
         const double T = t.compThresholdDb[m], R = t.compRatio[m], W = std::max (0.01, t.compKneeDb[m]), rms = t.compRms[m];
+        const bool first = t.compGainFirst > 0.5;
         double most = 0;
         for (int i = 0; i < n; ++i)
         {
@@ -75,7 +77,9 @@ public:
             gainDb = target > gainDb ? target + (gainDb - target) * gAtt : target + (gainDb - target) * gRel;
             most = std::max (most, gainDb);
             const double g = std::pow (10.0, -gainDb / 20.0);
-            const double wl = wet[m][0].process (l[i]) * g, wr = wet[m][1].process (r[i]) * g;
+            // the gain before the wet filters, as the reference (MEASUREMENTS.md 14); after them is the option
+            const double wl = first ? wet[m][0].process (l[i] * g) : wet[m][0].process (l[i]) * g;
+            const double wr = first ? wet[m][1].process (r[i] * g) : wet[m][1].process (r[i]) * g;
             const double am = amount.next();
             l[i] += am * (wl - l[i]);
             r[i] += am * (wr - r[i]);

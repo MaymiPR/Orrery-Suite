@@ -13,10 +13,10 @@ void Engine::prepare (double sampleRate, int maxBlock)
     loud.prepare (fs);
     low.prepare (fs);
     grit.prepare (maxBlock);
-    harm.prepare (fs);
+    harm.prepare (maxBlock);
     comp.prepare (fs);
     drive.prepare();
-    lift.prepare();
+    lift.prepare (maxBlock);
     expander.prepare (fs);
     for (auto* a : { &harmAmount, &compAmount, &liftAmount }) a->setLength ((int) std::lround (tuning().amountRampMs * 0.001 * fs));
     for (auto& w : parWeight) w.setLength ((int) std::lround (tuning().parRampMs * 0.001 * fs));

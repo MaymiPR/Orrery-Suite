@@ -15,7 +15,9 @@ KPRE, KPOST, SEG, GWARM, BATCH = 64, 8192, 2048, int(os.environ.get("GWARM", 512
 torch.set_num_threads(int(os.environ.get("THREADS", max(1, os.cpu_count() // 2))))
 DEV = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 torch.backends.cudnn.allow_tf32 = torch.backends.cuda.matmul.allow_tf32 = False    # (full float precision, as on the CPU)
-torch.backends.cudnn.enabled = False     # (cuDNN rejects these GRUs on this GPU; PyTorch's own kernels run them)
+torch.backends.cudnn.enabled = os.environ.get("CUDNN", "1") == "1"   # (CUDNN=0: PyTorch's own kernels, e.g. for sequences cuDNN rejects)
+CELL = os.environ.get("CELL", "gru")       # gru or lstm (the NAM models in the reference are LSTMs)
+RNN_LAYERS = int(os.environ.get("LAYERS", 1))   # stacked layers (the reference names an 'LSTM_3_LAYER' drive model)
 
 
 class Model(torch.nn.Module):
@@ -24,12 +26,19 @@ class Model(torch.nn.Module):
         pre = torch.zeros(KPRE); pre[0] = 1.0
         self.pre = torch.nn.Parameter(pre)
         self.post = torch.nn.Parameter(torch.tensor(post_init[:KPOST], dtype=torch.float32))
-        self.gru = torch.nn.GRU(1, hidden, batch_first=True)
+        self.gru = (torch.nn.LSTM if CELL == 'lstm' else torch.nn.GRU)(1, hidden, num_layers=RNN_LAYERS, batch_first=True)
         self.out = torch.nn.Linear(hidden, 1)
         with torch.no_grad(): self.out.weight.zero_(); self.out.bias.zero_()
 
     def core(self, u):                      # (batch, n) -> (batch, n)
-        h, _ = self.gru(u.contiguous().unsqueeze(-1))
+        x = u.contiguous().unsqueeze(-1)
+        if x.shape[1] <= 16384:
+            h, _ = self.gru(x)
+        else:                               # long pieces in chunks, the state carried (cuDNN rejects long sequences)
+            hs, state = [], None
+            for k in range(0, x.shape[1], 8192):
+                hk, state = self.gru(x[:, k:k + 8192].contiguous(), state); hs.append(hk)
+            h = torch.cat(hs, 1)
         return u + self.out(h).squeeze(-1)
 
     def forward(self, x, gru_from=0):
@@ -44,7 +53,7 @@ class Model(torch.nn.Module):
 def train(case, steps, hidden):
     xs, ys, valid = load(case)
     keep = [i for i, x in enumerate(xs) if 20 * np.log10(np.abs(x).max() + 1e-9) <= MAXPEAK]
-    if case == 'grit':
+    if irname_of(case) is None:
         h = np.zeros(KPOST, np.float32); h[0] = 1.0
     else:
         h = np.load(os.path.join(IR, irname_of(case) + '.npy'))[0].astype(np.float32)
@@ -90,5 +99,5 @@ if __name__ == '__main__':
     model, xs, ys, valid, keep = train(case, steps, hidden)
     n = evaluate(model, xs, ys, valid, keep)
     print(case, f'hidden {hidden}', 'validation nulls', ' '.join('%d:%.1f' % v for v in n), 'mean %.1f' % np.mean([v for _, v in n]))
-    torch.save(dict(state={k: v.cpu() for k, v in model.state_dict().items()}, hidden=hidden),
-               os.path.join(NN, case + f'_gru{hidden}' + os.environ.get('TAG', '') + '.pt'))
+    torch.save(dict(state={k: v.cpu() for k, v in model.state_dict().items()}, hidden=hidden, cell=CELL, layers=RNN_LAYERS),
+               os.path.join(NN, case + f'_{CELL}{RNN_LAYERS}x{hidden}' + os.environ.get('TAG', '') + '.pt'))

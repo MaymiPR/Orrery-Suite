@@ -14,17 +14,31 @@ from train_wh import fftconv, NN, IR, load
 
 FS = 48000
 KPRE, KPOST, SEG, BATCH = int(os.environ.get("KPRE", 64)), 8192, 4096, 16
+STACK = int(os.environ.get("STACK", 12))
+# FEAT: time constants (ms) of slow envelopes of the input, one-pole averages of |x|, given to the network as extra
+# inputs (memory far beyond its receptive field, cheap to compute in the plug-in), e.g. FEAT=10,50,200,1000
+FEAT = [float(v) for v in os.environ.get("FEAT", "").split(",") if v]
 MAXPEAK = 4.0          # dBFS: training and validation pieces up to this peak
 torch.set_num_threads(int(os.environ.get("THREADS", max(1, os.cpu_count() // 2))))
 DEV = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 torch.backends.cudnn.allow_tf32 = torch.backends.cuda.matmul.allow_tf32 = False    # (full float precision, as on the CPU)
 
 
+def features(x):
+    """the slow envelopes of x (FEAT), (len(FEAT), n), float32"""
+    import scipy.signal as sg
+    out = []
+    for ms in FEAT:
+        a = np.exp(-1.0 / (ms * 0.001 * FS))
+        out.append(sg.lfilter([1 - a], [1, -a], np.abs(x.astype(np.float64))))
+    return np.array(out, np.float32).reshape(len(FEAT), len(x))
+
+
 class WaveNet(torch.nn.Module):
-    def __init__(self, ch=8, layers=10):
+    def __init__(self, ch=8, layers=10, nfeat=0):
         super().__init__()
-        self.dil = [2 ** (i % 12) for i in range(layers)]
-        self.inp = torch.nn.Conv1d(1, ch, 1)
+        self.dil = [2 ** (i % STACK) for i in range(layers)]     # (STACK: dilations 1 ... 2^(STACK-1), repeated)
+        self.inp = torch.nn.Conv1d(1 + nfeat, ch, 1)
         self.conv = torch.nn.ModuleList([torch.nn.Conv1d(ch, 2 * ch, 2, dilation=d) for d in self.dil])
         self.res = torch.nn.ModuleList([torch.nn.Conv1d(ch, ch, 1) for _ in self.dil])
         self.skip = torch.nn.ModuleList([torch.nn.Conv1d(ch, ch, 1) for _ in self.dil])
@@ -32,8 +46,8 @@ class WaveNet(torch.nn.Module):
         with torch.no_grad(): self.out.weight.zero_(); self.out.bias.zero_()
         self.rf = sum(self.dil) + 1
 
-    def forward(self, u):                     # (batch, n) -> (batch, n), causal
-        h = self.inp(u.unsqueeze(1)); s = 0
+    def forward(self, u, f=None):             # (batch, n), features (batch, nfeat, n) -> (batch, n), causal
+        h = self.inp(u.unsqueeze(1) if f is None else torch.cat([u.unsqueeze(1), f], 1)); s = 0
         for d, conv, res, skip in zip(self.dil, self.conv, self.res, self.skip):
             z = conv(torch.nn.functional.pad(h, (d, 0)))
             a, b = z.chunk(2, 1)
@@ -48,11 +62,11 @@ class Model(torch.nn.Module):
         pre = torch.zeros(KPRE); pre[0] = 1.0
         self.pre = torch.nn.Parameter(pre)
         self.post = torch.nn.Parameter(torch.tensor(post_init[:KPOST], dtype=torch.float32))
-        self.wn = WaveNet(ch, layers)
+        self.wn = WaveNet(ch, layers, len(FEAT))
 
-    def forward(self, x):
+    def forward(self, x, f=None):
         u = fftconv(x, self.pre)
-        return fftconv(u + self.wn(u), self.post)
+        return fftconv(u + self.wn(u, f), self.post)
 
 
 def train(case, steps, irname, ch, layers):
@@ -64,22 +78,29 @@ def train(case, steps, irname, ch, layers):
         h = np.load(os.path.join(IR, irname + '.npy'))[0].astype(np.float32)
     model = Model(h, ch, layers).to(DEV)
     train_idx = [i for i in keep if not valid[i]]
+    if os.environ.get('KINDS'):          # (KINDS=track,drums: train on those kinds of material only)
+        kinds = np.load(os.path.join(NN, case + '.npz'), allow_pickle=True)['kind']
+        train_idx = [i for i in train_idx if kinds[i] in os.environ['KINDS'].split(',')]
     opt = torch.optim.Adam([{'params': [model.pre, model.post], 'lr': 1e-4}, {'params': model.wn.parameters(), 'lr': 2e-3}])
     sched = torch.optim.lr_scheduler.OneCycleLR(opt, max_lr=[1e-4, 3e-3], total_steps=steps)
     rng = np.random.default_rng(1)
     warm = KPRE + KPOST + model.wn.rf
+    train_idx = [i for i in train_idx if len(xs[i]) > warm + SEG]   # (long memories need long pieces)
+    F = [features(x) for x in xs] if FEAT else None
     t0 = time.time()
     for step in range(steps):
-        xb, yb, wb = [], [], []
+        xb, yb, wb, fb = [], [], [], []
         for _ in range(BATCH):
             i = train_idx[rng.integers(len(train_idx))]
             x, y = xs[i], ys[i]
             start = rng.integers(warm, len(x) - SEG)
             xb.append(x[start - warm:start + SEG]); yb.append(y[start:start + SEG])
+            if F is not None: fb.append(F[i][:, start - warm:start + SEG])
             wb.append(1.0 / max(1e-6, float(np.mean(y[start:start + SEG] ** 2))))
         xb = torch.tensor(np.array(xb), device=DEV); yb = torch.tensor(np.array(yb), device=DEV)
         wb = torch.tensor(wb, dtype=torch.float32, device=DEV)
-        out = model(xb)[:, warm:]
+        fb = torch.tensor(np.array(fb), device=DEV) if F is not None else None
+        out = model(xb, fb)[:, warm:]
         loss = (((out - yb) ** 2).mean(1) * wb).mean()
         opt.zero_grad(); loss.backward(); torch.nn.utils.clip_grad_norm_(model.parameters(), 1.0); opt.step(); sched.step()
         if step % 500 == 0 or step == steps - 1:
@@ -92,14 +113,15 @@ def evaluate(model, xs, ys, valid, keep, all_=False):
     with torch.no_grad():
         for i, (x, y, v) in enumerate(zip(xs, ys, valid)):
             if i not in keep or (not v and not all_): continue
-            out = model(torch.tensor(x[None], device=DEV))[0].cpu().numpy()
+            f = torch.tensor(features(x)[None], device=DEV) if FEAT else None
+            out = model(torch.tensor(x[None], device=DEV), f)[0].cpu().numpy()
             res.append((i, o.null_db(y[None], out[None])))
     return res
 
 
 def irname_of(case):
     if case == 'lift': return 'lift_1.0'
-    if case == 'grit': return None
+    if case == 'grit' or case.startswith('harm'): return None
     return f'drive_{case[6]}_hp{1 if case.endswith("_hp") else 0}'
 
 
@@ -109,4 +131,4 @@ if __name__ == '__main__':
     model, xs, ys, valid, keep = train(case, steps, irname_of(case), ch, layers)
     n = evaluate(model, xs, ys, valid, keep)
     print(case, f'ch {ch} layers {layers}', 'validation nulls', ' '.join('%d:%.1f' % v for v in n), 'mean %.1f' % np.mean([v for _, v in n]))
-    torch.save(dict(state={k: v.cpu() for k, v in model.state_dict().items()}, ch=ch, layers=layers), os.path.join(NN, case + '_wn' + os.environ.get('TAG', '') + '.pt'))
+    torch.save(dict(state={k: v.cpu() for k, v in model.state_dict().items()}, ch=ch, layers=layers, dil=model.wn.dil, feat=FEAT), os.path.join(NN, case + '_wn' + os.environ.get('TAG', '') + '.pt'))

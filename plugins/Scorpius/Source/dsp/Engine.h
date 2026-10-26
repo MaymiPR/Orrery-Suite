@@ -3,7 +3,6 @@
 #include <vector>
 #include "Eq.h"
 #include "Parallels.h"
-#include "Harmonics.h"
 #include "Expander.h"
 #include "Compressor.h"
 #include "LearnedModules.h"
