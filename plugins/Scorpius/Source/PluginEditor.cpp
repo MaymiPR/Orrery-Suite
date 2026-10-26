@@ -447,14 +447,15 @@ void ScorpiusEditor::timerCallback()
     const int blocks = proc.blocksProcessed.load();
     const bool running = blocks != lastBlocks;
     lastBlocks = blocks;
-    const float pk = running ? jmax (inMeter[0].rawPeakDb, inMeter[1].rawPeakDb) : -200.0f;
-    // the circles follow the lows and the mids (Visuals.h)
-    harmBlob.update (running ? proc.visuals.takeLows() : 0.0f, dt);
-    liftBlob.update (running ? proc.visuals.takeMids() : 0.0f, dt);
-    stripe.setStyle (proc.particleStyle.load() == 0 ? sc::Stripe::Style::orion : sc::Stripe::Style::scorpius);
-    float bands[sc::Sky::numBands];
-    proc.visuals.takeBands (bands);
-    stripe.setInput (pk, running, proc.animation.load(), bands);
+    // (hosts with long buffers, FL Studio's among them, deliver audio less often than this clock runs: a frame without
+    // a new block is not a stop until 0.1 s have passed without one)
+    idleSeconds = running ? 0.0f : idleSeconds + dt;
+    const bool playing = idleSeconds < 0.1f;
+    // the circles follow the lows and the mids (Visuals.h; a frame without a new spectrum keeps the last one)
+    auto spectrum = [playing] (float fresh, float& last) { if (fresh > 0.0f || ! playing) last = fresh; return last; };
+    harmBlob.update (spectrum (proc.visuals.takeLows(), lastLows), dt);
+    liftBlob.update (spectrum (proc.visuals.takeMids(), lastMids), dt);
+    stepStripe (playing, dt);
     // only the meters change on this clock (the rest repaints when it changes)
     content.repaint (0, 36, (int) columnX[0], 236);
     content.repaint ((int) columnX[4] + 1, 36, (int) (designW - columnX[4]), 236);
@@ -474,13 +475,23 @@ void ScorpiusEditor::sampleReadouts()
     for (int i = 0; i < 4; ++i) meters[i]->sampleRms (*taps[i], running);
 }
 
-void ScorpiusEditor::filmStep (double now, float inputPeakDb)
+// the stripe's light follows the processor's level (dsp/Light.h); when the host stops calling the processor the level
+// stays where it was, so the editor lets it fall as after a stop
+void ScorpiusEditor::stepStripe (bool playing, float dt)
+{
+    if (playing) lightDb = proc.light.levelDb();
+    else lightDb = jmax (-200.0f, lightDb - sc::Light::releaseDbPerSec * dt);
+    const int beats = proc.light.beatCount();
+    const bool beat = beats != lastBeats;
+    lastBeats = beats;
+    stripe.setStyle (proc.particleStyle.load() == 0 ? sc::Stripe::Style::orion : sc::Stripe::Style::scorpius);
+    stripe.setInput (lightDb, beat, proc.animation.load());
+}
+
+void ScorpiusEditor::filmStep (double now)
 {
     stripe.clock = [now] { return now; };
-    float bands[sc::Sky::numBands];
-    proc.visuals.takeBands (bands);
-    stripe.setStyle (proc.particleStyle.load() == 0 ? sc::Stripe::Style::orion : sc::Stripe::Style::scorpius);
-    stripe.setInput (inputPeakDb, true, proc.animation.load(), bands);
+    stepStripe (true, 0.025f);
 }
 
 void ScorpiusEditor::setTestLevels (float inDb, float outDb, bool audio)
@@ -493,7 +504,7 @@ void ScorpiusEditor::setTestLevels (float inDb, float outDb, bool audio)
     harmBlob.freeze (audio ? Decibels::decibelsToGain (inDb - 3.0f) : 0.0f);
     liftBlob.freeze (audio ? Decibels::decibelsToGain (inDb - 8.0f) : 0.0f);
     stripe.setStyle (proc.particleStyle.load() == 0 ? sc::Stripe::Style::orion : sc::Stripe::Style::scorpius);
-    if (audio && proc.animation.load()) stripe.freeze (jlimit (0.0f, 1.0f, (inDb + 67.5f) / 27.5f));
+    if (audio && proc.animation.load()) stripe.freeze (sc::Stripe::brightness (inDb));
     content.repaint();
 }
 

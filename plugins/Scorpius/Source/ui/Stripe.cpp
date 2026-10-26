@@ -26,6 +26,18 @@ constexpr Tint palette[] {
 constexpr Tint flareTints[] {
     { 1.00f, 0.95f, 0.80f, 0.25f }, { 1.00f, 0.90f, 0.35f, 0.25f }, { 0.25f, 0.88f, 1.00f, 0.20f },
     { 1.00f, 0.60f, 0.15f, 0.12f }, { 1.00f, 0.25f, 0.25f, 0.08f }, { 0.70f, 0.50f, 1.00f, 0.10f } };
+// ours (SCORPIUS): warm in the middle (Antares crimson, red-orange, amber, warm white), cool towards the ends (the
+// controls' mint, teal, ice blue, white); the stars that flare
+constexpr Tint warmTints[] { { 1.00f, 0.13f, 0.07f, 0.25f }, { 1.00f, 0.32f, 0.06f, 0.25f }, { 1.00f, 0.62f, 0.12f, 0.30f },
+                             { 1.00f, 0.88f, 0.74f, 0.20f } };
+constexpr Tint coolTints[] { { 0.42f, 1.00f, 0.72f, 0.35f }, { 0.08f, 0.86f, 0.80f, 0.30f }, { 0.58f, 0.84f, 1.00f, 0.20f },
+                             { 0.94f, 0.98f, 1.00f, 0.15f } };
+constexpr Tint starTints[] { { 0.88f, 0.96f, 1.00f, 0.40f }, { 0.42f, 1.00f, 0.72f, 0.30f }, { 1.00f, 0.25f, 0.10f, 0.15f },
+                             { 1.00f, 0.70f, 0.25f, 0.15f } };
+constexpr float heartX = 455.0f;                               // the middle of the band (where the flares gather)
+// how warm a place is: 1 at the heart, 0 at the ends
+float warmth (float x) { return std::pow (1.0f - jlimit (0.0f, 1.0f, std::abs (x - heartX) / 420.0f), 1.3f); }
+
 constexpr int numParticles = 1700, numFlares = 10;
 constexpr float lanes[] { 289.1f, 291.6f, 294.25f, 302.5f };   // the rows the band's dashes keep to (the last one less)
 // where the reference's particles are (local maxima per frame, measured): along the stripe in bins of 18.5 design px
@@ -86,9 +98,9 @@ void Stripe::spawn (Particle& p, double now, bool anyAge)
     if (p.kind == Kind::flare)
     {
         // a flare: a narrow bar that swells to its height and shrinks again while it slides sideways
-        const auto& t = pick (rng, flareTints);
-        p.r = t.r; p.g = t.g; p.b = t.b;
         p.x = jlimit (40.0f, 840.0f, 455.0f + 190.0f * gauss (rng));
+        const auto& t = style == Style::scorpius ? pick (rng, starTints) : pick (rng, flareTints);
+        p.r = t.r; p.g = t.g; p.b = t.b;
         p.y = 287.0f + 4.0f * gauss (rng);              // (mostly a little above the band)
         p.vx = (rng.nextBool() ? 1.0f : -1.0f) * uniform (rng, 40.0f, 180.0f);
         p.vy = 0.0f;
@@ -100,9 +112,10 @@ void Stripe::spawn (Particle& p, double now, bool anyAge)
         p.flicker = 0.0f; p.rate = 0.0f;
         return;
     }
-    const auto& t = pick (rng, palette);
-    p.r = t.r; p.g = t.g; p.b = t.b;
     p.x = fromBins (rng, alongBins, 0.0f, 18.5f);
+    const auto& t = style == Style::orion ? pick (rng, palette)
+                  : rng.nextFloat() < 0.08f + 0.84f * warmth (p.x) ? pick (rng, warmTints) : pick (rng, coolTints);
+    p.r = t.r; p.g = t.g; p.b = t.b;
     // a dense layer of short dashes through the band (on its lanes or between them), the rest spread across as
     // measured: dots, faint dots and round blobs
     const float u = rng.nextFloat();
@@ -116,6 +129,7 @@ void Stripe::spawn (Particle& p, double now, bool anyAge)
     {
         const float v = rng.nextFloat();
         p.kind = v < 0.64f ? Kind::dot : v < 0.94f ? Kind::faint : Kind::blob;
+        if (style == Style::scorpius && p.kind == Kind::blob && rng.nextFloat() < 0.6f) p.kind = Kind::star;   // (ours)
         p.y = fromBins (rng, dotBins, 272.5f, 2.0f);
     }
     // moving (measured with frame-to-frame cross-correlation): in the band sideways, either way, at 90 ... 200 px/s;
@@ -129,6 +143,7 @@ void Stripe::spawn (Particle& p, double now, bool anyAge)
         case Kind::dash:  p.w = uniform (rng, 1.8f, 5.0f); p.h = uniform (rng, 0.7f, 1.0f); p.level = uniform (rng, 0.5f, 1.0f); break;
         case Kind::faint: p.w = 0.6f; p.h = 0.6f; p.level = uniform (rng, 0.3f, 0.6f); break;
         case Kind::blob:  p.w = uniform (rng, 1.6f, 3.5f); p.h = p.w * uniform (rng, 0.8f, 1.3f); p.level = uniform (rng, 0.6f, 1.1f); break;
+        case Kind::star:  p.w = uniform (rng, 3.0f, 5.5f); p.h = p.w * uniform (rng, 0.7f, 1.0f); p.level = uniform (rng, 0.7f, 1.2f); break;
         case Kind::flare: break;
     }
     p.life = uniform (rng, 0.05f, 0.3f);
@@ -137,36 +152,15 @@ void Stripe::spawn (Particle& p, double now, bool anyAge)
     p.rate = uniform (rng, 15.0f, 45.0f);
 }
 
-void Stripe::setInput (float peakDb, bool running, bool anim, const float* bands)
+void Stripe::setInput (float levelDb, bool jumpedUp, bool anim)
 {
     if (frozen) return;
     animated = anim;
-    // the level the light follows takes the input's level only when it jumps (by 6 dB within ~66 ms, up or down) and
-    // when the sound stops (then the last level); smooth changes leave it where it was
-    const bool sounding = animated && running && peakDb > -90.0f;
-    if (sounding)
-    {
-        const float lo = jmin (recent[0], recent[1]), hi = jmax (recent[0], recent[1]);
-        if (! wasSounding || peakDb - lo > 6.0f || hi - peakDb > 6.0f)
-        {
-            if (peakDb > target) beat = true;
-            target = peakDb;
-        }
-        lastLevel = peakDb;
-    }
-    else if (wasSounding)
-    {
-        detector = lastLevel;                        // (fading from the last level, also after a ramp it ignored)
-        target = -200.0f;
-    }
-    haveBands = sounding && bands != nullptr;
-    if (haveBands) std::copy (bands, bands + Sky::numBands, bandsIn.begin());
-    recent[1] = recent[0];
-    recent[0] = sounding ? peakDb : -200.0f;
-    wasSounding = sounding;
+    levelIn = animated ? levelDb : -200.0f;
+    beat = beat || (animated && jumpedUp);
     // (moved on by the editor's clock, so the whole editor repaints once per frame)
     const double now = clock();
-    if (envelope > 0.0f || brightness (target) > 0.0f || detector > -100.0f)
+    if (envelope > 0.002f || brightness (levelIn) > 0.0f)
     {
         if (! moving) lastTime = now;
         moving = true;
@@ -176,6 +170,7 @@ void Stripe::setInput (float peakDb, bool running, bool anim, const float* bands
     else if (moving)
     {
         moving = false;
+        envelope = 0.0f;
         repaint();
     }
 }
@@ -184,22 +179,9 @@ void Stripe::freeze (float b)
 {
     frozen = true;
     envelope = b;
+    heart = 0.4f;
     // a moment well into the animation, so ages and flares are spread as while it runs
     for (int i = 0; i < 60; ++i) { elapsed += 1.0 / 60.0; for (auto& p : particles) if (elapsed - p.born > p.life) spawn (p, elapsed, false); }
-    // (and a spectrum like music's: a kick every half second, a snare between, the hi-hats on eighths)
-    for (int i = 0; i < 90; ++i)
-    {
-        float spectrum[Sky::numBands];
-        for (int k = 0; k < Sky::numBands; ++k)
-        {
-            float db = -20.0f - 0.9f * (float) k + 3.0f * std::sin (0.7f * (float) i + (float) k);
-            if (i % 20 == 0 && k < 6) db += 12.0f;
-            if (i % 20 == 10 && k >= 9 && k < 19) db += 10.0f;
-            if (i % 5 == 0 && k >= 20) db += 9.0f;
-            spectrum[k] = std::pow (10.0f, db / 20.0f);
-        }
-        sky.advance (1.0f / 40.0f, b, false, spectrum);
-    }
     repaint();
 }
 
@@ -207,6 +189,8 @@ void Stripe::setStyle (Style s)
 {
     if (s == style) return;
     style = s;
+    for (auto& p : particles) spawn (p, elapsed, true);     // (each style's own colours and shapes)
+    glowScale = 0.0f;                                       // (and its own glow)
     repaint();
 }
 
@@ -215,10 +199,9 @@ void Stripe::advance (double now)
     const double dt = jlimit (0.0, 0.1, now - lastTime);
     lastTime = now;
     elapsed += dt;
-    // the level the light follows: up at once, down at a steady rate (in dB)
-    detector = target >= detector ? target : jmax (target, detector - (float) (releaseDbPerSec * dt));
-    envelope = animated ? brightness (detector) : 0.0f;
-    sky.advance ((float) dt, envelope, beat, haveBands ? bandsIn.data() : nullptr);
+    // the light eases to the level's brightness; ours: the heart beats
+    envelope += (brightness (levelIn) - envelope) * (float) (1.0 - std::exp (-dt / easing));
+    heart = beat ? 1.0f : heart * (float) std::exp (-dt / 0.35);
     beat = false;
     for (auto& p : particles)
     {
@@ -252,6 +235,22 @@ void Stripe::renderGlow (int w, int h, float s)
             }
         }
     }
+    glowHeart.assign (glow.size(), 0.0f);
+    if (style != Style::scorpius) return;
+    // ours: the same glow's light, crimson and amber at the heart, mint and teal towards the ends; the heart's beat a
+    // crimson swell of its middle
+    for (int j = 0; j < h; ++j)
+        for (int i = 0; i < w; ++i)
+        {
+            const float x = left + ((float) i + 0.5f) / s;
+            float* px = glow.data() + (size_t) ((j * w + i) * 3);
+            const float lum = (px[0] + px[1] + px[2]) / 3.0f, k = warmth (x);
+            const float r = 0.35f + 0.85f * k, g = 0.9f - 0.45f * k, b = 0.75f - 0.62f * k;
+            px[0] = lum * r * 1.15f; px[1] = lum * g * 1.15f; px[2] = lum * b * 1.15f;
+            const float beatShare = lum * std::exp (-std::pow ((x - heartX) / 140.0f, 2.0f));
+            float* hp = glowHeart.data() + (size_t) ((j * w + i) * 3);
+            hp[0] = beatShare * 1.0f; hp[1] = beatShare * 0.18f; hp[2] = beatShare * 0.08f;
+        }
 }
 
 // adds one particle's light: a soft-edged box (its core) and a wider halo
@@ -314,6 +313,26 @@ void Stripe::splat (const Particle& p, float level, float s)
     }
 }
 
+// ours: a four-pointed star, a round core with a long thin ray across and a shorter one up and down (a flare's rays
+// swell and shrink with it)
+void Stripe::splatStar (const Particle& p, float level, float s)
+{
+    float size = 1.0f;
+    if (p.kind == Kind::flare) size = std::sin (MathConstants<float>::pi * jlimit (0.0f, 1.0f, (float) ((elapsed - p.born) / p.life)));
+    const float span = (p.kind == Kind::flare ? p.h * 1.3f : p.w) * size;
+    if (span < 0.2f) return;
+    Particle ray = p;
+    ray.kind = Kind::dot;                                   // (thin rays: the soft box)
+    ray.w = span; ray.h = 0.45f;
+    splat (ray, level * 0.8f, s);
+    ray.w = 0.45f; ray.h = span * 0.6f;
+    splat (ray, level * 0.8f, s);
+    Particle core = p;
+    core.kind = Kind::blob;
+    core.w = core.h = jmax (0.8f, (p.kind == Kind::flare ? p.w * 0.8f : 1.1f) * jmax (0.4f, size));
+    splat (core, level, s);
+}
+
 void Stripe::render (int w, int h, float s)
 {
     if (w != bufW || h != bufH || s != glowScale)
@@ -339,26 +358,21 @@ void Stripe::render (int w, int h, float s)
             }
     }
     light.resize (glow.size());
-    if (style == Style::scorpius)
+    const float beatGlow = style == Style::scorpius ? 0.7f * heart * envelope : 0.0f;
+    for (size_t k = 0; k < glow.size(); ++k) light[k] = glow[k] * envelope + glowHeart[k] * beatGlow;
+    for (auto& p : particles)
     {
-        std::fill (light.begin(), light.end(), 0.0f);
-        sky.render (light, w, h, s, envelope);
-    }
-    else
-    {
-        for (size_t k = 0; k < glow.size(); ++k) light[k] = glow[k] * envelope;
-        for (auto& p : particles)
+        const float age = (float) (elapsed - p.born);
+        if (age < 0.0f || age > p.life) continue;
+        float a = 1.0f;
+        if (p.kind != Kind::flare)
         {
-            const float age = (float) (elapsed - p.born);
-            if (age < 0.0f || age > p.life) continue;
-            float a = 1.0f;
-            if (p.kind != Kind::flare)
-            {
-                a = jmin (1.0f, age / 0.015f) * jmin (1.0f, (p.life - age) / (0.3f * p.life));
-                a *= 0.8f + 0.2f * std::sin (p.flicker + p.rate * age);
-            }
-            if (a * envelope > 0.005f) splat (p, p.level * a * envelope, s);
+            a = jmin (1.0f, age / 0.015f) * jmin (1.0f, (p.life - age) / (0.3f * p.life));
+            a *= 0.8f + 0.2f * std::sin (p.flicker + p.rate * age);
         }
+        if (a * envelope <= 0.005f) continue;
+        if (style == Style::scorpius && (p.kind == Kind::flare || p.kind == Kind::star)) splatStar (p, p.level * a * envelope, s);
+        else splat (p, p.level * a * envelope, s);
     }
     Image::BitmapData bd (image, Image::BitmapData::writeOnly);
     for (int j = 0; j < h; ++j)

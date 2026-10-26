@@ -89,6 +89,7 @@ void ScorpiusProcessor::prepareToPlay (double sampleRate, int block)
     inMeter.prepare (sampleRate);
     outMeter.prepare (sampleRate);
     visuals.prepare (sampleRate);
+    light.prepare (sampleRate);
     for (auto* s : { &inGain, &outGain }) s->reset (sampleRate, 0.01);
     inGain.setCurrentAndTargetValue (Decibels::decibelsToGain (inGainRaw->load()));
     outGain.setCurrentAndTargetValue (Decibels::decibelsToGain (outGainRaw->load()));
@@ -122,6 +123,7 @@ void ScorpiusProcessor::processBlock (AudioBuffer<float>& buffer, MidiBuffer&)
     // the input meters read the signal after the input gain
     inMeter.measure (main);
     visuals.process (main, compAmountRaw->load(), external ? &side : nullptr);
+    light.process (main);
     // (the modules: Phase 4)
     for (int i = 0; i < n; ++i)
     {

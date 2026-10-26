@@ -321,3 +321,27 @@ Way, venom running like meteors from the head to the stinger.
   The brightness still follows the reference's rules (the same as the ORION style). Filmed offline with
   `ScorpiusSnapshot --film=audio.f32,seconds,every` (the stripe every n frames of the 40 Hz clock). Cost at 200 %:
   3.5 ms a frame (the ORION style 2.8).
+
+## UI round 6
+
+- **The stripe's level, measured again with music** (`RefCapture` films at 200 % of the reference and ours: a demo
+  track's drop, the same 30 dB quieter and its fade-out; tone steps from −65 to −30 dBFS with stops; pulses fading
+  from −10 to −60 and rising back; a tone ramp down). The rule of round 4 (the level is taken on jumps of 6 dB
+  between the editor's frames) kept the light full through a track's fade-out, where the reference dims (0.6 at
+  −47 dBFS peaks). What fits all four of its films (light per frame, rms error 0.039, was 0.069; music 0.034, was 0.077):
+  - jumps are judged per 10 ms of audio: more than 4.5 dB against any chunk of the last 120 ms (smooth ramps still
+    leave the level where it was; music, whose peaks come and go, is followed down);
+  - at a stop the level takes the loudest chunk of the last 0.15 s (after a hit the light holds longer), then falls
+    at 50 dB/s;
+  - brightness ((dB + 72) / 32)^1.25: dark below −72 dBFS, full from −40 (tones: 0.16, 0.29, 0.44, 0.61, 0.81, 1.0
+    from −65 to −40 dBFS), and eased over ~30 ms on screen.
+  Ours runs this on the audio thread (`dsp/Light.h`). Before, the editor judged jumps between its frames and took a
+  frame without a new audio block for a stop, so with long host buffers (FL Studio) the light dropped and came back
+  between blocks; now a frame without a block is not a stop until 0.1 s have passed (the circles keep their last
+  spectrum the same way).
+- **SCORPIUS style, redone** (the round-5 sky is gone): the reference's field and light (`ui/Stripe.cpp`: the same
+  glow, ~1700 particles, lanes, motion, lifetimes and flares), in our colours: crimson, red-orange and amber at the
+  middle (Antares, the scorpion's red heart) cooling to the controls' mint, teal and ice blue at the ends, with the
+  glow tinted the same way; its flares and a share of the round particles are four-pointed stars; on a beat (the
+  level jumping up) the heart of the glow swells crimson and fades over 0.35 s. Cost at 200 %: 2.8 ms a frame (the
+  ORION style 2.9).

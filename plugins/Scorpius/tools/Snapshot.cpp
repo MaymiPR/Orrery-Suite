@@ -82,7 +82,6 @@ int main (int argc, char** argv)
             const juce::Rectangle<int> area = juce::Rectangle<float> (10, 272, 868, 36).transformedBy (juce::AffineTransform::scale (scale)).toNearestInt();
             for (int tick = 0; tick < (int) (seconds * 40.0f) && pos + 1200 <= frames; ++tick)
             {
-                float peak = 0.0f;
                 for (int b = 0; b < 4; ++b, pos += 300)
                 {
                     for (int k = 0; k < 300; ++k)
@@ -91,9 +90,8 @@ int main (int argc, char** argv)
                         buf.setSample (1, k, audio[2 * (pos + k) + 1]);
                     }
                     proc->processBlock (buf, midi);
-                    peak = juce::jmax (peak, buf.getMagnitude (0, 300));
                 }
-                ed->filmStep (tick / 40.0, juce::Decibels::gainToDecibels (peak, -200.0f));
+                ed->filmStep (tick / 40.0);
                 if (tick % every != 0) continue;
                 auto img = ed->createComponentSnapshot (ed->getLocalBounds(), true, 1.0f).getClippedImage (area);
                 auto f = base.getSiblingFile (base.getFileName() + juce::String::formatted ("_%04d.png", tick));

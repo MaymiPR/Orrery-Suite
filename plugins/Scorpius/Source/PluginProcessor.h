@@ -5,6 +5,7 @@
 #include "Presets.h"
 #include "shared/dsp/LevelMeter.h"
 #include "dsp/Visuals.h"
+#include "dsp/Light.h"
 
 // Scorpius: the recreation of Cradle's Orion (RESEARCH.md). Phase 2: the parameters, presets, the A / B compare and
 // the meters are complete; the audio passes through the input and output gains only (the modules follow in Phase 4).
@@ -58,6 +59,7 @@ public:
     orrery::LevelMeter inMeter, outMeter;
     std::atomic<float> compGr { 0.0f };
     sc::Visuals visuals;                     // what the circles follow (dsp/Visuals.h)
+    sc::Light light;                         // what the stripe's light follows (dsp/Light.h)
     std::atomic<int> blocksProcessed { 0 };
 
 private:

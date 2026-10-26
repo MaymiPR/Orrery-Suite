@@ -209,6 +209,53 @@ static void testSidechain()
     CHECK (q.sidechainExternal.load());
 }
 
+// The stripe's light level (dsp/Light.h, measured on the reference): a jump is taken at once, a smooth ramp is not;
+// music-like pulses fading out are followed; at a stop the level takes the loudest of the last 0.15 s and falls at
+// 50 dB/s
+static void testLight()
+{
+    sc::Light light;
+    light.prepare (48000.0);
+    AudioBuffer<float> b (2, 480);
+    auto play = [&] (double seconds, std::function<float (double)> amplitude)
+    {
+        static double t = 0.0;
+        for (int k = 0; k < (int) (seconds * 100.0); ++k)
+        {
+            for (int i = 0; i < 480; ++i, t += 1.0 / 48000.0)
+            {
+                const float v = amplitude (t) * (float) std::sin (MathConstants<double>::twoPi * 1000.0 * t);
+                b.setSample (0, i, v); b.setSample (1, i, v);
+            }
+            light.process (b);
+        }
+    };
+    play (0.5, [] (double) { return Decibels::decibelsToGain (-20.0f); });
+    CHECK_NEAR (light.levelDb(), -20.0, 0.1);
+    CHECK (light.beatCount() == 1);
+    // a slow ramp down to -60 dBFS (12.5 dB/s): the level stays
+    double start = -1.0;
+    play (3.2, [&] (double t) { if (start < 0) start = t; return Decibels::decibelsToGain ((float) (-20.0 - 12.5 * (t - start))); });
+    CHECK_NEAR (light.levelDb(), -20.0, 0.1);
+    // a jump up is taken
+    play (0.3, [] (double) { return Decibels::decibelsToGain (-10.0f); });
+    CHECK_NEAR (light.levelDb(), -10.0, 0.1);
+    CHECK (light.beatCount() == 2);
+    // pulses (4 a second) fading from -10 to -50 dBFS: followed
+    start = -1.0;
+    play (4.0, [&] (double t)
+    {
+        if (start < 0) start = t;
+        const double u = t - start;
+        return Decibels::decibelsToGain ((float) (-10.0 - 10.0 * u)) * (float) std::exp (-std::fmod (u, 0.25) / 0.08);
+    });
+    CHECK (light.levelDb() < -40.0f);
+    // a stop: from the loudest of the last 0.15 s, falling at 50 dB/s
+    play (0.5, [] (double) { return Decibels::decibelsToGain (-20.0f); });
+    play (0.2, [] (double) { return 0.0f; });
+    CHECK_NEAR (light.levelDb(), -20.0 - 50.0 * 0.2, 1.0);
+}
+
 int main()
 {
     ScopedJuceInitialiser_GUI init;
@@ -219,6 +266,7 @@ int main()
     testIoLink();
     testPassThrough();
     testSidechain();
+    testLight();
     std::printf ("%d checks, %d failed\n", checks, failures);
     return failures == 0 ? 0 : 1;
 }
