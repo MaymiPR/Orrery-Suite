@@ -304,10 +304,11 @@ down more of how it is built:
   shaper in any order (Wiener, Hammerstein, both, with learned FIR filters: −14 dB at best on held-out music) nor a
   short-memory network reproduces them; the drive's peaks wander irregularly far above full scale. Scorpius learns
   its own models of them from 174 s of program material per setting (`capture_nn.py`): the drive a small WaveNet
-  (8 channels, 12 layers of dilations 1 … 2048, `train_wn.py`), one per colour and hi-pass setting (the hi-pass
+  (8 channels, 12 for colour a with the hi-pass; 12 layers of dilations 1 … 2048 with 3 taps each, `train_wn.py`),
+  one per colour and hi-pass setting (the hi-pass
   changes the drive's sound on music by more than its low cut suggests), lift's wet path a WaveNet too (−48.1 dB on held-out pieces after 60k steps, a GRU of 16 units
   −39.8), each between a learned short FIR and a learned 8192-tap FIR. Trained on the GPU when there is one. On
-  held-out pieces up to +4 dBFS peak the drive's models null at −25 (colour a) to −33 dB (c). On the loud mastered
+  held-out pieces up to +4 dBFS peak the drive's models null at −28 (colour a) to −36 dB (c). On the loud mastered
   track the drive's error is broadband (−11 … −20 dB in every band), the same in loud and quiet passages, as large as
   the signal in its quietest samples: dense intermodulation the model gets slightly wrong. The reference's drive is
   time-invariant (a time-shifted input nulls at −67 dB) and does not depend on the block size, so better is
@@ -323,7 +324,13 @@ down more of how it is built:
   trained or held out alike; trained on one loud piece alone it reaches -21 (8 channels) / -26 dB (16). What helps:
   **the network's output beside the long filter, not through it** (y = Post(u) + WaveNet(u)): colour a -24.6 ->
   -26.1 dB with 8 channels, -27.2 with 12 (its loudest piece -16.3 -> -18.7 / -20.0), 60k steps; the default preset
-  on the track -16.1 -> -20.8 dB. For colours b and c it is better on loud pieces, worse on quiet ones.
+  on the track -16.1 -> -20.8 dB. For colours b and c it is better on loud pieces, worse on quiet ones. Then
+  **dilated convolutions of 3 taps, and the input mixed into every layer** (train_wn.py KERNEL=3 MIXIN=1, still
+  beside the filter): 3 … 5 dB better on held-out pieces for every colour (loudest piece 1.4 … 2 dB), colour a
+  hi-pass -29.7 (-21.8) with 12 channels; in place the default preset 1.5 … 1.8 dB better (drums -26.6, track
+  -22.4), c mode 1.5 … 3.6, low end theory 1 … 3. A longer run of the plain structure (120k steps, 12 channels) and
+  a loss weighted against loud passages (LOSSP) gain less; an LSTM like the reference's (3 layers of 24) -23.4
+  (-13.7). The drive costs about what the reference's does (5.6 against 5.8 s of a core per minute).
 
 ## Open
 

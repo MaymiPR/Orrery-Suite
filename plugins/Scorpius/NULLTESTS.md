@@ -19,12 +19,12 @@ local (git-ignored).
 
 | Preset | drums | drums -12 | track | track -10 |
 |---|---|---|---|---|
-| start me up (default) | -24.9 | -32.8 | -20.8 | -29.7 |
-| c mode (drive colour c, compression mode a) | -31.1 | -36.6 | -23.3 | -34.6 |
-| free at last | -24.9 | -32.7 | -20.7 | -29.5 |
-| louder | -25.2 | -32.4 | -20.9 | -29.7 |
-| low end theory | -24.3 | -30.8 | -21.0 | -28.8 |
-| parallel me in | -25.0 | -32.8 | -20.7 | -29.8 |
+| start me up (default) | -26.6 | -34.6 | -22.4 | -31.2 |
+| c mode (drive colour c, compression mode a) | -32.6 | -40.2 | -24.8 | -36.8 |
+| free at last | -26.5 | -34.6 | -22.3 | -31.0 |
+| louder | -27.1 | -33.8 | -22.6 | -31.5 |
+| low end theory | -26.5 | -33.9 | -22.4 | -29.8 |
+| parallel me in | -26.8 | -34.5 | -22.3 | -31.2 |
 | top of the morning | -32.9 | -36.6 | -33.4 | -35.1 |
 | all off, 48 kHz | exact | exact | exact | exact |
 | start me up with the drive off (the rest of the chain) | -46.8 | -50.7 | -44.1 | -48.0 |
@@ -33,10 +33,10 @@ local (git-ignored).
 | all off, 96 kHz | -89.7 | -89.7 | -92.2 | -92.2 |
 | all off, 176.4 kHz | -73.1 | -73.1 | -73.3 | -73.3 |
 | all off, 192 kHz | -86.2 | -86.2 | -86.4 | -86.4 |
-| start me up, 88.2 kHz | -23.7 | -32.6 | -19.6 | -29.3 |
-| start me up, 96 kHz | -24.3 | -32.7 | -19.9 | -29.4 |
-| start me up, 176.4 kHz | -23.7 | -32.1 | -20.3 | -29.4 |
-| start me up, 192 kHz | -24.7 | -32.3 | -20.5 | -29.6 |
+| start me up, 88.2 kHz | -24.8 | -34.1 | -20.7 | -30.6 |
+| start me up, 96 kHz | -25.6 | -34.1 | -21.1 | -30.7 |
+| start me up, 176.4 kHz | -24.6 | -32.1 | -21.7 | -30.5 |
+| start me up, 192 kHz | -26.3 | -32.3 | -22.0 | -30.8 |
 
 ## Module by module
 
@@ -51,14 +51,14 @@ Each module alone (the others off with the reference's own power buttons), on th
 | compression, mode b / a | -47.5 … -58 / -40 … -50 |
 | loud, level 1 | -31 … -39 |
 | lift (learned) | -43.5 … -51.5 |
-| drive colour a, hi-pass on (learned, the default) | -19 … -31 |
+| drive colour a, hi-pass on (learned, the default) | -22 … -34 |
 | grit (learned), level 1 / 0.731 | -27 … -31 / -33 … -37 |
 | low, tones and chords | -38 … -46 |
 | low, music | about 0 (the octave's polarity slips against the reference's) |
 
 The learned drive models on held-out pieces of their training material (up to +4 dBFS peak), mean (loudest piece):
-colour a -27.2 (-20.0) / -26.3 (-19.4) dB (hi-pass on / off), colour b -29.2 (-22.2) / -30.1 (-22.3), colour c -31.6
-(-24.0) / -31.0 (-24.0).
+colour a -29.7 (-21.8) / -28.3 (-20.5) dB (hi-pass on / off), colour b -32.1 (-23.6) / -33.6 (-23.7), colour c -34.6
+(-25.5) / -36.3 (-25.6).
 
 ## What the numbers say
 
@@ -69,7 +69,7 @@ colour a -27.2 (-20.0) / -26.3 (-19.4) dB (hi-pass on / off), colour b -29.2 (-2
   four amounts, interpolated).
 - **The whole plug-in is limited by the drive**, which the reference runs as a learned model of its own and which
   Scorpius learns from the reference's input and output: on loud program material the default preset nulls at about
-  -21 to -25 dB, 10 … 12 dB lower at -30 to -33 dB. Loud, dense material is the hard part: a linear filter explains
+  -22 to -27 dB, 10 … 12 dB lower at -31 to -35 dB. Loud, dense material is the hard part: a linear filter explains
   only 3 dB of the drive's output there, and even a model trained on one loud piece alone reaches only -21 (8
   channels) to -26 dB (16) on it.
 - **Above 48 kHz** (88.2, 96, 176.4, 192 kHz) Scorpius runs the reference's own converters, identified from its
