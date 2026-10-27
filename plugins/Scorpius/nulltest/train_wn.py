@@ -23,7 +23,10 @@ FEAT = [float(v) for v in os.environ.get("FEAT", "").split(",") if v]
 # output in by the weight, so the model learns what the amount changes beyond the mix)
 COND = [(c.split(':')[0], float(c.split(':')[1])) for c in os.environ.get("COND", "").split(",") if c]
 EQUIV = float(os.environ.get("EQUIV", 0))   # a capture at amount EQUIV: target its fully wet equivalent (no extra input)
-BYPASS = os.environ.get("BYPASS") == "1"   # y = Post(u) + WaveNet(u) instead of Post(u + WaveNet(u))
+BYPASS = os.environ.get("BYPASS") == "1"
+# the layer's shape (NAM's WaveNets: kernel 3, the input mixed into every layer, tanh without a gate)
+KERNEL = int(os.environ.get("KERNEL", 2)); MIXIN = os.environ.get("MIXIN") == "1"; GATED = os.environ.get("GATED", "1") == "1"
+LOSSP = float(os.environ.get("LOSSP", 1.0))   # each slice's loss / its output power ^ LOSSP (below 1: loud slices count more)   # y = Post(u) + WaveNet(u) instead of Post(u + WaveNet(u))
 MAXPEAK = 4.0          # dBFS: training and validation pieces up to this peak
 torch.set_num_threads(int(os.environ.get("THREADS", max(1, os.cpu_count() // 2))))
 DEV = torch.device("cuda" if torch.cuda.is_available() else "cpu")
@@ -58,19 +61,25 @@ class WaveNet(torch.nn.Module):
         super().__init__()
         self.dil = [2 ** (i % STACK) for i in range(layers)]     # (STACK: dilations 1 ... 2^(STACK-1), repeated)
         self.inp = torch.nn.Conv1d(1 + nfeat, ch, 1)
-        self.conv = torch.nn.ModuleList([torch.nn.Conv1d(ch, 2 * ch, 2, dilation=d) for d in self.dil])
+        g = 2 if GATED else 1
+        self.conv = torch.nn.ModuleList([torch.nn.Conv1d(ch, g * ch, KERNEL, dilation=d) for d in self.dil])
+        self.mix = torch.nn.ModuleList([torch.nn.Conv1d(1, g * ch, 1, bias=False) for _ in self.dil]) if MIXIN else None
         self.res = torch.nn.ModuleList([torch.nn.Conv1d(ch, ch, 1) for _ in self.dil])
         self.skip = torch.nn.ModuleList([torch.nn.Conv1d(ch, ch, 1) for _ in self.dil])
         self.out = torch.nn.Conv1d(ch, 1, 1)
         with torch.no_grad(): self.out.weight.zero_(); self.out.bias.zero_()
-        self.rf = sum(self.dil) + 1
+        self.rf = (KERNEL - 1) * sum(self.dil) + 1
 
     def forward(self, u, f=None):             # (batch, n), features (batch, nfeat, n) -> (batch, n), causal
         h = self.inp(u.unsqueeze(1) if f is None else torch.cat([u.unsqueeze(1), f], 1)); s = 0
-        for d, conv, res, skip in zip(self.dil, self.conv, self.res, self.skip):
-            z = conv(torch.nn.functional.pad(h, (d, 0)))
-            a, b = z.chunk(2, 1)
-            g = torch.tanh(a) * torch.sigmoid(b)
+        for i, (d, conv, res, skip) in enumerate(zip(self.dil, self.conv, self.res, self.skip)):
+            z = conv(torch.nn.functional.pad(h, ((KERNEL - 1) * d, 0)))
+            if MIXIN: z = z + self.mix[i](u.unsqueeze(1))
+            if GATED:
+                a, b = z.chunk(2, 1)
+                g = torch.tanh(a) * torch.sigmoid(b)
+            else:
+                g = torch.tanh(z)
             h = h + res(g); s = s + skip(g)
         return self.out(torch.relu(s)).squeeze(1)
 
@@ -93,6 +102,8 @@ class Model(torch.nn.Module):
 def train(case, steps, irname, ch, layers):
     if COND: xs, ys, valid, conds = load_cond()
     else: xs, ys, valid = load(case)
+    for extra in [c for c in os.environ.get("UNION", "").split(",") if c]:     # (UNION=more,cases: their pieces too)
+        x_, y_, v_ = load(extra); xs += x_; ys += y_; valid += v_
     if EQUIV: ys = [x + (y - x) / amount_weight(EQUIV) for x, y in zip(xs, ys)]
     keep = [i for i, x in enumerate(xs) if 20 * np.log10(np.abs(x).max() + 1e-9) <= MAXPEAK]
     if irname is None:                  # (grit: steady signals pass unchanged, so the filters start as the identity)
@@ -121,7 +132,7 @@ def train(case, steps, irname, ch, layers):
             start = rng.integers(warm, len(x) - SEG)
             xb.append(x[start - warm:start + SEG]); yb.append(y[start:start + SEG])
             if F is not None: fb.append(F[i][:, start - warm:start + SEG])
-            wb.append(1.0 / max(1e-6, float(np.mean(y[start:start + SEG] ** 2))))
+            wb.append(1.0 / max(1e-6, float(np.mean(y[start:start + SEG] ** 2))) ** LOSSP)
         xb = torch.tensor(np.array(xb), device=DEV); yb = torch.tensor(np.array(yb), device=DEV)
         wb = torch.tensor(wb, dtype=torch.float32, device=DEV)
         fb = torch.tensor(np.array(fb), device=DEV) if F is not None else None

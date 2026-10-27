@@ -29,7 +29,11 @@ local (git-ignored).
 | all off, 48 kHz | exact | exact | exact | exact |
 | start me up with the drive off (the rest of the chain) | -46.8 | -50.7 | -44.1 | -48.0 |
 | all off, 44.1 kHz | -51.5 | -51.5 | -63.7 | -63.7 |
-| all off, 88.2 / 96 / 192 kHz (drums, track) | -20.6 / -21.1 / -22.6 | | -27.7 / -28.3 / -31.4 | |
+| all off, 96 kHz | -89.7 | -89.7 | -92.2 | -92.2 |
+| all off, 192 kHz | -86.2 | -86.2 | -86.4 | -86.4 |
+| start me up, 96 kHz | -24.3 | -32.7 | -19.9 | -29.4 |
+| start me up, 192 kHz | -24.7 | -32.3 | -20.5 | -29.6 |
+| all off, 88.2 kHz | -20.6 | | -27.7 | |
 
 ## Module by module
 
@@ -65,8 +69,9 @@ colour a -27.2 (-20.0) / -26.3 (-19.4) dB (hi-pass on / off), colour b -29.2 (-2
   -21 to -25 dB, 10 … 12 dB lower at -30 to -33 dB. Loud, dense material is the hard part: a linear filter explains
   only 3 dB of the drive's output there, and even a model trained on one loud piece alone reaches only -21 (8
   channels) to -26 dB (16) on it.
-- **Above 48 kHz** the rate converters are the limit (-21 … -31 dB with everything off): the reference's response
-  near 20 … 24 kHz (and its phase there) is not a windowed sinc of any length its delay allows.
+- **At 96 and 192 kHz** Scorpius runs the reference's own converters, identified from its impulse responses
+  (-86 … -92 dB with everything off); the presets null as at 48 kHz. **At 88.2 and 176.4 kHz** (not whole ratios)
+  its converters are another design, not yet identified: -21 … -31 dB with everything off.
 - **Grit** is learned too (a transient shaper of the mids, each channel by itself), 5 … 9 dB better than a
   hand-made transient shaper; after the compressor on stereo material the reference's grit still differs a little.
 - **Low** matches on tones and chords; on music its octave keeps the right shape and level but its polarity drifts

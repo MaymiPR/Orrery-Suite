@@ -313,6 +313,28 @@ static void testEngine()
         CHECK (finite);
         CHECK (most < 16.0f);
     }
+    // 96 / 192 kHz run the reference's identified converters: its latency, and every module off passes a tone at its
+    // level (blocks of odd sizes)
+    for (double fs : { 96000.0, 192000.0 })
+    {
+        ScorpiusProcessor p;
+        p.setRateAndBufferSizeDetails (fs, 512);
+        p.prepareToPlay (fs, 512);
+        CHECK (p.getLatencySamples() == (fs == 96000.0 ? 48 : 80));
+        for (auto* pid : { sc::id::driveOn, sc::id::harmOn, sc::id::compOn, sc::id::liftOn, sc::id::eqOn }) setReal (p, pid, 0.0f);
+        MidiBuffer midi;
+        double in = 0, out = 0; long long t = 0;
+        for (int block = 0; block < 300; ++block)
+        {
+            const int n = 37 + (block * 97) % 400;
+            AudioBuffer<float> b (2, n);
+            for (int i = 0; i < n; ++i, ++t)
+                for (int c = 0; c < 2; ++c) b.setSample (c, i, 0.25f * (float) std::sin (2.0 * 3.14159265358979 * 1000.0 * (double) t / fs));
+            p.processBlock (b, midi);
+            if (block > 50) for (int i = 0; i < n; ++i) { out += (double) b.getSample (0, i) * b.getSample (0, i); in += 0.25 * 0.25 / 2; }
+        }
+        CHECK_NEAR (10 * std::log10 (out / in), 0.0, 0.1);
+    }
     // EXT: a loud side-chain makes the compressor reduce a quiet main signal
     auto gainWith = [] (bool ext)
     {

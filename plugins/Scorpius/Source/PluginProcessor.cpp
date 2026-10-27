@@ -93,6 +93,7 @@ void ScorpiusProcessor::prepareToPlay (double sampleRate, int block)
     // the modules run at 48 kHz (their fits and learned models are made there); other rates are converted in and out,
     // as the reference does (MEASUREMENTS.md 2)
     resampling = std::abs (sampleRate - 48000.0) > 0.5;
+    integerRatio = std::abs (sampleRate - 96000.0) < 0.5 ? 2 : std::abs (sampleRate - 192000.0) < 0.5 ? 4 : 0;
     const int block48 = (int) std::ceil (jmax (1, block) * 48000.0 / sampleRate) + 8;
     engine.prepare (48000.0, block48);
     silence.assign ((size_t) block48, 0.0f);
@@ -107,6 +108,14 @@ void ScorpiusProcessor::prepareToPlay (double sampleRate, int block)
             toInner[c].prepare (sampleRate, 48000.0, low ? t.resampleCutoffIn : t.resampleCutoffInHigh, hIn, beta);
             keyToInner[c].prepare (sampleRate, 48000.0, low ? t.resampleCutoffIn : t.resampleCutoffInHigh, hIn, beta);
             toOuter[c].prepare (48000.0, sampleRate, low ? t.resampleCutoffOut : t.resampleCutoffOutHigh, hOut, beta);
+            if (integerRatio != 0)               // the reference's own converters, identified (exact delay, no hold-back)
+            {
+                const auto& down = integerRatio == 2 ? sc::dsp::fits::convDown96 : sc::dsp::fits::convDown192;
+                const auto& up = integerRatio == 2 ? sc::dsp::fits::convUp96 : sc::dsp::fits::convUp192;
+                toInner[c].prepareInteger (integerRatio, true, down);
+                keyToInner[c].prepareInteger (integerRatio, true, down);
+                toOuter[c].prepareInteger (integerRatio, false, up);
+            }
             inner[c].reserve ((size_t) block48 * 2);
             keyInner[c].reserve ((size_t) block48 * 2);
         }
@@ -114,6 +123,13 @@ void ScorpiusProcessor::prepareToPlay (double sampleRate, int block)
         // a few samples of output held ahead (so the output never runs short), the rest trimmed by the converters'
         // start offsets
         auto [target, reported] = referenceDelay (sampleRate);
+        if (integerRatio != 0)
+        {
+            for (int c = 0; c < 2; ++c) outer[c].clear();
+            setLatencySamples (reported);
+        }
+        else
+        {
         if (sampleRate > 48000.0) target += sc::dsp::tuning().resampleDelayTrimHigh;
         const double r = sampleRate / 48000.0, full = toInner[0].halfLength() + toOuter[0].halfLength() * r;
         const int prefill = jmax (2, (int) std::ceil (target - full));
@@ -125,6 +141,7 @@ void ScorpiusProcessor::prepareToPlay (double sampleRate, int block)
             outer[c].assign ((size_t) prefill, 0.0f);
         }
         setLatencySamples (reported);
+        }
     }
     else setLatencySamples (0);
     // the input and output gains glide exponentially (measured: 90 % of a step after 19 ms, tau ~8.3 ms)

@@ -283,6 +283,13 @@ down more of how it is built:
   error re its contribution −9 … −16 → −19 dB).
 - **The expander** (`fit_exp.py`): threshold −58.1 dBFS (peak of the last 1.13 s), 2.03 dB of gain per dB below,
   closing with a 208 ms time constant; at the start of playback it takes the signal's own level.
+- **Rates at 96 and 192 kHz** (`fit_converters.py`): the reference's converters there are a decimating FIR (the
+  stream's first sample kept, then every 2nd / 4th) and an interpolating FIR, **not linear-phase** (no windowed sinc
+  of any length its delay allows reaches its response near 20 … 24 kHz). Its responses to impulses at every phase fix
+  the pair (y_c[t] = Σ over q ≡ −c (mod R) of d[q] u[t + S − q], fitted by alternating least squares to −76 / −78 dB);
+  the split between the two is free up to a filter in z^R, taken with the decimator at unity gain. With them the
+  round trip nulls at −86 … −92 dB on music and the presets as at 48 kHz (the split with the decimator 2.5 dB hot
+  drove the drive harder: −6 … −15 dB). At 88.2 kHz the same kernels resampled do not fit (−28 dB): another design.
 - **Rates** (`Resampler.h`): the reference's round trip delays 27.0 / 31.0 / 48.742 / 51.1 / 81.461 / 87.085 samples
   at 32 / 44.1 / 88.2 / 96 / 176.4 / 192 kHz (phase slope of white noise), reporting 27 / 31 / 46 / 48 / 75 / 80; at
   44.1 kHz it is flat to 22 kHz (−0.3 dB).
@@ -315,6 +322,5 @@ down more of how it is built:
 
 - The drive on loud, dense material (all of the default preset's error), compression mode a on drums (−40 against
   b's −48), which crossings the low path's flip-flop counts on music, its soft limit on loud bass, grit after the
-  compressor on stereo material, the converters above 48 kHz (−21 … −31 dB all off: a delay trim of 0.175 samples
-  and the cutoffs fitted, `fit_resample_high.py`; neither longer filters within the reference's delay nor another
-  Kaiser beta reaches its response near 20 … 24 kHz).
+  compressor on stereo material, the converters at 88.2 / 176.4 kHz (−21 … −31 dB all off: a delay trim and the
+  cutoffs fitted, `fit_resample_high.py`).

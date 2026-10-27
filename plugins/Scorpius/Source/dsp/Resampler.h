@@ -5,7 +5,8 @@
 
 // Streaming sample-rate conversion by a fixed ratio (Kaiser-windowed sinc, a table of phases interpolated linearly),
 // for running the DSP at 48 kHz whatever the host's rate, as the reference does (MEASUREMENTS.md 2: its own
-// resampler is linear-phase, 31 samples of latency at 44.1 kHz).
+// resampler is linear-phase, 31 samples of latency at 44.1 kHz). At integer ratios (96 / 192 kHz) it can instead run
+// the reference's own converters, identified (ConverterFits.h, MEASUREMENTS.md 14): not linear-phase.
 namespace sc::dsp
 {
 class Resampler
@@ -17,6 +18,7 @@ public:
     // and its Kaiser window's beta
     void prepare (double inRate, double outRate, double cutoff = 0.92, int halfLength = 16, double beta = 8.0)
     {
+        ratio = 0;
         half = std::max (2, halfLength);
         step = inRate / outRate;
         const double fc = cutoff * std::min (1.0, outRate / inRate);       // in input-rate Nyquist units
@@ -39,6 +41,17 @@ public:
         history.assign ((size_t) 4 * half, 0.0);
         reset();
     }
+    // an integer ratio with given filters at the higher rate: down keeps the input's first sample and every ratio-th
+    // after, through taps; up gives ratio outputs per input, zero-stuffed through taps. Delay: the filters' own.
+    void prepareInteger (int r, bool down, const std::vector<double>& taps)
+    {
+        ratio = r; decimating = down; fir = taps;
+        const int len = (int) fir.size(), keep = down ? len : (len + r - 1) / r;
+        fir.resize ((size_t) (down ? len : keep * r), 0.0);
+        history.assign ((size_t) (2 * keep), 0.0);
+        ringLen = keep;
+        reset();
+    }
     void reset() { std::fill (history.begin(), history.end(), 0.0); pos = offset; filled = 0; }
     // the delay it adds, in input samples: half, less the start offset (0 ... 1) that trims it
     double latencyIn() const { return half - offset; }
@@ -48,6 +61,7 @@ public:
     // converts n input samples, appending the output to out
     void process (const float* in, int n, std::vector<float>& out)
     {
+        if (ratio > 0) { processInteger (in, n, out); return; }
         for (int i = 0; i < n; ++i)
         {
             // keep the last 2 half input samples (a doubled ring for contiguous reads)
@@ -73,7 +87,37 @@ public:
     }
 
 private:
-    std::vector<double> table, history;
+    void processInteger (const float* in, int n, std::vector<float>& out)
+    {
+        const int L = ringLen, r = ratio;
+        for (int i = 0; i < n; ++i)
+        {
+            history[(size_t) (filled % L)] = in[i];
+            history[(size_t) (filled % L + L)] = in[i];
+            const double* x = history.data() + (size_t) (filled % L) + 1;    // oldest .. newest (x[L - 1])
+            if (decimating)
+            {
+                if (filled % r == 0)
+                {
+                    double acc = 0;
+                    for (int j = 0; j < L; ++j) acc += fir[(size_t) j] * x[L - 1 - j];
+                    out.push_back ((float) acc);
+                }
+            }
+            else
+                for (int m = 0; m < r; ++m)
+                {
+                    double acc = 0;
+                    for (int k = 0; k < L; ++k) acc += fir[(size_t) (m + r * k)] * x[L - 1 - k];
+                    out.push_back ((float) acc);
+                }
+            ++filled;
+        }
+    }
+
+    std::vector<double> table, history, fir;
+    int ratio = 0, ringLen = 0;
+    bool decimating = false;
     double step = 1.0, pos = 0.0, offset = 0.0;
     int half = 16;
     long long filled = 0;
