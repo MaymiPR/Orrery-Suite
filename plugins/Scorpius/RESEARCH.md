@@ -365,14 +365,16 @@ probe (1 kHz: steps of -10, -4, -14, -2, -8 dBFS, then -4 / -14 alternating ever
   points (9.6 at -50 dBFS, 10.7 at -40, 18 at -10): harmonics 8.29 + 15.80 (a^0.312 - 0.083), up 0.05 s, down
   0.3 s at most 24 px/s; lift 3.76 + 19.07 (a^0.168 - 0.083), up 0.22 s, down 0.4 s. Per-frame radius against the
   reference: harmonics 0.95 px rms (was 2.4), lift 1.5; means and wobble now within 0.15 px.
-- **SCORPIUS style, redone again (ours): venom coming at you.** A venom gland glows far away in the middle of the
-  stripe and sprays venom out of the screen, as the reference's field streams outwards: each drop flies in 3-D
-  towards the viewer (projected from its distance: small, dim and slow in the middle, growing, brightening and
-  speeding outwards as it nears), streaking, near ones with bright droplet heads, until it passes the stripe's edges.
-  It sprays 90 ... 990 drops a second with the level and spits globs; each beat fires a burst (170 drops, a ring of
-  64 that spreads as it comes, 3 ... 5 globs, the gland's flash and rays); globs that reach the glass splat on it and
-  run down with a few drips. Colours: acid green, teal, electric violet, magenta, amber (each burst its own, its ring
-  another), drifting round the hue circle about once a minute; the haze behind flares at the middle on a beat. The
-  light follows the same level as the ORION style. Cost at 200 %: 3.6 ms a frame (the ORION style 3.7).
+- **SCORPIUS style, redone again (ours): green venom shot at you.** Far away in the middle of the stripe beats a
+  crimson heart (Antares, the scorpion's red star), the venom gland, with a dark red halo. Out of it comes green venom
+  only (acid lime through the controls' mint to deep teal, white-hot where it is thickest), flying in 3-D towards the
+  viewer (projected from its distance: small, dim and slow in the middle, growing and speeding outwards as it nears)
+  as liquid drops: round, glossy (a highlight up and left), stretched into teardrops along their motion, with a fine
+  mist behind. Quiet music: a slow drip and a faint haze; louder: a steady spray (up to ~530 drops a second); each
+  beat a strike: the heart squeezes and recoils, its rays flare, and it fires 110 drops, a ring of 36 and 2 ... 4
+  globs. Globs hit the glass along the stripe: a splash (lobes and satellite drops) that slides down and fades, drips
+  that run down leaving wet trails, and the venom eats at the glass: bubbles and wisps rise, a faint mark stays for
+  ~3 s. The bass makes the globs bigger and deeper green, the mids thicken the mist. The light follows the same level
+  as the ORION style. Cost at 200 %: 3.0 ms a frame (the ORION style 3.2).
 - **Knobs (both plug-ins):** double-click opens a field over the knob to type its value (Enter or a click elsewhere
   sets it, as one host gesture; Escape leaves it); Alt-click still resets to the default.

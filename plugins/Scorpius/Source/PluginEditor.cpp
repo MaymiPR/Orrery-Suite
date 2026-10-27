@@ -489,12 +489,15 @@ void ScorpiusEditor::stepStripe (bool playing, float dt)
     const bool beat = beats != lastBeats;
     lastBeats = beats;
     stripe.setStyle (proc.particleStyle.load() == 0 ? sc::Stripe::Style::orion : sc::Stripe::Style::scorpius);
+    stripe.setBands (lastLows, lastMids);
     stripe.setInput (lightDb, beat, proc.animation.load());
 }
 
 void ScorpiusEditor::filmStep (double now)
 {
     stripe.clock = [now] { return now; };
+    if (const float l = proc.visuals.takeLows(); l > 0.0f) lastLows = l;
+    if (const float m = proc.visuals.takeMids(); m > 0.0f) lastMids = m;
     stepStripe (true, 0.025f);
 }
 
