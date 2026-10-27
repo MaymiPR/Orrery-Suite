@@ -13,7 +13,8 @@ namespace orrery
 //     0.2 (1 + sin (pi (1.5 + min (0.5, max (0, d - 1) / 200)))) of the range: slow moves fine-tune, fast ones jump.
 //     Releasing the key restores the cursor where the value puts it and continues from there. Ctrl (Cmd) drags at the
 //     normal speed (as both references);
-//   - double-click or Alt-click = default value.
+//   - Alt-click = default value; double-click opens a field to type the value in (Enter or a click elsewhere sets it,
+//     Escape leaves it), parsed by the parameter's own text conversion.
 class MetalKnob : public juce::Slider
 {
 public:
@@ -24,8 +25,12 @@ public:
     void mouseDown (const juce::MouseEvent&) override;
     void mouseDrag (const juce::MouseEvent&) override;
     void mouseUp (const juce::MouseEvent&) override;
+    void mouseDoubleClick (const juce::MouseEvent&) override;
     void modifierKeysChanged (const juce::ModifierKeys&) override;
-    void setDefaultValue (double v) { defaultValue = v; setDoubleClickReturnValue (true, v); }
+    void setDefaultValue (double v) { defaultValue = v; }
+    // a typed value is set as one host gesture: begin (true) / end (false), when the owner provides them
+    std::function<void (bool)> onGesture;
+    void showValueEntry();
 
     static constexpr float startAngle = -2.35619449f, endAngle = 2.35619449f;
 
@@ -43,5 +48,7 @@ private:
     static bool velocityKeys (const juce::ModifierKeys& m) { return m.isShiftDown(); }
     void restoreMouse();
     void renderBody (int px);
+    void closeValueEntry (bool apply);
+    std::unique_ptr<juce::TextEditor> entry;       // on the top-level component, over the knob
 };
 }

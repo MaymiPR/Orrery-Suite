@@ -66,6 +66,59 @@ void MetalKnob::mouseUp (const MouseEvent& e)
     Slider::mouseUp (e);
 }
 
+void MetalKnob::mouseDoubleClick (const MouseEvent& e)
+{
+    if (! e.mods.isAltDown()) showValueEntry();
+}
+
+void MetalKnob::showValueEntry()
+{
+    auto* top = getTopLevelComponent();
+    if (top == nullptr || entry != nullptr) return;
+    // centred on the knob, wide enough for a value with its unit, in the top level's coordinates (the knob may be scaled)
+    const auto area = top->getLocalArea (this, getLocalBounds()).toFloat();
+    const float k = area.getWidth() / (float) jmax (1, getWidth()) / std::abs (getTransform().mat00);   // top px per design px
+    const float w = jmax (area.getWidth() * 1.3f, 64.0f * k), h = 19.0f * k;
+    entry = std::make_unique<TextEditor>();
+    auto& t = *entry;
+    t.setFont (theme::font (12.5f * k));
+    t.setJustification (Justification::centred);
+    t.setIndents (2, 0);
+    t.setColour (TextEditor::backgroundColourId, theme::boxFill.withAlpha (0.96f));
+    t.setColour (TextEditor::textColourId, theme::text);
+    t.setColour (TextEditor::outlineColourId, theme::boxLine);
+    t.setColour (TextEditor::focusedOutlineColourId, theme::mint);
+    t.setColour (TextEditor::highlightColourId, theme::mint.withAlpha (0.35f));
+    t.setColour (CaretComponent::caretColourId, theme::mint);
+    t.setSelectAllWhenFocused (true);
+    t.setText (getTextFromValue (getValue()), false);
+    t.onReturnKey = [this] { closeValueEntry (true); };
+    t.onEscapeKey = [this] { closeValueEntry (false); };
+    t.onFocusLost = [this] { closeValueEntry (true); };
+    top->addAndMakeVisible (t);
+    t.setBounds (Rectangle<float> (w, h).withCentre (area.getCentre()).getSmallestIntegerContainer()
+                     .constrainedWithin (top->getLocalBounds()));
+    t.grabKeyboardFocus();
+    t.selectAll();
+}
+
+void MetalKnob::closeValueEntry (bool apply)
+{
+    if (entry == nullptr) return;
+    auto e = std::move (entry);          // (closing changes focus, which calls back here: entry is already gone)
+    const auto text = e->getText().trim();
+    e->setVisible (false);
+    if (auto* p = e->getParentComponent()) p->removeChildComponent (e.get());
+    if (! apply || text.isEmpty()) return;
+    const double v = getValueFromText (text);
+    if (! std::isfinite (v)) return;
+    if (onGesture) onGesture (true);
+    if (onDragStart) onDragStart();
+    setValue (jlimit (getMinimum(), getMaximum(), v), sendNotificationSync);
+    if (onDragEnd) onDragEnd();
+    if (onGesture) onGesture (false);
+}
+
 void MetalKnob::modifierKeysChanged (const ModifierKeys& m)
 {
     if (velocity && isMouseButtonDown() && ! velocityKeys (m)) restoreMouse();

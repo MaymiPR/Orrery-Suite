@@ -102,7 +102,10 @@ AntiparticleEditor::AntiparticleEditor (AntiparticleProcessor& p) : AudioProcess
     {
         attachments.push_back (std::make_unique<AudioProcessorValueTreeState::SliderAttachment> (s, pid, sl));
         if (auto* prm = dynamic_cast<RangedAudioParameter*> (s.getParameter (pid)))
+        {
             sl.setDefaultValue (prm->convertFrom0to1 (prm->getDefaultValue()));
+            sl.onGesture = [prm] (bool begin) { if (begin) prm->beginChangeGesture(); else prm->endChangeGesture(); };
+        }
     };
     attach (eqHigh, ap::id::eqHigh);
     attach (eqMid, ap::id::eqMid);

@@ -28,7 +28,7 @@ input: the main signal or the side-chain bus.
 
 ## Using it
 
-- **Knobs:** drag up / down. Hold Shift for fine adjustment; double-click or Alt-click resets. While the mouse is over
+- **Knobs:** drag up / down. Hold Shift for fine adjustment; Alt-click resets; double-click to type a value. While the mouse is over
   a knob, its label shows the value.
 - **I/O LINK** (top bar, ours): the output gain follows the input gain inverted, so you can drive the chain harder
   without the level changing.
