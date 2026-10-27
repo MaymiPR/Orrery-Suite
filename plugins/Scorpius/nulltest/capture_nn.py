@@ -42,6 +42,9 @@ CASES = {f'drive_{c}{"_hp" if hp else ""}': dict(params=o.ONLY('drive', hipass=h
 CASES['lift'] = dict(params={**o.ONLY('lift'), 'Lift Amount': 1})
 CASES['harm80'] = dict(params={**o.ONLY('harm'), 'Harm Amount': 1.0, 'Harm Freq': 80})
 CASES['harm50'] = dict(params={**o.ONLY('harm'), 'Harm Amount': 1.0, 'Harm Freq': 50})
+for f_ in (80, 50):                  # (harmonics at partial amounts: the amount-conditioned model)
+    for a_ in (0.25, 0.5, 0.75):
+        CASES[f'harm{f_}_a{int(a_ * 100):03d}'] = dict(params={**o.ONLY('harm'), 'Harm Amount': a_, 'Harm Freq': f_})
 CASES['grit'] = dict(params={**o.NONE, 'Par Grit On/Off': 1, 'Par Grit Level': 1.0}, left=True)
 
 if __name__ == '__main__':

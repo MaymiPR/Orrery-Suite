@@ -123,10 +123,12 @@ struct WaveNetWeights
     int channels;
     std::vector<int> dilations;
     std::vector<float> pre, post;
-    std::vector<float> inW, inB;                     // C x 1, C
+    std::vector<float> inW, inB;                     // C x (1 + conds), C
     std::vector<std::vector<float>> convW, convB;     // per layer: (2C) x C x 2 (PyTorch layout), 2C
     std::vector<std::vector<float>> resW, resB, skipW, skipB;   // per layer: C x C, C
     std::vector<float> outW; float outB;             // 1 x C
+    bool bypass = false;                             // y = Post(u) + WaveNet(u) (the network beside the long filter)
+    int conds = 0;                                   // a control's value as an extra input (0 or 1; train_wn.py COND)
 };
 
 class LearnedWaveNet
@@ -163,17 +165,18 @@ public:
         prePos = 0;
     }
     // in place allowed
-    void process (const double* in, double* out, int n)
+    // cond: the control's value per sample, for a model with conds = 1
+    void process (const double* in, double* out, int n, const double* cond = nullptr)
     {
         for (int done = 0; done < n; done += maxBlock)
         {
             const int m = std::min (maxBlock, n - done);
-            block (in + done, out + done, m);
+            block (in + done, out + done, m, cond != nullptr ? cond + done : nullptr);
         }
     }
 
 private:
-    void block (const double* in, double* out, int n)
+    void block (const double* in, double* out, int n, const double* cond)
     {
         const auto& w = *weights;
         const int C = w.channels, K = (int) w.pre.size(), N = maxBlock;
@@ -197,8 +200,14 @@ private:
         for (int c = 0; c < C; ++c)
         {
             float* hc = hp + c * N; float* sc = sk + c * N;
-            const float a = w.inW[(size_t) c], b = w.inB[(size_t) c];
+            const int I = 1 + w.conds;
+            const float a = w.inW[(size_t) (c * I)], b = w.inB[(size_t) c];
             for (int t = 0; t < n8; ++t) { hc[t] = a * up[t] + b; sc[t] = 0; }
+            if (w.conds > 0)
+            {
+                const float k = w.inW[(size_t) (c * I + 1)];
+                for (int t = 0; t < n; ++t) hc[t] += k * (cond != nullptr ? (float) cond[t] : 0.0f);
+            }
         }
         for (size_t l = 0; l < w.dilations.size(); ++l)
         {
@@ -277,7 +286,8 @@ private:
             const float a = w.outW[(size_t) c]; const float* sc = sk + c * N;
             for (int t = 0; t < n; ++t) yp[t] += a * std::max (0.0f, sc[t]);
         }
-        for (int t = 0; t < n; ++t) out[t] = post.process (up[t] + yp[t]);
+        if (w.bypass) for (int t = 0; t < n; ++t) out[t] = post.process (up[t]) + yp[t];
+        else for (int t = 0; t < n; ++t) out[t] = post.process (up[t] + yp[t]);
     }
 
     const WaveNetWeights* weights = nullptr;

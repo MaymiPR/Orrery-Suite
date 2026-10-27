@@ -19,7 +19,13 @@ def trimmed(h, floor_db=-80.0, minimum=64):
 
 def arr(v):
     v = np.asarray(v, np.float32).ravel()
-    return '{ ' + ', '.join(f'{x:.9g}f' for x in v) + ' }'
+    return '{ ' + ', '.join(lit(x) for x in v) + ' }'
+
+
+def lit(x):
+    """a C++ float literal (1 -> 1.f: '1f' is not one)"""
+    t = f'{x:.9g}'
+    return t + ('f' if any(c in t for c in '.e') else '.f')
 
 
 if __name__ == '__main__':
@@ -40,7 +46,7 @@ if __name__ == '__main__':
             for key in ('conv', 'res', 'skip'):
                 lines.append('    { ' + ', '.join(arr(s[f'wn.{key}.{i}.weight']) for i in range(L)) + ' },')
                 lines.append('    { ' + ', '.join(arr(s[f'wn.{key}.{i}.bias']) for i in range(L)) + ' },')
-            lines.append(f'    {arr(s["wn.out.weight"])}, {float(s["wn.out.bias"][0]):.9g}f }};')
+            lines.append(f'    {arr(s["wn.out.weight"])}, {lit(float(s["wn.out.bias"][0]))}{", true" if d.get("bypass") else ""}{(", false" if not d.get("bypass") else "") + ", 1" if d.get("cond") else ""} }};')
             print(name, 'WaveNet', C, 'channels', L, 'layers, post taps', len(post))
             continue
         H = d['hidden']
@@ -50,13 +56,13 @@ if __name__ == '__main__':
             lines.append(f'    {arr(s["post"])},')
             for key in ('weight_ih', 'weight_hh', 'bias_ih', 'bias_hh'):
                 lines.append('    { ' + ', '.join(arr(s[f'gru.{key}_l{k}']) for k in range(Lr)) + ' },')
-            lines.append(f'    {arr(s["out.weight"])}, {float(s["out.bias"][0]):.9g}f }};')
+            lines.append(f'    {arr(s["out.weight"])}, {lit(float(s["out.bias"][0]))} }};')
             print(name, 'LSTM', Lr, 'x', H)
             continue
         lines.append(f'inline const LearnedWeights {name} {{ {H}, {arr(s["pre"])},')
         lines.append(f'    {arr(s["post"])},')
         lines.append(f'    {arr(s["gru.weight_ih_l0"])}, {arr(s["gru.weight_hh_l0"])}, {arr(s["gru.bias_ih_l0"])}, {arr(s["gru.bias_hh_l0"])},')
-        lines.append(f'    {arr(s["out.weight"])}, {float(s["out.bias"][0]):.9g}f }};')
+        lines.append(f'    {arr(s["out.weight"])}, {lit(float(s["out.bias"][0]))} }};')
         print(name, 'hidden', H, 'post taps', len(s['post']))
     lines.append('}')
     open(os.path.join(o.PLUGIN, 'Source', 'dsp', 'LearnedModels.h'), 'w').write('\n'.join(lines) + '\n')

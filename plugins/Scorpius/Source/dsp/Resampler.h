@@ -11,15 +11,17 @@ namespace sc::dsp
 class Resampler
 {
 public:
-    static constexpr int half = 16, phases = 512;
+    static constexpr int phases = 512;
 
-    // in and out rates; the cutoff is a share of the lower rate's Nyquist
-    void prepare (double inRate, double outRate, double cutoff = 0.92)
+    // in and out rates; the cutoff is a share of the lower rate's Nyquist; the filter's half length (input samples)
+    // and its Kaiser window's beta
+    void prepare (double inRate, double outRate, double cutoff = 0.92, int halfLength = 16, double beta = 8.0)
     {
+        half = std::max (2, halfLength);
         step = inRate / outRate;
         const double fc = cutoff * std::min (1.0, outRate / inRate);       // in input-rate Nyquist units
         table.assign ((size_t) (phases + 1) * 2 * half, 0.0);
-        const double beta = 8.0, pi = 3.14159265358979323846;
+        const double pi = 3.14159265358979323846;
         auto bessel0 = [] (double x) { double s = 1, t = 1; for (int k = 1; k < 30; ++k) { t *= (x / (2 * k)) * (x / (2 * k)); s += t; } return s; };
         for (int p = 0; p <= phases; ++p)
         {
@@ -40,6 +42,7 @@ public:
     void reset() { std::fill (history.begin(), history.end(), 0.0); pos = offset; filled = 0; }
     // the delay it adds, in input samples: half, less the start offset (0 ... 1) that trims it
     double latencyIn() const { return half - offset; }
+    int halfLength() const { return half; }
     void setOffset (double o) { offset = std::clamp (o, 0.0, 0.999); pos = offset; }
 
     // converts n input samples, appending the output to out
@@ -72,6 +75,7 @@ public:
 private:
     std::vector<double> table, history;
     double step = 1.0, pos = 0.0, offset = 0.0;
+    int half = 16;
     long long filled = 0;
 };
 }

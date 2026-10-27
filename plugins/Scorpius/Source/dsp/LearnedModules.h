@@ -32,32 +32,55 @@ private:
 };
 
 // Harmonics: the reference runs a neural model of a fully wet process here and mixes it with the dry signal by the
-// amount, a little under linearly (the measured weights); ours is learned from that wet process (capture_nn.py harm80 /
-// harm50, the amount at 1).
+// amount, a little under linearly (the measured weights), its processing changing a little with the amount too; ours
+// is learned at amounts 0.25, 0.5, 0.75 and 1 (capture_nn.py harm80 / harm50 ..., train_wn.py EQUIV: the fully wet
+// equivalent of each), the two models either side of the amount interpolated and mixed in by the same weights.
 class Harmonics
 {
 public:
+    static constexpr double nodes[4] { 0.25, 0.5, 0.75, 1.0 };
+
     void prepare (int maxBlock)
     {
-        for (int c = 0; c < 2; ++c) { model[0][c].prepare (models::harm80); model[1][c].prepare (models::harm50); }
-        for (auto& b : tmp) b.assign ((size_t) std::max (1, maxBlock), 0.0);
+        const WaveNetWeights* w[2][4] { { &models::harm80a25, &models::harm80a50, &models::harm80a75, &models::harm80 },
+                                        { &models::harm50a25, &models::harm50a50, &models::harm50a75, &models::harm50 } };
+        for (int f = 0; f < 2; ++f)
+            for (int k = 0; k < 4; ++k)
+                for (auto& m : model[f][k]) m.prepare (*w[f][k]);
+        for (auto& v : tmp) for (auto& b : v) b.assign ((size_t) std::max (1, maxBlock), 0.0);
+        amounts.assign ((size_t) std::max (1, maxBlock), 0.0);
     }
-    void reset() { for (auto& k : model) for (auto& m : k) m.reset(); }
+    void reset() { for (auto& f : model) for (auto& k : f) for (auto& m : k) m.reset(); pair = -1; }
     void setMode (int freqHz)
     {
-        const int k = freqHz == 50 ? 1 : 0;
-        if (k != current) { model[k][0].reset(); model[k][1].reset(); current = k; }
+        const int f = freqHz == 50 ? 1 : 0;
+        if (f != current) { current = f; pair = -1; }
     }
     // in place: the wet signal mixed with the dry one by the amount (0 ... 1)
     void process (double* l, double* r, int n, Ramp& amount)
     {
-        const int k = current < 0 ? 0 : current;
+        const int f = current < 0 ? 0 : current;
         double* ch[2] { l, r };
-        for (int c = 0; c < 2; ++c) model[k][c].process (ch[c], tmp[c].data(), n);
+        for (int i = 0; i < n; ++i) amounts[(size_t) i] = amount.next();
+        // the two models either side of the amount (at the block's middle); one coming in starts from silence
+        const double mid = amounts[(size_t) (n / 2)];
+        int lo = 0;
+        while (lo < 2 && mid > nodes[lo + 1]) ++lo;
+        if (lo != pair)
+            for (int k = lo; k <= lo + 1; ++k)
+                if (pair < 0 || k < pair || k > pair + 1) for (auto& m : model[f][k]) m.reset();
+        pair = lo;
+        for (int s = 0; s < 2; ++s)
+            for (int c = 0; c < 2; ++c) model[f][lo + s][c].process (ch[c], tmp[s][c].data(), n);
         for (int i = 0; i < n; ++i)
         {
-            const double w = weight (amount.next());
-            for (int c = 0; c < 2; ++c) ch[c][i] += w * (tmp[c][(size_t) i] - ch[c][i]);
+            const double a = amounts[(size_t) i], w = weight (a);
+            const double t = std::clamp ((a - nodes[lo]) / (nodes[lo + 1] - nodes[lo]), 0.0, 1.0);
+            for (int c = 0; c < 2; ++c)
+            {
+                const double wet = tmp[0][c][(size_t) i] + t * (tmp[1][c][(size_t) i] - tmp[0][c][(size_t) i]);
+                ch[c][i] += w * (wet - ch[c][i]);
+            }
         }
     }
     // the amount's weight of the wet signal (measured: 0.237, 0.483, 0.738 at 0.25, 0.5, 0.75)
@@ -71,9 +94,9 @@ public:
     }
 
 private:
-    LearnedWaveNet model[2][2];
-    std::vector<double> tmp[2];
-    int current = -1;
+    LearnedWaveNet model[2][4][2];        // [frequency][amount node][channel]
+    std::vector<double> tmp[2][2], amounts;
+    int current = -1, pair = -1;
 };
 
 class Lift

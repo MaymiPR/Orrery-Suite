@@ -102,17 +102,20 @@ void ScorpiusProcessor::prepareToPlay (double sampleRate, int block)
         {
             const auto& t = sc::dsp::tuning();
             const bool low = sampleRate < 48000.0;
-            toInner[c].prepare (sampleRate, 48000.0, low ? t.resampleCutoffIn : t.resampleCutoffInHigh);
-            keyToInner[c].prepare (sampleRate, 48000.0, low ? t.resampleCutoffIn : t.resampleCutoffInHigh);
-            toOuter[c].prepare (48000.0, sampleRate, low ? t.resampleCutoffOut : t.resampleCutoffOutHigh);
+            const int hIn = low ? 16 : (int) std::lround (t.resampleHalfInHigh), hOut = low ? 16 : (int) std::lround (t.resampleHalfOutHigh);
+            const double beta = low ? 8.0 : t.resampleBetaHigh;
+            toInner[c].prepare (sampleRate, 48000.0, low ? t.resampleCutoffIn : t.resampleCutoffInHigh, hIn, beta);
+            keyToInner[c].prepare (sampleRate, 48000.0, low ? t.resampleCutoffIn : t.resampleCutoffInHigh, hIn, beta);
+            toOuter[c].prepare (48000.0, sampleRate, low ? t.resampleCutoffOut : t.resampleCutoffOutHigh, hOut, beta);
             inner[c].reserve ((size_t) block48 * 2);
             keyInner[c].reserve ((size_t) block48 * 2);
         }
         // the delay the reference has at this rate (measured; reported a little short above 48 kHz, as it does):
         // a few samples of output held ahead (so the output never runs short), the rest trimmed by the converters'
         // start offsets
-        const auto [target, reported] = referenceDelay (sampleRate);
-        const double r = sampleRate / 48000.0, full = sc::dsp::Resampler::half * (1 + r);
+        auto [target, reported] = referenceDelay (sampleRate);
+        if (sampleRate > 48000.0) target += sc::dsp::tuning().resampleDelayTrimHigh;
+        const double r = sampleRate / 48000.0, full = toInner[0].halfLength() + toOuter[0].halfLength() * r;
         const int prefill = jmax (2, (int) std::ceil (target - full));
         const double trim = full + prefill - target;                  // 0 ... 1 + r
         const double inTrim = jmin (0.999, trim), outTrim = jmin (0.999, (trim - inTrim) / r);

@@ -236,7 +236,10 @@ down more of how it is built:
   1.4 times the chosen frequency (112 / 70 Hz), its boost soft-clipped and then high-passed at 20 Hz. That structure
   nulls at −43 … −48 dB; Scorpius now learns the fully wet process instead (`capture_nn.py harm80 / harm50`, amount
   1; a WaveNet as the drive's: −62 / −63 dB on held-out pieces, against −50 for an LSTM of the reference's own size,
-  24 units) and mixes it by the measured amount weights. The amount is not quite a mix: the output at amount a is
+  24 units) and mixes it by the measured amount weights; since the amount also changes the processing, at amounts
+  0.25, 0.5 and 0.75 as well (each the fully wet equivalent x + (y − x) / w, `train_wn.py EQUIV`; −51 … −75 dB held
+  out), the two models either side of the amount interpolated: at 0.8 −55 … −71 dB in place (one model: −46 … −52).
+  The amount as an extra input of one model (`COND`) does worse at amount 1 (−37 … −44). The amount is not quite a mix: the output at amount a is
   (1 − w) x + w wet (+0.4 % of x) with w = 0.105 / 0.21 / 0.37 / 0.52 / 0.72 / 0.86 at a = 0.9 … 0.15, leaving
   −31 … −53 dB re the contribution that no filters on the two terms explain (the amount changes the processing).
 - **Compression** (`fit_comp.py`): a feed-forward compressor on the mid signal: threshold −12.8 dBFS (detector level),
@@ -288,7 +291,7 @@ down more of how it is built:
   short-memory network reproduces them; the drive's peaks wander irregularly far above full scale. Scorpius learns
   its own models of them from 174 s of program material per setting (`capture_nn.py`): the drive a small WaveNet
   (8 channels, 12 layers of dilations 1 … 2048, `train_wn.py`), one per colour and hi-pass setting (the hi-pass
-  changes the drive's sound on music by more than its low cut suggests), lift's wet path a WaveNet too (−46.4 dB on held-out pieces, a GRU of 16 units
+  changes the drive's sound on music by more than its low cut suggests), lift's wet path a WaveNet too (−48.1 dB on held-out pieces after 60k steps, a GRU of 16 units
   −39.8), each between a learned short FIR and a learned 8192-tap FIR. Trained on the GPU when there is one. On
   held-out pieces up to +4 dBFS peak the drive's models null at −25 (colour a) to −33 dB (c). On the loud mastered
   track the drive's error is broadband (−11 … −20 dB in every band), the same in loud and quiet passages, as large as
@@ -297,12 +300,21 @@ down more of how it is built:
   possible. What does not help colour a: more channels or layers (16 channels −25.5 against −24.6), a longer
   memory (dilations to 8192 or 32768, 0.34 / 1.4 s: −24.1 / −24.0), slow envelopes of the input as extra inputs
   (10 ms … 1 s: −23.8), a long pre-filter (−24.2), LSTMs (1 x 24: −19.7; 3 x 16 / 3 x 24: −20.5 / −21.0 after 20k
-  steps). The reference's binary names its neural models (RESEARCH.md: "NLS Buss Drive A … LSTM_3_LAYER", other "NLS
-  Buss" LSTMs of 2 layers, "Black Box", "Decapitator", "Shadow Hills" of 1): drive colour a is very likely a 3-layer
-  LSTM; ours do not train as well as the WaveNet yet.
+  steps; 3 x 24 after 100k: -23.4, its loudest piece -13.7). The reference's binary names its neural models
+  (RESEARCH.md: "NLS Buss Drive A … LSTM_3_LAYER", other "NLS Buss" LSTMs of 2 layers, "Black Box", "Decapitator",
+  "Shadow Hills" of 1): drive colour a is very likely a 3-layer LSTM; ours do not train as well as the WaveNet.
+  The reference's drive is not chaotic (noise added at -100 … -60 dBFS moves its output in proportion) and depends
+  on no future input; a linear filter explains only 3 … 4 dB of its output even 10 dB below full scale. The loud
+  pieces are the limit even in training: the model fits the quiet ones to -29 dB and the loud ones to -16 … -19,
+  trained or held out alike; trained on one loud piece alone it reaches -21 (8 channels) / -26 dB (16). What helps:
+  **the network's output beside the long filter, not through it** (y = Post(u) + WaveNet(u)): colour a -24.6 ->
+  -26.1 dB with 8 channels, -27.2 with 12 (its loudest piece -16.3 -> -18.7 / -20.0), 60k steps; the default preset
+  on the track -16.1 -> -20.8 dB. For colours b and c it is better on loud pieces, worse on quiet ones.
 
 ## Open
 
-- The drive (colour a especially; all of the default preset's error), harmonics' amount law, compression mode a on
-  drums (−40 against b's −48), which crossings the low path's flip-flop counts on music, its soft limit on loud
-  bass, grit after the compressor on stereo material, the converters above 48 kHz.
+- The drive on loud, dense material (all of the default preset's error), compression mode a on drums (−40 against
+  b's −48), which crossings the low path's flip-flop counts on music, its soft limit on loud bass, grit after the
+  compressor on stereo material, the converters above 48 kHz (−21 … −31 dB all off: a delay trim of 0.175 samples
+  and the cutoffs fitted, `fit_resample_high.py`; neither longer filters within the reference's delay nor another
+  Kaiser beta reaches its response near 20 … 24 kHz).

@@ -15,20 +15,21 @@ local (git-ignored).
 
 ## The whole plug-in: the factory presets
 
-48 kHz (44.1 kHz within 0.4 dB of these, except "all off"):
+48 kHz (44.1 kHz within 0.2 dB of these, except "all off"):
 
 | Preset | drums | drums -12 | track | track -10 |
 |---|---|---|---|---|
-| start me up (default) | -21.2 | -31.0 | -16.1 | -24.6 |
-| c mode (drive colour c, compression mode a) | -29.4 | -39.4 | -21.4 | -34.1 |
-| free at last | -21.1 | -30.9 | -16.2 | -24.6 |
-| louder | -21.4 | -30.1 | -16.0 | -24.3 |
-| low end theory | -22.4 | -32.0 | -16.6 | -25.5 |
-| parallel me in | -21.2 | -31.1 | -15.9 | -24.5 |
+| start me up (default) | -24.9 | -32.8 | -20.8 | -29.7 |
+| c mode (drive colour c, compression mode a) | -31.1 | -36.6 | -23.3 | -34.6 |
+| free at last | -24.9 | -32.7 | -20.7 | -29.5 |
+| louder | -25.2 | -32.4 | -20.9 | -29.7 |
+| low end theory | -24.3 | -30.8 | -21.0 | -28.8 |
+| parallel me in | -25.0 | -32.8 | -20.7 | -29.8 |
 | top of the morning | -32.9 | -36.6 | -33.4 | -35.1 |
 | all off, 48 kHz | exact | exact | exact | exact |
-| start me up with the drive off (the rest of the chain) | -43.8 | -47.4 | -41.4 | -44.4 |
+| start me up with the drive off (the rest of the chain) | -46.8 | -50.7 | -44.1 | -48.0 |
 | all off, 44.1 kHz | -51.5 | -51.5 | -63.7 | -63.7 |
+| all off, 88.2 / 96 / 192 kHz (drums, track) | -20.6 / -21.1 / -22.6 | | -27.7 / -28.3 / -31.4 | |
 
 ## Module by module
 
@@ -39,29 +40,33 @@ Each module alone (the others off with the reference's own power buttons), on th
 | EQ, one band at +6 dB | -55 … -67 |
 | EQ, all bands at +4 dB | -46 … -48 |
 | sub | -65 … -72 |
-| harmonics (learned), amount 0.8 / 1 | -46 … -52 / -51 … -68 |
+| harmonics (learned), amount 1 / 0.8 / 0.6 / 0.3 | -50 … -65 / -55 … -71 / -59 … -67 / -66 … -67 |
 | compression, mode b / a | -47.5 … -58 / -40 … -50 |
 | loud, level 1 | -31 … -39 |
-| lift (learned) | -41 … -50 |
-| drive colour c (learned) | -21 … -34 |
-| drive colour a (learned) | -16 … -31 |
+| lift (learned) | -43.5 … -51.5 |
+| drive colour a, hi-pass on (learned, the default) | -19 … -31 |
 | grit (learned), level 1 / 0.731 | -27 … -31 / -33 … -37 |
 | low, tones and chords | -38 … -46 |
 | low, music | about 0 (the octave's polarity slips against the reference's) |
 
-The learned drive models on held-out pieces of their training material (up to +4 dBFS peak): colour a -24.6 / -24.8
-dB (hi-pass on / off), colour b -31.7 / -31.4, colour c -33.4 / -32.9.
+The learned drive models on held-out pieces of their training material (up to +4 dBFS peak), mean (loudest piece):
+colour a -27.2 (-20.0) / -26.3 (-19.4) dB (hi-pass on / off), colour b -29.2 (-22.2) / -30.1 (-22.3), colour c -31.6
+(-24.0) / -31.0 (-24.0).
 
 ## What the numbers say
 
 - **The fixed parts are close to exact** (EQ, sub, the rate converters: -50 to -70 dB): these are the reference's own
   filters, identified from its responses.
-- **Everything but the drive** nulls at -41 … -47 dB together (the default preset with the drive off): the
-  compressor applies its gain before its filters (as the reference), lift and harmonics are learned.
+- **Everything but the drive** nulls at -44 … -51 dB together (the default preset with the drive off): the
+  compressor applies its gain before its filters (as the reference), lift and harmonics are learned (harmonics at
+  four amounts, interpolated).
 - **The whole plug-in is limited by the drive**, which the reference runs as a learned model of its own and which
   Scorpius learns from the reference's input and output: on loud program material the default preset nulls at about
-  -16 to -21 dB, 12 dB lower at -25 to -31 dB. Colour c, which Scorpius models best, takes the chain to -21 … -39.
-  What is left of the drive is mostly below 250 Hz; wider or deeper models gain only about 1 dB.
+  -21 to -25 dB, 10 … 12 dB lower at -30 to -33 dB. Loud, dense material is the hard part: a linear filter explains
+  only 3 dB of the drive's output there, and even a model trained on one loud piece alone reaches only -21 (8
+  channels) to -26 dB (16) on it.
+- **Above 48 kHz** the rate converters are the limit (-21 … -31 dB with everything off): the reference's response
+  near 20 … 24 kHz (and its phase there) is not a windowed sinc of any length its delay allows.
 - **Grit** is learned too (a transient shaper of the mids, each channel by itself), 5 … 9 dB better than a
   hand-made transient shaper; after the compressor on stereo material the reference's grit still differs a little.
 - **Low** matches on tones and chords; on music its octave keeps the right shape and level but its polarity drifts
@@ -69,5 +74,7 @@ dB (hi-pass on / off), colour b -31.7 / -31.4, colour c -33.4 / -32.9.
 
 ## CPU
 
-60 s of the drum loop, stereo, 48 kHz, one instance, offline: the default preset takes 6.0 s of CPU against the
-reference's 9.2 s in the same run (drive alone 3.8 s against 5.7, grit alone 3.8 s against 4.0).
+60 s of the drum loop, stereo, 48 kHz, one instance, offline, the two plug-ins in the same run: the default preset
+takes 10.6 … 10.8 s of CPU against the reference's 9.1 s (drive alone 4.6 s against 5.7, lift 3.3 against 2.3,
+compression 0.5 against 2.1, grit 2.8 against 4.1). The learned parts run in 8-wide vector registers where the
+processor has AVX.
