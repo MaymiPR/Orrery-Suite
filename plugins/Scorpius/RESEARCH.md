@@ -365,12 +365,14 @@ probe (1 kHz: steps of -10, -4, -14, -2, -8 dBFS, then -4 / -14 alternating ever
   points (9.6 at -50 dBFS, 10.7 at -40, 18 at -10): harmonics 8.29 + 15.80 (a^0.312 - 0.083), up 0.05 s, down
   0.3 s at most 24 px/s; lift 3.76 + 19.07 (a^0.168 - 0.083), up 0.22 s, down 0.4 s. Per-frame radius against the
   reference: harmonics 0.95 px rms (was 2.4), lift 1.5; means and wobble now within 0.15 px.
-- **SCORPIUS style, redone again (ours):** a scorpion's tail rises from the stripe's bottom left corner (glowing
-  segments, the venom bulb lit in the venom's colour, the barb) and shoots venom along the stripe: a volley on each
-  beat (a big glob and often a smaller one; at most one volley per 0.28 s), small spits in between (0.5 ... 3 a
-  second with the level). Globs fly with comet tails that turn colour, glance off the tube's walls, slow down and
-  burst into splashes of their own colour where they die; their tails drip. Colours: acid green, teal, electric
-  violet, magenta, amber, the whole set drifting round the hue circle about once a minute; the haze behind is tinted
-  from magenta at the stinger through green to violet. The light follows the same level as the ORION style.
+- **SCORPIUS style, redone again (ours): venom coming at you.** A venom gland glows far away in the middle of the
+  stripe and sprays venom out of the screen, as the reference's field streams outwards: each drop flies in 3-D
+  towards the viewer (projected from its distance: small, dim and slow in the middle, growing, brightening and
+  speeding outwards as it nears), streaking, near ones with bright droplet heads, until it passes the stripe's edges.
+  It sprays 90 ... 990 drops a second with the level and spits globs; each beat fires a burst (170 drops, a ring of
+  64 that spreads as it comes, 3 ... 5 globs, the gland's flash and rays); globs that reach the glass splat on it and
+  run down with a few drips. Colours: acid green, teal, electric violet, magenta, amber (each burst its own, its ring
+  another), drifting round the hue circle about once a minute; the haze behind flares at the middle on a beat. The
+  light follows the same level as the ORION style. Cost at 200 %: 3.6 ms a frame (the ORION style 3.7).
 - **Knobs (both plug-ins):** double-click opens a field over the knob to type its value (Enter or a click elsewhere
   sets it, as one host gesture; Escape leaves it); Alt-click still resets to the default.

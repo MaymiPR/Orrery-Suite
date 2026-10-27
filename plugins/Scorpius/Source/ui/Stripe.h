@@ -15,12 +15,13 @@
 //     the sound stops, falling at 50 dB/s): dark below -72 dBFS, full from -40 dBFS up, ((dB + 72) / 32)^1.25 between
 //     (measured with tones from -65 to -40 dBFS: 0.16, 0.29, 0.44, 0.61, 0.81, 1), and eased over ~30 ms on screen;
 //   - with the particle animation off (settings), the stripe stays dark.
-// Our own style (settings, "SCORPIUS"): a scorpion's stinger glows at the left end of the stripe and shoots venom
-// across it, under the same light (the level's brightness). Each beat (the light's jump up) fires a volley: a big glob
-// and a spray of smaller ones; between beats it spits small drops, more the louder it is. The globs fly through the
-// tube, glancing off its walls and slowing down, trailing comet tails that shift colour and drip, and burst where they
-// die into a splash of sparks. The venom is colourful: acid green, teal, electric violet, magenta and amber, its hue
-// wandering slowly so that each stretch of music has its own; the haze behind it is tinted to match.
+// Our own style (settings, "SCORPIUS"): venom coming at you. A venom gland glows in the middle of the stripe, far
+// away, and sprays venom out of the screen: each drop flies towards the viewer, slow and small in the distance,
+// growing, brightening and speeding outwards as it comes near (a warp field), streaking, until it flies past the
+// stripe's edges. It sprays all the time (more the louder it is); each beat (the light's jump up) fires a burst: a
+// flood of drops, a ring that spreads as it comes, and big globs that splat on the glass and run down it. Colourful:
+// acid green, teal, electric violet, magenta and amber, each burst in its own, the set drifting round the hue circle
+// about once a minute; the haze behind is tinted to match and flares at the middle on a beat.
 // The light is added (as light), computed per physical pixel and drawn as one image per frame of the editor's clock.
 namespace sc
 {
@@ -49,21 +50,22 @@ public:
 
 private:
     enum class Kind { dot, dash, faint, blob, flare, star };
-    // ours: the venom
+    // ours: the venom, in 3-D (x and y across, z the distance: 1 far, 0 at the glass), or on the glass (splats, drips)
     struct Drop
     {
-        enum class Type { glob, trail, spark, drip, flash } type;
-        float x, y, vx, vy, size, r, g, b, level, born, life, drag, gravity, hue, emitted;
+        enum class Type { spray, glob, splat, drip, flash } type;
+        float X, Y, Z, vX, vY, vZ, size, r, g, b, level, born, life, hue, sx, sy, px, py;
     };
-    void fire (bool volley);
+    void fire (bool burst);
+    void emit (Drop::Type, float hue, float speed, float size, float level, float angle = -1.0f);
     void advanceVenom (float dt);
-    void burst (const Drop&);
     void addDrop (const Drop&);
     void renderVenom (float pxPerDesign);
-    void renderStinger (float pxPerDesign);
+    void renderGland (float pxPerDesign);
+    void splatLine (float x0, float y0, float x1, float y1, float width, float level, float r, float g, float b, float pxPerDesign);
     std::vector<Drop> drops;
-    float hueDrift = 0.0f, spitDue = 0.0f, charge = 0.0f;
-    double lastVolley = -1.0;
+    float hueDrift = 0.0f, sprayDue = 0.0f, globDue = 0.0f, charge = 0.0f;
+    double lastBurst = -1.0;
     struct Particle
     {
         Kind kind;
