@@ -380,10 +380,12 @@ probe (1 kHz: steps of -10, -4, -14, -2, -8 dBFS, then -4 / -14 alternating ever
   the globs bigger and deeper green, the mids thicken the mist. The light follows the same level as the ORION style.
   The heart is a soft glow (warm core, crimson, maroon, shading into the green haze) beating lub-dub, resynced to each
   strike, after which a red pressure wave runs out both ways turning green. **Blood** (the accent): on hits with
-  strong bass, at most once every 1.2 s, 1 or 2 globs of blood fly with the venom and spatter on the glass: a dense
-  dark red middle, lobes, and elongated droplets flung out pointing away from the hit, a dull gloss while wet; 1 or 2
-  heavy runs go down slowly; it darkens as it dries (3 ... 4.5 s) and fades. Blood covers what is behind it (a layer
-  that absorbs green and blue most, its colour in front), where the venom only adds light. Cost at 200 %: 3.1 ms a
-  frame (the ORION style 3.2).
+  strong bass, at most once every 1.2 s, 1 or 2 globs of blood fly with the venom and hit the glass as a liquid: a
+  pool of beads spreading out from the hit (slower than water, it is thicker), droplets flung away that streak as they
+  fly, and 1 or 2 heavy beads that run down in fits and starts leaving trails of tiny ones. It is translucent: a layer
+  takes green and blue away from what is behind it (the venom shows through tinted red, darker where the blood is
+  thick), its red is in front (where drops overlap they merge, saturating at a deep red instead of adding up), with a
+  red refracted rim and a wet highlight on top; drying (the second half of its 3 ... 5 s) it loses the shine and
+  darkens, then fades. Cost at 200 %: 3.7 ms a frame (the ORION style 3.2 ... 3.7).
 - **Knobs (both plug-ins):** double-click opens a field over the knob to type its value (Enter or a click elsewhere
   sets it, as one host gesture; Escape leaves it); Alt-click still resets to the default.

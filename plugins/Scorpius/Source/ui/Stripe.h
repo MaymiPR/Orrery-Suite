@@ -22,8 +22,9 @@
 // louder: a steady spray; each beat a strike, the heart squeezing and recoiling as it fires a burst, a ring and 2 ... 4
 // globs, and a red pressure wave runs out from it, turning green. The heart is a soft glow that shades from its warm
 // core through crimson and maroon into the green haze, beating lub-dub. On the biggest hits (strong bass) it also throws
-// blood: dark, thick drops that spatter on the glass (elongated droplets pointing away from the hit), run down slowly in
-// heavy trails and darken as they dry; blood covers what is behind it, where the venom only adds light. A share of the spray and all the globs hit the glass, as water does: a splash ring and droplets flung out on
+// blood: it splashes on the glass as a liquid, a pool of beads spreading out and droplets flung away streaking, then
+// runs down in heavy beads that leave trails of tiny ones; it is translucent (it tints what is behind it red, darker
+// where thick, with a red refracted rim and a wet highlight) and, drying, loses its shine and darkens, then fades. A share of the spray and all the globs hit the glass, as water does: a splash ring and droplets flung out on
 // impact, then clear beads that stay (a faint tint, a bright highlight, light refracted along their lower edge); the
 // bigger ones run down in fits and starts, leaving a trail of tiny beads, and the globs' pools eat at the glass
 // (bubbles and wisps rise, a faint mark is left). The bass makes the globs bigger and deeper green, the mids thicken
@@ -61,7 +62,7 @@ private:
     // ours: the venom, in 3-D (x and y across, z the distance: 1 far, 0 at the glass), or on the glass
     struct Drop
     {
-        enum class Type { spray, glob, mist, bead, ring, bubble, wisp, etch, flash, wave, spatter, run } type;
+        enum class Type { spray, glob, mist, bead, ring, bubble, wisp, etch, flash, wave } type;
         float X, Y, Z, vX, vY, vZ, size, r, g, b, level, born, life, seed, sx, sy, px, py;
         bool wet;                    // a spray drop that lands on the glass (the rest fly past)
         bool blood;                  // a glob of blood (the heart's, on the biggest hits)
@@ -88,7 +89,7 @@ private:
     // the layers (ours): splats add to the canvas, the light by default; blood darkens what is behind it (absorb, per
     // channel) and adds its own colour in front
     float* canvas = nullptr;
-    std::vector<float> front, absorb;
+    std::vector<float> front, absorb, gloss;      // (gloss: blood's highlights, on top of everything)
     struct Particle
     {
         Kind kind;
