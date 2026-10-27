@@ -35,7 +35,7 @@ namespace sc::dsp
 {
 #if SC_AVX
 // the two matrix products of a layer in 8-wide registers (see LearnedWaveNet::block), over nT (a multiple of 16) samples
-SC_AVX_FN inline void waveNetConvAvx (const float* rows, int rowLen, int d, const float* W, const float* B, float* zp, int C, int N, int nT)
+SC_AVX_FN inline void waveNetConvAvx (const float* rows, int rowLen, int d, int K, const float* W, const float* B, float* zp, int C, int N, int nT)
 {
     for (int o = 0; o < 2 * C; o += 4)
         for (int t = 0; t < nT; t += 16)
@@ -44,13 +44,21 @@ SC_AVX_FN inline void waveNetConvAvx (const float* rows, int rowLen, int d, cons
             for (int k = 0; k < 4; ++k) acc[k][0] = acc[k][1] = _mm256_set1_ps (B[o + k]);
             for (int c = 0; c < C; ++c)
             {
-                const float* old = rows + c * rowLen + t; const float* now = old + d;
-                const __m256 o0 = _mm256_loadu_ps (old), o1 = _mm256_loadu_ps (old + 8), n0 = _mm256_loadu_ps (now), n1 = _mm256_loadu_ps (now + 8);
+                __m256 x[3][2];
+                for (int j = 0; j < K; ++j)
+                {
+                    const float* p = rows + c * rowLen + t + j * d;
+                    x[j][0] = _mm256_loadu_ps (p); x[j][1] = _mm256_loadu_ps (p + 8);
+                }
                 for (int k = 0; k < 4; ++k)
                 {
-                    const __m256 wo = _mm256_broadcast_ss (W + ((o + k) * C + c) * 2), wn = _mm256_broadcast_ss (W + ((o + k) * C + c) * 2 + 1);
-                    acc[k][0] = _mm256_add_ps (acc[k][0], _mm256_add_ps (_mm256_mul_ps (wo, o0), _mm256_mul_ps (wn, n0)));
-                    acc[k][1] = _mm256_add_ps (acc[k][1], _mm256_add_ps (_mm256_mul_ps (wo, o1), _mm256_mul_ps (wn, n1)));
+                    const float* wk = W + ((o + k) * C + c) * K;
+                    for (int q = 0; q < 2; ++q)
+                    {
+                        __m256 s = _mm256_add_ps (_mm256_mul_ps (_mm256_broadcast_ss (wk), x[0][q]), _mm256_mul_ps (_mm256_broadcast_ss (wk + 1), x[1][q]));
+                        if (K > 2) s = _mm256_add_ps (s, _mm256_mul_ps (_mm256_broadcast_ss (wk + 2), x[2][q]));
+                        acc[k][q] = _mm256_add_ps (acc[k][q], s);
+                    }
                 }
             }
             for (int k = 0; k < 4; ++k) { _mm256_storeu_ps (zp + (o + k) * N + t, acc[k][0]); _mm256_storeu_ps (zp + (o + k) * N + t + 8, acc[k][1]); }
@@ -124,11 +132,14 @@ struct WaveNetWeights
     std::vector<int> dilations;
     std::vector<float> pre, post;
     std::vector<float> inW, inB;                     // C x (1 + conds), C
+    // (convW: per layer (2C) x C x kernel)
     std::vector<std::vector<float>> convW, convB;     // per layer: (2C) x C x 2 (PyTorch layout), 2C
     std::vector<std::vector<float>> resW, resB, skipW, skipB;   // per layer: C x C, C
     std::vector<float> outW; float outB;             // 1 x C
     bool bypass = false;                             // y = Post(u) + WaveNet(u) (the network beside the long filter)
     int conds = 0;                                   // a control's value as an extra input (0 or 1; train_wn.py COND)
+    int kernel = 2;                                  // the dilated convolutions' kernel size (2 or 3; train_wn.py KERNEL)
+    std::vector<std::vector<float>> mixW;            // per layer 2C: the input mixed into it (train_wn.py MIXIN), or none
 };
 
 class LearnedWaveNet
@@ -144,7 +155,8 @@ public:
         post.prepare (w.post);
         pre.assign (w.pre.size(), 0.0f);
         hist.clear();
-        for (int d : w.dilations) hist.push_back (std::vector<float> ((size_t) C * (size_t) (d + maxBlock), 0.0f));
+        jassert (w.kernel == 2 || w.kernel == 3);
+        for (int d : w.dilations) hist.push_back (std::vector<float> ((size_t) C * (size_t) ((w.kernel - 1) * d + maxBlock), 0.0f));
         u.assign ((size_t) maxBlock, 0.0f); y = u;
         h.assign ((size_t) (C * maxBlock), 0.0f); skip = h; g = h;
         z.assign ((size_t) (2 * C * maxBlock), 0.0f);
@@ -179,7 +191,7 @@ private:
     void block (const double* in, double* out, int n, const double* cond)
     {
         const auto& w = *weights;
-        const int C = w.channels, K = (int) w.pre.size(), N = maxBlock;
+        const int C = w.channels, PL = (int) w.pre.size(), N = maxBlock;
 #if SC_AVX
         static const bool avx = juce::SystemStats::hasAVX();
 #else
@@ -193,8 +205,8 @@ private:
             pre[(size_t) prePos] = (float) in[t];
             float s = 0;
             int j = prePos;
-            for (int k = 0; k < K; ++k) { s += w.pre[(size_t) k] * pre[(size_t) j]; j = j == 0 ? K - 1 : j - 1; }
-            prePos = (prePos + 1) % K;
+            for (int k = 0; k < PL; ++k) { s += w.pre[(size_t) k] * pre[(size_t) j]; j = j == 0 ? PL - 1 : j - 1; }
+            prePos = (prePos + 1) % PL;
             up[t] = s;
         }
         for (int c = 0; c < C; ++c)
@@ -211,13 +223,13 @@ private:
         }
         for (size_t l = 0; l < w.dilations.size(); ++l)
         {
-            const int d = w.dilations[l], rowLen = d + maxBlock;
+            const int d = w.dilations[l], K = w.kernel, back = (K - 1) * d, rowLen = back + maxBlock;
             float* rows = hist[l].data();
-            // the layer's input after its last `d` inputs: row c = [x(t - d) ... x(t - 1) | this block]
-            for (int c = 0; c < C; ++c) std::memcpy (rows + c * rowLen + d, hp + c * N, sizeof (float) * (size_t) n);
+            // the layer's input after its last (K - 1) d inputs: row c = [x(t - (K - 1) d) ... x(t - 1) | this block]
+            for (int c = 0; c < C; ++c) std::memcpy (rows + c * rowLen + back, hp + c * N, sizeof (float) * (size_t) n);
             const float* W = convS[l].data(); const float* B = w.convB[l].data();
 #if SC_AVX
-            if (avx) waveNetConvAvx (rows, rowLen, d, w.convW[l].data(), B, zp, C, N, n8);
+            if (avx) waveNetConvAvx (rows, rowLen, d, K, w.convW[l].data(), B, zp, C, N, n8);
             else
 #endif
             for (int o = 0; o < 2 * C; o += 4)
@@ -227,17 +239,27 @@ private:
                     for (int k = 0; k < 4; ++k) acc[k][0] = acc[k][1] = V4::all (B[o + k]);
                     for (int c = 0; c < C; ++c)
                     {
-                        const float* old = rows + c * rowLen + t; const float* now = old + d;
-                        const V4 o0 = V4::load (old), o1 = V4::load (old + 4), n0 = V4::load (now), n1 = V4::load (now + 4);
+                        V4 x[3][2];                  // the taps, oldest first: x(t - (K - 1) d) ... x(t)
+                        for (int j = 0; j < K; ++j) { const float* p = rows + c * rowLen + t + j * d; x[j][0] = V4::load (p); x[j][1] = V4::load (p + 4); }
                         for (int k = 0; k < 4; ++k)
                         {
-                            const V4 wo = V4::load (W + ((o + k) * C + c) * 8), wn = V4::load (W + ((o + k) * C + c) * 8 + 4);
-                            acc[k][0] = acc[k][0] + (wo * o0 + wn * n0);
-                            acc[k][1] = acc[k][1] + (wo * o1 + wn * n1);
+                            const float* wk = W + ((o + k) * C + c) * K * 4;
+                            const V4 w0 = V4::load (wk), w1 = V4::load (wk + 4);
+                            for (int q = 0; q < 2; ++q)
+                            {
+                                V4 s = w0 * x[0][q] + w1 * x[1][q];
+                                if (K > 2) s = s + V4::load (wk + 8) * x[2][q];
+                                acc[k][q] = acc[k][q] + s;
+                            }
                         }
                     }
                     for (int k = 0; k < 4; ++k) { acc[k][0].store (zp + (o + k) * N + t); acc[k][1].store (zp + (o + k) * N + t + 4); }
                 }
+            if (! w.mixW.empty())
+            {
+                const float* M = w.mixW[l].data();
+                for (int o = 0; o < 2 * C; ++o) { float* zo = zp + o * N; const float m = M[o]; for (int t = 0; t < n8; ++t) zo[t] += m * up[t]; }
+            }
             for (int c = 0; c < C; ++c)
             {
                 const float* za = zp + c * N; const float* zb = zp + (C + c) * N; float* gc = gp + c * N;
@@ -277,7 +299,7 @@ private:
                         }
                 }
             // keep the last d inputs for the next block
-            for (int c = 0; c < C; ++c) std::memmove (rows + c * rowLen, rows + c * rowLen + n, sizeof (float) * (size_t) d);
+            for (int c = 0; c < C; ++c) std::memmove (rows + c * rowLen, rows + c * rowLen + n, sizeof (float) * (size_t) back);
         }
         float* yp = y.data();
         for (int t = 0; t < n; ++t) yp[t] = w.outB;

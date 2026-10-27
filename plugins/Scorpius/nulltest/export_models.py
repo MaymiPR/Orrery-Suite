@@ -22,6 +22,15 @@ def arr(v):
     return '{ ' + ', '.join(lit(x) for x in v) + ' }'
 
 
+def flags(d, s):
+    """the WaveNet's optional fields (bypass, conds, kernel), written when any differs from its default"""
+    k = int(s['wn.conv.0.weight'].shape[-1]); mix = 'wn.mix.0.weight' in s
+    if not d.get('bypass') and not d.get('cond') and k == 2 and not mix: return ''
+    out = f", {'true' if d.get('bypass') else 'false'}, {1 if d.get('cond') else 0}, {k}"
+    if mix: out += ', { ' + ', '.join(arr(s[f'wn.mix.{i}.weight']) for i in range(d['layers'])) + ' }'
+    return out
+
+
 def lit(x):
     """a C++ float literal (1 -> 1.f: '1f' is not one)"""
     t = f'{x:.9g}'
@@ -46,7 +55,7 @@ if __name__ == '__main__':
             for key in ('conv', 'res', 'skip'):
                 lines.append('    { ' + ', '.join(arr(s[f'wn.{key}.{i}.weight']) for i in range(L)) + ' },')
                 lines.append('    { ' + ', '.join(arr(s[f'wn.{key}.{i}.bias']) for i in range(L)) + ' },')
-            lines.append(f'    {arr(s["wn.out.weight"])}, {lit(float(s["wn.out.bias"][0]))}{", true" if d.get("bypass") else ""}{(", false" if not d.get("bypass") else "") + ", 1" if d.get("cond") else ""} }};')
+            lines.append(f'    {arr(s["wn.out.weight"])}, {lit(float(s["wn.out.bias"][0]))}{flags(d, s)} }};')
             print(name, 'WaveNet', C, 'channels', L, 'layers, post taps', len(post))
             continue
         H = d['hidden']
