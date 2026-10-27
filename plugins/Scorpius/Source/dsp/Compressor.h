@@ -51,7 +51,13 @@ public:
     {
         for (auto& m : wet) for (auto& f : m) f.reset();
         env = 0; envSq = 0; gainDb = 0;
+        shownGr = smoothGr = sinceTake = 0;
     }
+    // the readout above the knob (dB, positive), as the reference's moves (RESEARCH.md UI round 5, films of tones and
+    // music): the gain reduction times the amount, smoothed (up 0.25 s, down 0.2 s); the readout holds the highest
+    // value since it last took the smoothed one, and takes it again after every 1.5 s of compression (the clock stops
+    // while the smoothed reduction is under 0.3 dB: silence and quiet passages keep the last value)
+    double readout() const { return shownGr; }
     // in place; mode 0 = a, 1 = b; the amount (0 ... 1) moving per sample; key: the detector's input (the side-chain,
     // EXT) or null (the signal itself). Returns the largest gain reduction of the block (dB, positive).
     double process (double* l, double* r, int n, int mode, Ramp& amount, const double* keyL = nullptr, const double* keyR = nullptr)
@@ -63,6 +69,7 @@ public:
         const double gRel = t.compGainReleaseMs[m] > 0 ? std::exp (-1.0 / (t.compGainReleaseMs[m] * 0.001 * fs)) : 0.0;
         const double T = t.compThresholdDb[m], R = t.compRatio[m], W = std::max (0.01, t.compKneeDb[m]), rms = t.compRms[m];
         const bool first = t.compGainFirst > 0.5;
+        const double up = std::exp (-1.0 / (0.25 * fs)), down = std::exp (-1.0 / (0.2 * fs)), takeEvery = 1.5 * fs;
         double most = 0;
         for (int i = 0; i < n; ++i)
         {
@@ -83,12 +90,16 @@ public:
             const double am = amount.next();
             l[i] += am * (wl - l[i]);
             r[i] += am * (wr - r[i]);
+            const double v = gainDb * am;
+            smoothGr = v + (smoothGr - v) * (v > smoothGr ? up : down);
+            if (smoothGr > 0.3 && ++sinceTake >= takeEvery) { shownGr = smoothGr; sinceTake = 0; }
+            shownGr = std::max (shownGr, smoothGr);
         }
         return most;
     }
 
 private:
-    double fs = 48000.0, env = 0, envSq = 0, gainDb = 0;
+    double fs = 48000.0, env = 0, envSq = 0, gainDb = 0, shownGr = 0, smoothGr = 0, sinceTake = 0;
     ParallelFilter wet[2][2];
 };
 }

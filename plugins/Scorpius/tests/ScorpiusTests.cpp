@@ -6,6 +6,7 @@
 #include "PluginProcessor.h"
 #include "dsp/Convolver.h"
 #include "dsp/LearnedModules.h"
+#include "shared/ui/MetalKnob.h"
 
 static int failures = 0, checks = 0;
 #define CHECK(cond) do { ++checks; if (! (cond)) { ++failures; std::printf ("FAIL %s:%d  %s\n", __FILE__, __LINE__, #cond); } } while (0)
@@ -405,6 +406,42 @@ static void bench()
     }
 }
 
+// double-clicking a knob opens a field over it: a typed value (in the parameter's own text) is set as one gesture,
+// clamped to the range; Escape leaves the value alone
+static void testValueEntry()
+{
+    ScorpiusProcessor p;
+    Component top;
+    top.setSize (300, 200);
+    orrery::MetalKnob knob (orrery::MetalKnob::Kind::small);
+    top.addAndMakeVisible (knob);
+    knob.setBounds (100, 60, 40, 40);
+    AudioProcessorValueTreeState::SliderAttachment att (p.apvts, sc::id::eq100, knob);
+    int begins = 0, ends = 0;
+    knob.onGesture = [&] (bool b) { (b ? begins : ends)++; };
+    auto field = [&top]() -> TextEditor* { for (auto* c : top.getChildren()) if (auto* t = dynamic_cast<TextEditor*> (c)) return t; return nullptr; };
+    auto type = [&] (const char* text, bool enter)
+    {
+        knob.showValueEntry();
+        auto* t = field();
+        CHECK (t != nullptr);
+        if (t == nullptr) return;
+        CHECK (t->getBounds().getCentre().getDistanceFrom (knob.getBounds().getCentre()) <= 1);
+        t->setText (text);
+        if (enter) t->onReturnKey(); else t->onEscapeKey();
+        CHECK (field() == nullptr);
+    };
+    type ("3.5", true);
+    CHECK_NEAR (real (p, sc::id::eq100), 3.5, 0.05);
+    CHECK (begins == 1 && ends == 1);
+    type ("1.5 dB", true);
+    CHECK_NEAR (real (p, sc::id::eq100), 1.5, 0.05);
+    type ("5", false);
+    CHECK_NEAR (real (p, sc::id::eq100), 1.5, 0.05);
+    type ("99", true);
+    CHECK_NEAR (real (p, sc::id::eq100), knob.getMaximum(), 1e-6);
+}
+
 int main (int argc, char** argv)
 {
     ScopedJuceInitialiser_GUI init;
@@ -419,6 +456,7 @@ int main (int argc, char** argv)
     testLight();
     testConvolver();
     testEngine();
+    testValueEntry();
     std::printf ("%d checks, %d failed\n", checks, failures);
     return failures == 0 ? 0 : 1;
 }

@@ -116,15 +116,18 @@ public:
 };
 
 
-// The circles above harmonics and lift (measured on the reference with tones, steps and music, RESEARCH.md UI round 4):
-// at rest a circle of radius 6.43; once the level it follows (Visuals.h: the lows for harmonics, the mids for lift)
-// passes -52 dBFS, a ring of radius 9.32 + 15.84 (a^0.4 - 0.083), a the peak (9.6 at -50 dBFS, 18 at -10), growing
-// within ~20 ms and shrinking back over ~0.35 s. Its outline is irregular, and the shape moves only as the level
-// changes: a steady tone leaves it still, music keeps it moving.
+// The circles above harmonics and lift (measured on the reference with tones, steps and music, RESEARCH.md UI rounds 4
+// and 5): at rest a circle of radius 6.43; once the level it follows (Visuals.h: the lows for harmonics, the mids for
+// lift, a new reading every 85 ms) passes -52 dBFS, a ring of radius k0 + k1 (a^power - 0.083), a the level (9.6 at
+// -50 dBFS, 10.7 at -40, 18 at -10 with tones), growing and shrinking at its own pace (Law: fitted to films of music,
+// each circle by itself). Its outline wobbles by about 1 px (rms) in lobes 2 ... 12, most in 2 ... 4, and the shape
+// morphs in place, only as the level changes: a steady tone leaves it still, music keeps it moving.
 class Blob : public juce::Component
 {
 public:
-    explicit Blob (juce::uint32 seed);
+    struct Law { float k0, k1, power, upSeconds, downSeconds, fallPxPerSecond; };
+    static constexpr Law lows { 8.286f, 15.797f, 0.312f, 0.05f, 0.298f, 23.9f }, mids { 3.755f, 19.072f, 0.168f, 0.223f, 0.405f, 53.2f };
+    Blob (juce::uint32 seed, Law);
     void paint (juce::Graphics&) override;
     // a new peak (linear) for the time since the last call
     void update (float peak, float seconds);
@@ -132,8 +135,11 @@ public:
     void freeze (float peak);
     static constexpr float restRadius = 6.43f, maxRadius = 22.0f;
 private:
+    static constexpr int lobes = 11;              // 2 ... 12
+    Law law;
+    float target (float peak) const;
     float radius = restRadius, time = 0.0f, lastDb = -200.0f;
-    float amp[6] {}, phase[6] {}, rate[6] {};
+    float amp[lobes] {}, phaseC[lobes] {}, phaseS[lobes] {}, rateC[lobes] {}, rateS[lobes] {};
 };
 
 // The harmonic EQ's bands, drawn above the knobs while the EQ is on: one shape per band, as the reference draws them.

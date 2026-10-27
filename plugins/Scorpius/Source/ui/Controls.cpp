@@ -333,40 +333,52 @@ void GrReadout::paint (Graphics& g)
 {
     g.setColour (theme::mint);
     g.setFont (theme::font (19.5f));
-    theme::textAt (g, text, (float) getWidth() * 0.5f, 22.0f, Justification::horizontallyCentred);
+    // the number is centred and a reduction's "-" hangs to its left (as the reference: "- 3.6" sits left of "0.0")
+    const float cx = (float) getWidth() * 0.5f;
+    const String number = text.startsWith ("-") ? text.substring (1).trimStart() : text;
+    theme::textAt (g, number, cx, 22.0f, Justification::horizontallyCentred);
+    if (number != text)
+    {
+        GlyphArrangement ga;
+        ga.addLineOfText (g.getCurrentFont(), number, 0.0f, 0.0f);
+        theme::textAt (g, "-", cx - ga.getBoundingBox (0, -1, false).getRight() * 0.5f - 5.0f, 22.0f, Justification::right);
+    }
 }
 
 
 //==============================================================================
-Blob::Blob (uint32 seed)
+Blob::Blob (uint32 seed, Law l) : law (l)
 {
     setInterceptsMouseClicks (false, false);
-    // the outline's deformation: lobes 2 ... 7 with their own sizes, phases and speeds, scaled to an rms of 1
+    // the outline's deformation: lobes 2 ... 12 in the reference's proportions (its outlines' angular spectrum), each
+    // swelling in place at its own speed (the reference's shapes morph without turning), scaled to an rms of 1
+    static constexpr float profile[lobes] { 0.80f, 0.53f, 0.66f, 0.22f, 0.40f, 0.20f, 0.25f, 0.15f, 0.10f, 0.12f, 0.08f };
     Random r ((int64) seed);
     float power = 0.0f;
-    for (int k = 0; k < 6; ++k)
+    for (int k = 0; k < lobes; ++k)
     {
-        amp[k] = 0.4f + 0.6f * r.nextFloat();
-        phase[k] = MathConstants<float>::twoPi * r.nextFloat();
-        rate[k] = (r.nextBool() ? 1.0f : -1.0f) * (0.6f + 1.6f * r.nextFloat());
+        amp[k] = profile[k] * (0.8f + 0.4f * r.nextFloat());
+        phaseC[k] = MathConstants<float>::twoPi * r.nextFloat();
+        phaseS[k] = MathConstants<float>::twoPi * r.nextFloat();
+        rateC[k] = 0.6f + 1.6f * r.nextFloat();
+        rateS[k] = 0.6f + 1.6f * r.nextFloat();
         power += amp[k] * amp[k] * 0.5f;
     }
     for (auto& a : amp) a /= std::sqrt (power);
 }
 
-static float blobTarget (float peak)
+float Blob::target (float peak) const
 {
-    if (peak < 0.00251f) return Blob::restRadius;                // (below -52 dBFS)
-    return jmin (Blob::maxRadius, 9.32f + 15.84f * (std::pow (peak, 0.4f) - 0.0832f));
+    if (peak < 0.00251f) return restRadius;                       // (below -52 dBFS)
+    return jmin (maxRadius, law.k0 + law.k1 * (std::pow (peak, law.power) - 0.0832f));
 }
 
 void Blob::update (float peak, float dt)
 {
-    const float target = blobTarget (peak);
-    // (measured: up within ~20 ms; down at a steady ~62 px/s, landing softly)
-    if (target > radius) radius += (target - radius) * (1.0f - std::exp (-dt / 0.02f));
-    else radius -= jmin (62.0f * dt, (radius - target) * (1.0f - std::exp (-dt / 0.05f)));
-    if (target <= restRadius && radius - restRadius < 0.1f) radius = restRadius;
+    const float goal = target (peak);
+    if (goal > radius) radius += (goal - radius) * (1.0f - std::exp (-dt / law.upSeconds));
+    else radius -= jmin (law.fallPxPerSecond * dt, (radius - goal) * (1.0f - std::exp (-dt / law.downSeconds)));
+    if (goal <= restRadius && radius - restRadius < 0.1f) radius = restRadius;
     // the shape moves by as much as the level changes (a steady tone leaves it still)
     const float db = 20.0f * std::log10 (jmax (peak, 1.0e-6f));
     if (db > -60.0f || lastDb > -60.0f) time += 0.05f * jmin (12.0f, std::abs (db - jmax (lastDb, -60.0f)));
@@ -376,7 +388,7 @@ void Blob::update (float peak, float dt)
 
 void Blob::freeze (float peak)
 {
-    radius = blobTarget (peak);
+    radius = target (peak);
     time = 3.7f;
     repaint();
 }
@@ -384,15 +396,17 @@ void Blob::freeze (float peak)
 void Blob::paint (Graphics& g)
 {
     const auto c = getLocalBounds().toFloat().getCentre();
-    // (measured: about 2 px of deformation (rms) at any size once it grows)
-    const float deform = 1.9f * jlimit (0.0f, 1.0f, (radius - restRadius) / 3.0f);
+    // (measured: about 1 px of deformation (rms) at any size once it grows)
+    const float deform = 1.0f * jlimit (0.0f, 1.0f, (radius - restRadius) / 3.0f);
     Path p;
     constexpr int n = 120;
     for (int i = 0; i <= n; ++i)
     {
         const float a = MathConstants<float>::twoPi * (float) i / (float) n;
         float w = 0.0f;
-        for (int k = 0; k < 6; ++k) w += amp[k] * std::sin ((float) (k + 2) * a + phase[k] + rate[k] * time);
+        for (int k = 0; k < lobes; ++k)
+            w += amp[k] * (std::cos (phaseC[k] + rateC[k] * time) * std::cos ((float) (k + 2) * a)
+                           + std::sin (phaseS[k] + rateS[k] * time) * std::sin ((float) (k + 2) * a));
         const float rr = radius + deform * w;
         const Point<float> q (c.x + rr * std::sin (a), c.y - rr * std::cos (a));
         if (i == 0) p.startNewSubPath (q); else p.lineTo (q);

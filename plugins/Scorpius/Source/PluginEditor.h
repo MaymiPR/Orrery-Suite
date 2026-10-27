@@ -123,7 +123,7 @@ private:
     sc::SegmentStack color { { "a", "b", "c" } };
     // harmonics, compression, lift
     orrery::PowerButton harmPower, compPower, liftPower;
-    sc::Blob harmBlob { 31 }, liftBlob { 47 };
+    sc::Blob harmBlob { 31, sc::Blob::lows }, liftBlob { 47, sc::Blob::mids };
     sc::GrReadout grReadout;
     sc::SegmentStack freq { { "50Hz", "80Hz" } }, mode { { "a", "b" } };
     orrery::MetalKnob harmKnob { orrery::MetalKnob::Kind::small }, compKnob { orrery::MetalKnob::Kind::small },

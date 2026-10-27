@@ -50,7 +50,8 @@ private:
     std::vector<double> keyBufL, keyBufR;
     Compressor comp;
 public:
-    double compReduction = 0;              // the last block's largest gain reduction (dB), for the readout
+    double compReduction = 0;              // the last block's largest gain reduction (dB)
+    double compReadout() const { return comp.readout(); }   // what the readout above the knob shows (dB, positive)
 private:
     Harmonics harm;
     Expander expander;

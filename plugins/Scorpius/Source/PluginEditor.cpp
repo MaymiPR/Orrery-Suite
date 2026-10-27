@@ -123,8 +123,14 @@ ScorpiusEditor::ScorpiusEditor (ScorpiusProcessor& p) : AudioProcessorEditor (p)
     {
         attachments.push_back (std::make_unique<AudioProcessorValueTreeState::SliderAttachment> (s, pid, sl));
         if (auto* prm = dynamic_cast<RangedAudioParameter*> (s.getParameter (pid)))
-            if (auto* mk = dynamic_cast<orrery::MetalKnob*> (&sl)) mk->setDefaultValue (prm->convertFrom0to1 (prm->getDefaultValue()));
+        {
+            if (auto* mk = dynamic_cast<orrery::MetalKnob*> (&sl))
+            {
+                mk->setDefaultValue (prm->convertFrom0to1 (prm->getDefaultValue()));
+                mk->onGesture = [prm] (bool begin) { if (begin) prm->beginChangeGesture(); else prm->endChangeGesture(); };
+            }
             else sl.setDoubleClickReturnValue (true, prm->convertFrom0to1 (prm->getDefaultValue()));
+        }
     };
     attach (harmKnob, sc::id::harmAmount);
     attach (compKnob, sc::id::compAmount);
@@ -439,10 +445,8 @@ void ScorpiusEditor::timerCallback()
     const double now = Time::getMillisecondCounterHiRes() * 0.001;
     const float dt = (float) jlimit (0.0, 0.2, now - lastTick);
     lastTick = now;
-    // the compression readout (measured): moves towards the gain reduction while there is some (~0.15 s), and keeps
-    // its last value while there is none (in silence too)
-    const float gr = proc.compGr.load();
-    if (gr > 0.05f) compGrDb += (gr - compGrDb) * (1.0f - std::exp (-dt / 0.15f));
+    // the compression readout: its ballistics are the processor's (dsp/Compressor.h)
+    compGrDb = proc.compGr.load();
     if (grText (compGrDb) != grReadout.text) { grReadout.text = grText (compGrDb); grReadout.repaint(); }
     const int blocks = proc.blocksProcessed.load();
     const bool running = blocks != lastBlocks;

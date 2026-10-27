@@ -15,10 +15,12 @@
 //     the sound stops, falling at 50 dB/s): dark below -72 dBFS, full from -40 dBFS up, ((dB + 72) / 32)^1.25 between
 //     (measured with tones from -65 to -40 dBFS: 0.16, 0.29, 0.44, 0.61, 0.81, 1), and eased over ~30 ms on screen;
 //   - with the particle animation off (settings), the stripe stays dark.
-// Our own style (settings, "SCORPIUS") is the same field with the same light, in the plug-in's own colours: the glow
-// and the particles burn crimson and amber in the middle, Antares the scorpion's red heart, and cool to the mint of
-// the controls, teal and ice blue towards the ends; its flares are four-pointed stars and some particles twinkle as
-// small stars; the heart of the glow beats when the music jumps up.
+// Our own style (settings, "SCORPIUS"): a scorpion's stinger glows at the left end of the stripe and shoots venom
+// across it, under the same light (the level's brightness). Each beat (the light's jump up) fires a volley: a big glob
+// and a spray of smaller ones; between beats it spits small drops, more the louder it is. The globs fly through the
+// tube, glancing off its walls and slowing down, trailing comet tails that shift colour and drip, and burst where they
+// die into a splash of sparks. The venom is colourful: acid green, teal, electric violet, magenta and amber, its hue
+// wandering slowly so that each stretch of music has its own; the haze behind it is tinted to match.
 // The light is added (as light), computed per physical pixel and drawn as one image per frame of the editor's clock.
 namespace sc
 {
@@ -47,6 +49,21 @@ public:
 
 private:
     enum class Kind { dot, dash, faint, blob, flare, star };
+    // ours: the venom
+    struct Drop
+    {
+        enum class Type { glob, trail, spark, drip, flash } type;
+        float x, y, vx, vy, size, r, g, b, level, born, life, drag, gravity, hue, emitted;
+    };
+    void fire (bool volley);
+    void advanceVenom (float dt);
+    void burst (const Drop&);
+    void addDrop (const Drop&);
+    void renderVenom (float pxPerDesign);
+    void renderStinger (float pxPerDesign);
+    std::vector<Drop> drops;
+    float hueDrift = 0.0f, spitDue = 0.0f, charge = 0.0f;
+    double lastVolley = -1.0;
     struct Particle
     {
         Kind kind;

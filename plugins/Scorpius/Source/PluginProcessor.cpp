@@ -175,7 +175,7 @@ void ScorpiusProcessor::processBlock (AudioBuffer<float>& buffer, MidiBuffer&)
     }
     // the input meters read the signal after the input gain
     inMeter.measure (main);
-    visuals.process (main, compAmountRaw->load(), external ? &side : nullptr);
+    visuals.process (main);
     light.process (main);
     const bool key = external && side.getNumChannels() >= 2;
     if (! resampling)
@@ -215,7 +215,7 @@ void ScorpiusProcessor::processBlock (AudioBuffer<float>& buffer, MidiBuffer&)
         main.getWritePointer (1)[i] *= g;
     }
     outMeter.measure (main);
-    compGr = visuals.grEstimate.load();        // the readout's own quantity (measured on the reference, dsp/Visuals.h)
+    compGr = (float) engine.compReadout();    // the readout's own ballistics (dsp/Compressor.h)
     ++blocksProcessed;
 }
 

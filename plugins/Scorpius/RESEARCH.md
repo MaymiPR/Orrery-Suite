@@ -345,3 +345,32 @@ Way, venom running like meteors from the head to the stinger.
   glow tinted the same way; its flares and a share of the round particles are four-pointed stars; on a beat (the
   level jumping up) the heart of the glow swells crimson and fades over 0.35 s. Cost at 200 %: 2.8 ms a frame (the
   ORION style 2.9).
+
+## UI round 7: the compression readout and the circles, measured again; the venom
+
+Filmed at 200 % with `RefCapture` (the reference and ours, the same inputs): 20 s of the demo track and a 23 s tone
+probe (1 kHz: steps of -10, -4, -14, -2, -8 dBFS, then -4 / -14 alternating every 0.25 s, a 1 Hz swing between -14 and
+-2, a pause, -6). The readout's strings were read from every frame (each string is drawn the same every time).
+- **Compression readout:** ours (the round-4 stand-in, a 50 ms RMS rule) changed 13 times a second on music, the
+  reference about 4. The reference's readout holds the highest value of a smoothed gain reduction, and every 1.5 s of
+  compression takes the smoothed value again (dropping, then climbing back over 0.2 ... 0.4 s); while there is
+  little or none it keeps its value, through silence too. Fitted to both films against our compressor's own gain
+  reduction (times the amount): smoothing up 0.25 s, down 0.2 s; the clock runs while the smoothed reduction is over
+  0.3 dB. Ours now runs this inside the compressor (`dsp/Compressor.h`): 4.3 changes a second on music (the
+  reference 4.4), within 0.7 ... 0.9 dB per frame of the reference's on both films. Its number is centred and the
+  "-" hangs to its left, as the reference's (ours centred the whole string, 7 px to the right).
+- **Circles:** the reference's move in steps (a new reading about every 85 ms: a 4096-sample spectrum every 4096
+  samples, not every 1024), their outlines wobble by about 1 px rms (ours 2) in lobes 2 ... 12 (most in 2 ... 4) and
+  morph in place without turning (ours turned). Radius laws refitted to the music films while keeping the tone
+  points (9.6 at -50 dBFS, 10.7 at -40, 18 at -10): harmonics 8.29 + 15.80 (a^0.312 - 0.083), up 0.05 s, down
+  0.3 s at most 24 px/s; lift 3.76 + 19.07 (a^0.168 - 0.083), up 0.22 s, down 0.4 s. Per-frame radius against the
+  reference: harmonics 0.95 px rms (was 2.4), lift 1.5; means and wobble now within 0.15 px.
+- **SCORPIUS style, redone again (ours):** a scorpion's tail rises from the stripe's bottom left corner (glowing
+  segments, the venom bulb lit in the venom's colour, the barb) and shoots venom along the stripe: a volley on each
+  beat (a big glob and often a smaller one; at most one volley per 0.28 s), small spits in between (0.5 ... 3 a
+  second with the level). Globs fly with comet tails that turn colour, glance off the tube's walls, slow down and
+  burst into splashes of their own colour where they die; their tails drip. Colours: acid green, teal, electric
+  violet, magenta, amber, the whole set drifting round the hue circle about once a minute; the haze behind is tinted
+  from magenta at the stinger through green to violet. The light follows the same level as the ORION style.
+- **Knobs (both plug-ins):** double-click opens a field over the knob to type its value (Enter or a click elsewhere
+  sets it, as one host gesture; Escape leaves it); Alt-click still resets to the default.
