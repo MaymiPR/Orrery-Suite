@@ -444,11 +444,11 @@ void Stripe::emit (Drop::Type type, float depth, float speed, float size, float 
     Drop d {};
     d.type = type;
     const float a = angle >= 0.0f ? angle : MathConstants<float>::twoPi * rng.nextFloat();
-    // (globs keep within the stripe's height, so that they hit the glass somewhere along it)
-    const bool glob = type == Drop::Type::glob;
-    const float lateral = (angle >= 0.0f ? 0.42f : glob ? uniform (rng, 0.06f, 0.34f) : uniform (rng, 0.06f, 0.6f)) * speed;
+    // (globs, and the spray that lands, keep within the stripe's height, so that they hit the glass somewhere along it)
+    d.wet = type == Drop::Type::glob || (type == Drop::Type::spray && angle < 0.0f && rng.nextFloat() < 0.3f);
+    const float lateral = (angle >= 0.0f ? 0.42f : d.wet ? uniform (rng, 0.04f, 0.36f) : uniform (rng, 0.06f, 0.6f)) * speed;
     d.X = 0.012f * gauss (rng); d.Y = 0.003f * gauss (rng); d.Z = angle >= 0.0f ? 1.0f : uniform (rng, 0.85f, 1.15f);
-    d.vX = lateral * (glob ? (rng.nextBool() ? 1.0f : -1.0f) : std::cos (a)); d.vY = (glob ? 0.012f * gauss (rng) : 0.16f * lateral * std::sin (a));
+    d.vX = lateral * (d.wet ? (rng.nextBool() ? 1.0f : -1.0f) : std::cos (a)); d.vY = (d.wet ? 0.014f * gauss (rng) : 0.16f * lateral * std::sin (a));
     d.vZ = -(angle >= 0.0f ? 1.0f : uniform (rng, 0.5f, 1.3f)) * speed;
     d.size = size; d.level = level; d.seed = rng.nextFloat();
     const auto c = venomColour (depth, type == Drop::Type::mist ? 0.3f : 0.0f);
@@ -483,47 +483,77 @@ void Stripe::fire (bool strike)
     addDrop (f);
 }
 
-// a glob reaches the glass: it splashes (satellite drops around it), runs down in drips, and eats at the glass:
-// bubbles and wisps rise from it, and it leaves a faint mark
+// something left on the glass where a drop struck it
+Stripe::Drop Stripe::onGlass (const Drop& from, Drop::Type type, float x, float y, float size, float life, float delay)
+{
+    Drop e = from;
+    e.type = type; e.sx = e.px = x; e.sy = e.py = y; e.size = size;
+    e.born = (float) elapsed + delay; e.life = life; e.vX = e.vY = 0.0f; e.seed = rng.nextFloat();
+    e.slideAt = 0.0f; e.travel = 0.0f;
+    return e;
+}
+
+// a spray drop hits the glass, as water does: a splash ring, a few droplets flung out, and the drop stays as a bead (the
+// bigger ones later run down)
+void Stripe::land (const Drop& g)
+{
+    const float size = uniform (rng, 0.9f, 2.0f) * g.size / 0.05f;
+    auto r = onGlass (g, Drop::Type::ring, g.sx, g.sy, 1.5f + 2.2f * size, 0.16f, 0.0f);
+    r.level = 0.6f;
+    addDrop (r);
+    auto b = onGlass (g, Drop::Type::bead, g.sx, g.sy, size, uniform (rng, 1.5f, 3.5f), 0.0f);
+    if (size > 2.2f && rng.nextFloat() < 0.6f) b.slideAt = (float) elapsed + uniform (rng, 0.2f, 1.2f);
+    addDrop (b);
+    for (int k = rng.nextInt (4) + 1; --k >= 0;)
+    {
+        const float a = MathConstants<float>::twoPi * rng.nextFloat(), v = uniform (rng, 25.0f, 80.0f) * (0.5f + 0.25f * size);
+        auto f = onGlass (g, Drop::Type::bead, g.sx, g.sy, uniform (rng, 0.45f, 0.9f), uniform (rng, 0.8f, 2.0f), 0.0f);
+        f.vX = v * std::cos (a); f.vY = 0.65f * v * std::sin (a);
+        addDrop (f);
+    }
+}
+
+// a glob hits the glass: a big splash (a wide ring, a crown of droplets flung far), a pool that runs down in a few big
+// beads, and, venom, it eats at the glass: bubbles and wisps rise, a faint mark stays
 void Stripe::hitGlass (const Drop& g)
 {
-    Drop d = g;
-    d.type = Drop::Type::splat;
-    d.born = (float) elapsed; d.life = uniform (rng, 1.0f, 1.8f);
-    d.size = uniform (rng, 8.0f, 13.0f) * g.size / 0.14f;
-    d.vY = uniform (rng, 2.0f, 5.0f); d.seed = rng.nextFloat();
-    addDrop (d);
-    auto onGlass = [&] (Drop::Type type, float x, float y, float size, float life, float delay)
-    {
-        Drop e = d;
-        e.type = type; e.sx = e.px = x; e.sy = e.py = e.y0 = y; e.size = size;
-        e.born = (float) elapsed + delay; e.life = life; e.vY = 0.0f; e.vX = 0.0f; e.seed = rng.nextFloat();
-        return e;
-    };
+    const float size = uniform (rng, 5.0f, 8.0f) * g.size / 0.14f;
+    auto r = onGlass (g, Drop::Type::ring, g.sx, g.sy, 3.0f * size, 0.22f, 0.0f);
+    r.level = 0.9f;
+    addDrop (r);
+    auto pool = onGlass (g, Drop::Type::bead, g.sx, g.sy, size, uniform (rng, 1.8f, 3.0f), 0.0f);
+    pool.slideAt = (float) elapsed + uniform (rng, 0.15f, 0.5f);
+    addDrop (pool);
     for (int k = rng.nextInt (3) + 1; --k >= 0;)
     {
-        auto r = onGlass (Drop::Type::drip, d.sx + uniform (rng, -0.35f, 0.35f) * d.size, d.sy + 0.25f * d.size, uniform (rng, 1.0f, 1.9f),
-                          uniform (rng, 1.6f, 3.0f), uniform (rng, 0.05f, 0.35f));
-        r.vY = uniform (rng, 3.0f, 9.0f);
-        addDrop (r);
+        auto runner = onGlass (g, Drop::Type::bead, g.sx + uniform (rng, -0.45f, 0.45f) * size, g.sy + uniform (rng, 0.1f, 0.4f) * size,
+                               uniform (rng, 2.2f, 3.4f), uniform (rng, 2.0f, 3.5f), 0.0f);
+        runner.slideAt = (float) elapsed + uniform (rng, 0.1f, 0.8f);
+        addDrop (runner);
     }
-    for (int k = 0; k < 7; ++k)
+    for (int k = 0; k < 10; ++k)
     {
-        auto b = onGlass (Drop::Type::bubble, d.sx + uniform (rng, -0.4f, 0.4f) * d.size, d.sy + uniform (rng, -0.1f, 0.2f) * d.size,
-                          uniform (rng, 0.5f, 1.2f), uniform (rng, 0.35f, 0.8f), uniform (rng, 0.05f, 0.7f));
-        b.vY = -uniform (rng, 8.0f, 22.0f);
+        const float a = MathConstants<float>::twoPi * rng.nextFloat(), v = uniform (rng, 50.0f, 170.0f) * (0.6f + 0.06f * size);
+        auto f = onGlass (g, Drop::Type::bead, g.sx, g.sy, uniform (rng, 0.5f, 1.6f), uniform (rng, 1.0f, 2.6f), 0.0f);
+        f.vX = v * std::cos (a); f.vY = 0.6f * v * std::sin (a);
+        addDrop (f);
+    }
+    for (int k = 0; k < 6; ++k)
+    {
+        auto b = onGlass (g, Drop::Type::bubble, g.sx + uniform (rng, -0.4f, 0.4f) * size, g.sy + uniform (rng, -0.1f, 0.2f) * size,
+                          uniform (rng, 0.5f, 1.1f), uniform (rng, 0.35f, 0.8f), uniform (rng, 0.1f, 0.8f));
+        b.vY = -uniform (rng, 8.0f, 20.0f);
         addDrop (b);
     }
     for (int k = 0; k < 2; ++k)
     {
-        auto w = onGlass (Drop::Type::wisp, d.sx + uniform (rng, -0.3f, 0.3f) * d.size, d.sy, 2.0f, uniform (rng, 1.0f, 1.6f), uniform (rng, 0.1f, 0.5f));
+        auto w = onGlass (g, Drop::Type::wisp, g.sx + uniform (rng, -0.3f, 0.3f) * size, g.sy, 2.0f, uniform (rng, 1.0f, 1.6f), uniform (rng, 0.2f, 0.6f));
         w.vY = -uniform (rng, 4.0f, 9.0f); w.vX = 3.0f * gauss (rng);
         addDrop (w);
     }
-    auto mark = onGlass (Drop::Type::etch, d.sx, d.sy, d.size * 0.7f, uniform (rng, 2.2f, 3.2f), 0.25f);
-    addDrop (mark);
-    Drop f = onGlass (Drop::Type::flash, d.sx, d.sy, d.size * 0.9f, 0.12f, 0.0f);
-    f.level = 1.2f;
+    addDrop (onGlass (g, Drop::Type::etch, g.sx, g.sy, size, uniform (rng, 2.2f, 3.2f), 0.3f));
+    auto f = onGlass (g, Drop::Type::flash, g.sx, g.sy, size * 1.3f, 0.1f, 0.0f);
+    f.level = 0.9f;
     addDrop (f);
 }
 
@@ -559,14 +589,33 @@ void Stripe::advanceVenom (float dt)
                 if (d.Z > 0.03f) { d.sx = heartX + focal * d.X / d.Z; d.sy = glandY + focal * d.Y / d.Z; }
                 const bool onGlass = d.sx > left + 4.0f && d.sx < left + width - 4.0f && d.sy > top + 3.0f && d.sy < top + height - 4.0f;
                 if (d.type == Drop::Type::glob && d.Z < 0.17f && onGlass) { hitGlass (d); d.life = 0.0f; }
+                else if (d.wet && d.Z < 0.13f && onGlass) { land (d); d.life = 0.0f; }
                 else if (d.Z < 0.03f || d.sx < x0 || d.sx > x1 || d.sy < y0 || d.sy > y1) d.life = 0.0f;   // (past you)
                 break;
             }
-            case Drop::Type::splat: d.sy += d.vY * dt; d.vY *= std::exp (-dt / 0.8f); break;
-            case Drop::Type::drip:
-                d.vY += 5.0f * dt;
-                d.sy = jmin (top + height - 2.0f, d.sy + d.vY * dt);
+            case Drop::Type::bead:
+            {
+                // flung droplets skid to a stop; a bead that runs goes down in fits and starts (it sticks and slips),
+                // leaving tiny beads behind and shrinking, until the bottom of the glass
+                const float k = std::exp (-dt / 0.035f);
+                d.sx += d.vX * (1.0f - k) * 0.035f; d.sy += d.vY * (1.0f - k) * 0.035f; d.vX *= k; d.vY *= k;
+                if (d.slideAt > 0.0f && (float) elapsed > d.slideAt && d.sy < top + height - 2.5f)
+                {
+                    const float v = (6.0f + 7.0f * d.size) * (rng.nextFloat() < 0.15f ? 0.0f : uniform (rng, 0.4f, 1.6f));
+                    d.sy += v * dt; d.sx += 2.0f * gauss (rng) * dt; d.travel += v * dt;
+                    for (; d.travel > 2.4f; d.travel -= 2.4f)
+                    {
+                        auto t = onGlass (d, Drop::Type::bead, d.sx + 0.3f * gauss (rng), d.sy - 0.4f * d.size, uniform (rng, 0.4f, 0.75f),
+                                          uniform (rng, 0.6f, 1.6f), 0.0f);
+                        t.level = 0.55f * d.level;
+                        addDrop (t);
+                        d.size *= 0.985f;
+                    }
+                    d.life = jmax (d.life, age + 0.4f);           // (it lasts while it runs)
+                }
                 break;
+            }
+            case Drop::Type::ring: break;
             case Drop::Type::bubble: d.sy += d.vY * dt; d.sx += 6.0f * std::sin (25.0f * age + 6.0f * d.seed) * dt; break;
             case Drop::Type::wisp: d.sy += d.vY * dt; d.sx += d.vX * dt; d.size += 5.0f * dt; break;
             case Drop::Type::etch: case Drop::Type::flash: break;
@@ -602,6 +651,40 @@ void Stripe::splatLine (float x0, float y0, float x1, float y1, float width, flo
             row[0] += v * r; row[1] += v * g; row[2] += v * b;
         }
     }
+}
+
+// a bead of water on the glass: mostly clear (a faint tint of the venom), light refracted along its lower right edge,
+// and a bright highlight up and to the left; tiny ones are a speck with a glint
+void Stripe::bead (float x, float y, float size, float level, const Drop& d, float s)
+{
+    Particle p {};
+    p.kind = Kind::dot;
+    const float r = 0.5f * d.r + 0.5f, g = 0.5f * d.g + 0.5f, b = 0.5f * d.b + 0.5f;
+    if (size < 1.2f)
+    {
+        p.x = x; p.y = y; p.w = p.h = size; p.r = d.r; p.g = d.g; p.b = d.b;
+        splat (p, 0.2f * level, s);
+        p.x -= 0.25f * size; p.y -= 0.25f * size; p.w = p.h = 0.4f; p.r = p.g = p.b = 1.0f;
+        splat (p, 0.3f * level, s);
+        return;
+    }
+    // the body: barely there (water is clear), a touch of the venom's colour
+    p.kind = Kind::blob; p.x = x; p.y = y; p.w = size; p.h = 0.9f * size; p.r = d.r; p.g = d.g; p.b = d.b;
+    splat (p, 0.09f * level, s);
+    // the light it bends: a thin bright crescent along its lower edge, brightest at the bottom
+    p.kind = Kind::dot; p.w = p.h = jmax (0.4f, 0.14f * size); p.r = r; p.g = g; p.b = b;
+    const int n = size > 4.0f ? 9 : 5;
+    for (int k = 0; k < n; ++k)
+    {
+        const float a = 0.1f + 2.6f * (float) k / (float) (n - 1);     // (from the right round to the left)
+        p.x = x + 0.44f * size * std::cos (a); p.y = y + 0.4f * size * std::sin (a);
+        splat (p, (0.12f + 0.3f * std::sin (a)) * level, s);
+    }
+    // the highlight: a small, sharp white spot up and to the left, and a fainter one opposite
+    p.x = x - 0.2f * size; p.y = y - 0.2f * size; p.w = p.h = jmax (0.45f, 0.17f * size); p.r = p.g = p.b = 1.0f;
+    splat (p, 0.85f * level, s);
+    p.x = x + 0.18f * size; p.y = y + 0.24f * size; p.w = p.h = jmax (0.4f, 0.1f * size);
+    splat (p, 0.3f * level, s);
 }
 
 // a liquid drop: a round body stretched into a teardrop along its motion (dx, dy: where it came from), and a glossy
@@ -659,38 +742,25 @@ void Stripe::renderVenom (float s)
                 if (level > 0.004f) splatLine (d.px, d.py, d.sx, d.sy, 0.5f, level, d.r, d.g, d.b, s);
                 break;
             }
-            case Drop::Type::splat:
+            case Drop::Type::bead:
             {
-                // a splash: it spreads at once, lobes around a bright middle and satellite drops further out, fading as
-                // it runs down
-                const float grow = jmin (1.0f, age / 0.05f), level = 0.75f * d.level * (1.0f - u) * (1.0f - u) * e;
-                Random r ((int64) (d.seed * 1.0e6f) + 1);
-                for (int k = 0; k < 5; ++k)
-                {
-                    const float a = MathConstants<float>::twoPi * r.nextFloat(), rad = d.size * 0.32f * grow * r.nextFloat();
-                    p.x = d.sx + rad * std::cos (a); p.y = d.sy + 0.6f * rad * std::sin (a);
-                    p.w = p.h = d.size * grow * (0.22f + 0.22f * r.nextFloat());
-                    splat (p, 0.7f * level, s);
-                }
-                for (int k = 0; k < 5; ++k)
-                {
-                    const float a = MathConstants<float>::twoPi * r.nextFloat(), rad = d.size * (0.55f + 0.5f * r.nextFloat()) * grow;
-                    p.x = d.sx + rad * std::cos (a); p.y = d.sy + 0.55f * rad * std::sin (a);
-                    p.w = p.h = 0.7f + 1.3f * r.nextFloat();
-                    splat (p, 0.8f * level, s);
-                }
-                p.x = d.sx; p.y = d.sy; p.w = d.size * 0.5f * grow; p.h = d.size * 0.38f * grow;
-                splat (p, level, s);
-                p.x -= 0.12f * d.size; p.y -= 0.08f * d.size; p.w *= 0.35f; p.h *= 0.35f; p.r = p.g = p.b = 1.0f;
-                splat (p, 0.8f * level, s);
+                // (it dries: fades over the last third of its life)
+                const float level = d.level * jmin (1.0f, 3.0f * (1.0f - u)) * jmin (1.0f, age / 0.02f) * e;
+                if (level > 0.004f) bead (d.sx, d.sy, d.size, level, d, s);
                 break;
             }
-            case Drop::Type::drip:
+            case Drop::Type::ring:
             {
-                // a wet trail from where it started, and its drop at the bottom of it
-                const float level = d.level * jmin (1.0f, (1.0f - u) * 2.0f) * e;
-                splatLine (d.sx, d.y0, d.sx, d.sy, 0.6f * d.size, 0.35f * level, d.r, d.g, d.b, s);
-                droplet (d.sx, d.sy, 0.0f, -1.0f, d.size, 0.9f * level, d, s);
+                // the splash ring: a thin ring of light spreading fast and fading
+                const float radius = d.size * (1.0f - std::exp (-age / 0.035f)), level = d.level * (1.0f - u) * (1.0f - u) * e;
+                p.kind = Kind::dot; p.w = p.h = 0.7f;
+                const int n = jlimit (6, 24, (int) (radius * 2.0f));
+                for (int k = 0; k < n; ++k)
+                {
+                    const float a = MathConstants<float>::twoPi * ((float) k + d.seed) / (float) n;
+                    p.x = d.sx + radius * std::cos (a); p.y = d.sy + 0.7f * radius * std::sin (a);
+                    splat (p, level, s);
+                }
                 break;
             }
             case Drop::Type::bubble:

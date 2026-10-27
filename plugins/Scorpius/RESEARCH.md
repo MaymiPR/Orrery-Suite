@@ -372,9 +372,12 @@ probe (1 kHz: steps of -10, -4, -14, -2, -8 dBFS, then -4 / -14 alternating ever
   as liquid drops: round, glossy (a highlight up and left), stretched into teardrops along their motion, with a fine
   mist behind. Quiet music: a slow drip and a faint haze; louder: a steady spray (up to ~530 drops a second); each
   beat a strike: the heart squeezes and recoils, its rays flare, and it fires 110 drops, a ring of 36 and 2 ... 4
-  globs. Globs hit the glass along the stripe: a splash (lobes and satellite drops) that slides down and fades, drips
-  that run down leaving wet trails, and the venom eats at the glass: bubbles and wisps rise, a faint mark stays for
-  ~3 s. The bass makes the globs bigger and deeper green, the mids thicken the mist. The light follows the same level
-  as the ORION style. Cost at 200 %: 3.0 ms a frame (the ORION style 3.2).
+  globs. A third of the spray and every glob hit the glass along the stripe, as water does: a splash ring spreading
+  and fading in ~0.2 s, droplets flung out that skid to a stop, and clear beads that stay 1.5 ... 3.5 s (barely
+  tinted, a thin crescent of refracted light along the lower edge, a sharp highlight up and left). Bigger beads run
+  down in fits and starts (sticking and slipping), leaving a trail of tiny beads and shrinking; a glob leaves a pool
+  and a few runners, and, venom, eats at the glass: bubbles and wisps rise, a faint mark stays ~3 s. The bass makes
+  the globs bigger and deeper green, the mids thicken the mist. The light follows the same level as the ORION style.
+  Cost at 200 %: 2.7 ms a frame (the ORION style 3.2).
 - **Knobs (both plug-ins):** double-click opens a field over the knob to type its value (Enter or a click elsewhere
   sets it, as one host gesture; Escape leaves it); Alt-click still resets to the default.

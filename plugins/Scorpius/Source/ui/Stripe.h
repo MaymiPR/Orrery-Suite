@@ -20,9 +20,11 @@
 // mint to deep teal, white-hot where it is thickest), flying in 3-D towards the viewer: liquid drops, round and glossy,
 // stretching into teardrops as they come, with a fine mist behind. Quiet music: a slow drip and a faint green haze;
 // louder: a steady spray; each beat a strike, the heart squeezing and recoiling as it fires a burst, a ring and 2 ... 4
-// globs. The globs hit the glass: they splash, satellites around them, run down it in drips that leave wet trails, and
-// eat at it (bubbles and wisps rise, a faint mark is left). The bass makes the globs bigger and deeper green, the mids
-// thicken the mist.
+// globs. A share of the spray and all the globs hit the glass, as water does: a splash ring and droplets flung out on
+// impact, then clear beads that stay (a faint tint, a bright highlight, light refracted along their lower edge); the
+// bigger ones run down in fits and starts, leaving a trail of tiny beads, and the globs' pools eat at the glass
+// (bubbles and wisps rise, a faint mark is left). The bass makes the globs bigger and deeper green, the mids thicken
+// the mist.
 // The light is added (as light), computed per physical pixel and drawn as one image per frame of the editor's clock.
 namespace sc
 {
@@ -56,12 +58,17 @@ private:
     // ours: the venom, in 3-D (x and y across, z the distance: 1 far, 0 at the glass), or on the glass
     struct Drop
     {
-        enum class Type { spray, glob, mist, splat, drip, bubble, wisp, etch, flash } type;
-        float X, Y, Z, vX, vY, vZ, size, r, g, b, level, born, life, seed, sx, sy, px, py, y0;
+        enum class Type { spray, glob, mist, bead, ring, bubble, wisp, etch, flash } type;
+        float X, Y, Z, vX, vY, vZ, size, r, g, b, level, born, life, seed, sx, sy, px, py;
+        bool wet;                    // a spray drop that lands on the glass (the rest fly past)
+        float slideAt, travel;       // a bead on the glass: when it starts to run down (0: never), how far it has run
     };
     void fire (bool strike);
     void emit (Drop::Type, float depth, float speed, float size, float level, float angle = -1.0f);
     void hitGlass (const Drop&);
+    void land (const Drop&);
+    void bead (float x, float y, float size, float level, const Drop&, float pxPerDesign);
+    Drop onGlass (const Drop& from, Drop::Type, float x, float y, float size, float life, float delay);
     void advanceVenom (float dt);
     void addDrop (const Drop&);
     void renderVenom (float pxPerDesign);
