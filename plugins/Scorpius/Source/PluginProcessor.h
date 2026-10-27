@@ -79,7 +79,7 @@ private:
     bool resampling = false;
     static std::pair<double, int> referenceDelay (double sampleRate);
     sc::dsp::Resampler toInner[2], keyToInner[2], toOuter[2];
-    int integerRatio = 0;               // 2 / 4 at 96 / 192 kHz: the reference's own converters (ConverterFits.h)
+    const sc::dsp::fits::Converters* ownConverters = nullptr;   // above 48 kHz: the reference's own (ConverterFits.h)
     std::vector<float> inner[2], keyInner[2], outer[2];
     std::atomic<float>* raw (const char* pid) const { return apvts.getRawParameterValue (pid); }
     juce::AudioBuffer<float> meterBuf;

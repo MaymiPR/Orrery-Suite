@@ -313,14 +313,14 @@ static void testEngine()
         CHECK (finite);
         CHECK (most < 16.0f);
     }
-    // 96 / 192 kHz run the reference's identified converters: its latency, and every module off passes a tone at its
+    // above 48 kHz the reference's identified converters run: its latency, and every module off passes a tone at its
     // level (blocks of odd sizes)
-    for (double fs : { 96000.0, 192000.0 })
+    for (double fs : { 88200.0, 96000.0, 176400.0, 192000.0 })
     {
         ScorpiusProcessor p;
         p.setRateAndBufferSizeDetails (fs, 512);
         p.prepareToPlay (fs, 512);
-        CHECK (p.getLatencySamples() == (fs == 96000.0 ? 48 : 80));
+        CHECK (p.getLatencySamples() == (fs == 88200.0 ? 46 : fs == 96000.0 ? 48 : fs == 176400.0 ? 75 : 80));
         for (auto* pid : { sc::id::driveOn, sc::id::harmOn, sc::id::compOn, sc::id::liftOn, sc::id::eqOn }) setReal (p, pid, 0.0f);
         MidiBuffer midi;
         double in = 0, out = 0; long long t = 0;

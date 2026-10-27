@@ -289,7 +289,14 @@ down more of how it is built:
   the pair (y_c[t] = Σ over q ≡ −c (mod R) of d[q] u[t + S − q], fitted by alternating least squares to −76 / −78 dB);
   the split between the two is free up to a filter in z^R, taken with the decimator at unity gain. With them the
   round trip nulls at −86 … −92 dB on music and the presets as at 48 kHz (the split with the decimator 2.5 dB hot
-  drove the drive harder: −6 … −15 dB). At 88.2 kHz the same kernels resampled do not fit (−28 dB): another design.
+  drove the drive harder: −6 … −15 dB).
+- **Rates at 88.2 and 176.4 kHz**: rational polyphase converters. The responses to impulses repeat exactly every 147
+  host samples (80 / 40 inner samples), so the inner instants fall 147 / 80 (147 / 40) host samples apart and one pair
+  of filters on the grid of 1 / 80 (1 / 40) host sample describes them: v[k] = Σ_j x[j] d[147 k − 80 j], y[m] =
+  Σ_k v[k] u[80 (m + S) − 147 k]. The 96 kHz pair in continuous time fits only −34 dB (another design), but it starts
+  the fit: alternating least squares in which both steps split into small independent problems (each d tap belongs to
+  one impulse phase; the outputs at 80 (m + S) ≡ c (mod 147) touch only the u taps ≡ c), with a line search, both
+  filters causal. 88.2 kHz: fit −90 dB, music round trip −110 dB; 176.4 kHz converges slowly (−70 / −73 dB).
 - **Rates** (`Resampler.h`): the reference's round trip delays 27.0 / 31.0 / 48.742 / 51.1 / 81.461 / 87.085 samples
   at 32 / 44.1 / 88.2 / 96 / 176.4 / 192 kHz (phase slope of white noise), reporting 27 / 31 / 46 / 48 / 75 / 80; at
   44.1 kHz it is flat to 22 kHz (−0.3 dB).
@@ -322,5 +329,4 @@ down more of how it is built:
 
 - The drive on loud, dense material (all of the default preset's error), compression mode a on drums (−40 against
   b's −48), which crossings the low path's flip-flop counts on music, its soft limit on loud bass, grit after the
-  compressor on stereo material, the converters at 88.2 / 176.4 kHz (−21 … −31 dB all off: a delay trim and the
-  cutoffs fitted, `fit_resample_high.py`).
+  compressor on stereo material.

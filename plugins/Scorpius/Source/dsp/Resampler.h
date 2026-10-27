@@ -5,8 +5,8 @@
 
 // Streaming sample-rate conversion by a fixed ratio (Kaiser-windowed sinc, a table of phases interpolated linearly),
 // for running the DSP at 48 kHz whatever the host's rate, as the reference does (MEASUREMENTS.md 2: its own
-// resampler is linear-phase, 31 samples of latency at 44.1 kHz). At integer ratios (96 / 192 kHz) it can instead run
-// the reference's own converters, identified (ConverterFits.h, MEASUREMENTS.md 14): not linear-phase.
+// resampler is linear-phase, 31 samples of latency at 44.1 kHz). Above 48 kHz it can instead run the reference's own
+// converters, identified (ConverterFits.h, MEASUREMENTS.md 14): rational polyphase filters, not linear-phase.
 namespace sc::dsp
 {
 class Resampler
@@ -18,7 +18,7 @@ public:
     // and its Kaiser window's beta
     void prepare (double inRate, double outRate, double cutoff = 0.92, int halfLength = 16, double beta = 8.0)
     {
-        ratio = 0;
+        rational = false;
         half = std::max (2, halfLength);
         step = inRate / outRate;
         const double fc = cutoff * std::min (1.0, outRate / inRate);       // in input-rate Nyquist units
@@ -41,18 +41,21 @@ public:
         history.assign ((size_t) 4 * half, 0.0);
         reset();
     }
-    // an integer ratio with given filters at the higher rate: down keeps the input's first sample and every ratio-th
-    // after, through taps; up gives ratio outputs per input, zero-stuffed through taps. Delay: the filters' own.
-    void prepareInteger (int r, bool down, const std::vector<double>& taps)
+    // a rational ratio, the lower rate's samples p / q of the higher rate's apart (96 kHz: 2 / 1, 88.2 kHz: 147 / 80),
+    // with taps on the grid of 1 / q higher-rate samples. Down: v[k] = sum over j of x[j] taps[p k - q j] (the input's
+    // first sample is the first output's newest); up: y[n] = sum over k of v[k] taps[q n - p k]. Both causal; the
+    // delay is the taps' own.
+    void prepareRational (int p, int q, bool down, const std::vector<double>& taps)
     {
-        ratio = r; decimating = down; fir = taps;
-        const int len = (int) fir.size(), keep = down ? len : (len + r - 1) / r;
-        fir.resize ((size_t) (down ? len : keep * r), 0.0);
-        history.assign ((size_t) (2 * keep), 0.0);
-        ringLen = keep;
+        rows = down ? q : p; advance = down ? p : q;
+        ringLen = ((int) taps.size() + rows - 1) / rows;
+        poly.assign ((size_t) rows * (size_t) ringLen, 0.0);         // row r: taps[r], taps[r + rows], ...
+        for (size_t i = 0; i < taps.size(); ++i) poly[(i % (size_t) rows) * (size_t) ringLen + i / (size_t) rows] = taps[i];
+        history.assign ((size_t) (2 * ringLen), 0.0);
+        rational = true;
         reset();
     }
-    void reset() { std::fill (history.begin(), history.end(), 0.0); pos = offset; filled = 0; }
+    void reset() { std::fill (history.begin(), history.end(), 0.0); pos = offset; filled = 0; acc = 0; }
     // the delay it adds, in input samples: half, less the start offset (0 ... 1) that trims it
     double latencyIn() const { return half - offset; }
     int halfLength() const { return half; }
@@ -61,7 +64,7 @@ public:
     // converts n input samples, appending the output to out
     void process (const float* in, int n, std::vector<float>& out)
     {
-        if (ratio > 0) { processInteger (in, n, out); return; }
+        if (rational) { processRational (in, n, out); return; }
         for (int i = 0; i < n; ++i)
         {
             // keep the last 2 half input samples (a doubled ring for contiguous reads)
@@ -87,37 +90,31 @@ public:
     }
 
 private:
-    void processInteger (const float* in, int n, std::vector<float>& out)
+    void processRational (const float* in, int n, std::vector<float>& out)
     {
-        const int L = ringLen, r = ratio;
+        const int L = ringLen;
         for (int i = 0; i < n; ++i)
         {
-            history[(size_t) (filled % L)] = in[i];
-            history[(size_t) (filled % L + L)] = in[i];
-            const double* x = history.data() + (size_t) (filled % L) + 1;    // oldest .. newest (x[L - 1])
-            if (decimating)
+            const int w = (int) (filled % L);
+            history[(size_t) w] = in[i];
+            history[(size_t) (w + L)] = in[i];
+            const double* x = history.data() + w + L;                 // the newest; x[-i] the i-th before it
+            // acc: the next output's instant less this input's, on the taps' grid (q per higher-rate sample)
+            for (; acc < rows; acc += advance)
             {
-                if (filled % r == 0)
-                {
-                    double acc = 0;
-                    for (int j = 0; j < L; ++j) acc += fir[(size_t) j] * x[L - 1 - j];
-                    out.push_back ((float) acc);
-                }
+                const double* h = poly.data() + (size_t) acc * (size_t) L;
+                double s = 0;
+                for (int k = 0; k < L; ++k) s += h[k] * x[-k];
+                out.push_back ((float) s);
             }
-            else
-                for (int m = 0; m < r; ++m)
-                {
-                    double acc = 0;
-                    for (int k = 0; k < L; ++k) acc += fir[(size_t) (m + r * k)] * x[L - 1 - k];
-                    out.push_back ((float) acc);
-                }
+            acc -= rows;
             ++filled;
         }
     }
 
-    std::vector<double> table, history, fir;
-    int ratio = 0, ringLen = 0;
-    bool decimating = false;
+    std::vector<double> table, history, poly;
+    int ringLen = 0, rows = 1, advance = 1, acc = 0;
+    bool rational = false;
     double step = 1.0, pos = 0.0, offset = 0.0;
     int half = 16;
     long long filled = 0;
