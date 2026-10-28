@@ -1,14 +1,33 @@
 # Changelog
 
-## Unreleased
+## 1.1.0
+
+**Scorpius**, the suite's second plug-in: a recreation of Cradle's Orion (v1.2.1), the drum-bus processor, null-tested
+against the original. VST3, CLAP and a standalone app on Windows; VST3 and CLAP on Linux; AU, VST3 and CLAP on macOS.
+
+- **Signal chain:** input gain, drive (colours a / b / c, optional hi-pass), harmonics (50 or 80 Hz), compression
+  (modes a / b, with a gain-reduction readout), lift and a five-band harmonic EQ, then the sub, low, loud and grit
+  parallels mixed in, and output gain. The original's nine factory presets; your own save as `.scorpius` files.
+- **How close:** the EQ, sub and rate converters are the original's own filters (−50 to −70 dB); everything but the
+  drive nulls at −45 to −51 dB together; the default preset at about −22 to −27 dB on loud material, limited by the
+  drive. Parameter changes and power switches follow the original's timing. See plugins/Scorpius/NULLTESTS.md.
+- **Editor:** the original's layout, meters, knobs, faders and particle stripe, measured from it, with A / B compare.
+  Ours on top: an external side-chain (INT / EXT) for the compressor, I/O LINK, and a "Scorpius" particle style
+  (the default) next to the original's.
 
 In **The Antiparticle**:
 
 - **A / B compare** (ours, as Cradle's Orion has it): two complete settings in one instance, switched from the top bar;
   the arrow copies the active one over the other.
+- **Oversampling at every sample rate:** its filters are now designed for the session's rate, as the original's are.
+  At 44.1 kHz with 2x or 4x it used to differ clearly from the original (−14 dB on drums); now −61 dB. 96 kHz improves
+  the same way (−19 → −57 dB), and 4x / 8x at 48 kHz a little (−53 → −59 dB).
+- **Particles:** the "God particle" style now glows like neon around a black hole in the centre, the glass is clearer
+  and reflects the sparks in its rims, and both styles move with the project's tempo.
 - Fine adjustment of the knobs is Shift only, as on The God Particle (Ctrl now drags at the normal speed).
 
-The suite's top bars now match: A / B left of the preset menu, then the side-chain switch and I/O LINK.
+In both: double-click a knob to type a value. The suite's top bars match: A / B left of the preset menu, then the
+side-chain switch and I/O LINK.
 
 ## 1.0.1
 

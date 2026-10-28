@@ -1,3 +1,4 @@
 # One line per plug-in in the suite:  CMake target|product name|AU plugin code|AU manufacturer code
 # The installers and the release workflow read this list; add a line when a new plug-in is ready.
 TheAntiparticle|The Antiparticle|Atpl|Antp
+Scorpius|Scorpius|Scrp|Orry

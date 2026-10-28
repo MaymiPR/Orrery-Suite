@@ -55,7 +55,7 @@ check that a download is the published one.
 | Orrery plug-in | Modelled on | Status |
 |---|---|---|
 | **[The Antiparticle](plugins/TheAntiparticle)** | Cradle The God Particle: mix-bus EQ, multiband character and limiter | released: close, not a null on every material (see below) |
-| **[Scorpius](plugins/Scorpius)** | Cradle Orion: drum-bus drive, harmonics, compression, lift, harmonic EQ and parallels | in progress: editor and sound done, in testing ([NULLTESTS.md](plugins/Scorpius/NULLTESTS.md)) |
+| **[Scorpius](plugins/Scorpius)** | Cradle Orion: drum-bus drive, harmonics, compression, lift, harmonic EQ and parallels | released in 1.1.0: close on everything but the drive (see below) |
 
 ## The Antiparticle
 
@@ -91,6 +91,36 @@ Every case: [NULLTESTS.md](plugins/TheAntiparticle/NULLTESTS.md). How it was mea
 [MEASUREMENTS.md](plugins/TheAntiparticle/MEASUREMENTS.md). The editor and controls:
 [RESEARCH.md](plugins/TheAntiparticle/RESEARCH.md).
 
+## Scorpius
+
+<p align="center">
+  <img src="docs/screenshots/scorpius@2x.png" alt="Scorpius" width="80%">
+</p>
+
+Orion's drum-bus chain, rebuilt: input gain, drive (three colours, optional hi-pass), harmonics at 50 or 80 Hz,
+compression (two modes), lift, a five-band harmonic EQ, then four parallels mixed in (sub, low, loud, grit) and output
+gain. The original's nine factory presets, its A / B compare, editor, meters and particle stripe. Ours on top: an
+external side-chain for the compressor, **I/O LINK**, and a "Scorpius" particle style. More:
+[plugins/Scorpius](plugins/Scorpius).
+
+### Null test (honest numbers)
+
+- **The fixed parts are close to exact:** the harmonic EQ, the sub and the rate converters (the original's own filters,
+  identified from its responses) null at −50 to −70 dB, everything off at 44.1 to 192 kHz at −51 to −110 dB.
+- **Everything but the drive** together: −44.6 to −51.0 dB (the default preset with the drive off). Compression
+  −41 to −60 dB, harmonics −50 to −71 dB, lift −43.5 to −51.5 dB.
+- **The whole default preset:** −26.6 dB on loud drums, −22.4 dB on a mastered track (−34.6 / −31.2 dB 10 to 12 dB
+  lower). The limit is the drive: the original runs neural captures there, Scorpius learns its own model
+  from the original's input and output, and loud, dense material is where they part.
+- **Automation** follows the original's control rate (128-sample chunks, its parameter ramps and switches): an amount
+  jump nulls at −60 dB, as well as the setting held still.
+- **How:** the original was measured black-box (renders through it offline); the nonlinear modules are small neural
+  networks trained on its input and output (on a GPU), the linear parts fitted or identified exactly.
+
+Every case: [NULLTESTS.md](plugins/Scorpius/NULLTESTS.md). How it was measured:
+[MEASUREMENTS.md](plugins/Scorpius/MEASUREMENTS.md). The editor and controls:
+[RESEARCH.md](plugins/Scorpius/RESEARCH.md).
+
 ## Building
 
 CMake 3.22+ and a C++17 compiler. JUCE 8 and clap-juce-extensions are fetched by CMake.
@@ -107,7 +137,7 @@ plug-in's fitting helpers. The Windows installer is made with Inno Setup 6:
 
 ```bash
 pwsh packaging/make_iss_include.ps1 build
-iscc /DAppVersion=1.0.1 packaging/OrrerySuite.iss
+iscc /DAppVersion=1.1.0 packaging/OrrerySuite.iss
 ```
 
 ## Repository layout
@@ -125,11 +155,11 @@ Reference renders, measurement data and anything taken from the original plug-in
 
 ## Versions
 
-1.0.0 is the first release, with The Antiparticle. Each new plug-in raises the middle number (Scorpius will be 1.1.0, the
+1.0.0 is the first release, with The Antiparticle; 1.1.0 adds Scorpius. Each new plug-in raises the middle number (the
 next one 1.2.0), and fixes and small updates in between raise the last (1.1.1, 1.1.2 ...). Every plug-in carries the
 suite's version; [CHANGELOG.md](CHANGELOG.md) lists what changed in each.
 
 ## License
 
-[AGPL-3.0](LICENSE). The Antiparticle's interface font, Instrument Sans, is under the
+[AGPL-3.0](LICENSE). The interface font, Instrument Sans, is under the
 [SIL Open Font License 1.1](shared/resources/fonts/OFL-InstrumentSans.txt).

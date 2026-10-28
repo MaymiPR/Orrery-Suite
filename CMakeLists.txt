@@ -3,7 +3,7 @@ cmake_minimum_required(VERSION 3.22)
 # Orrery Suite: one CMake project for every plug-in (plugins/<Name>/plugin.cmake) and the measurement tools.
 # The suite's version, shared by every plug-in: a new plug-in raises the middle number (1.1.0, 1.2.0 ...), fixes and
 # small updates the last (1.1.1, 1.1.2 ...). CHANGELOG.md has a section per version.
-project(OrrerySuite VERSION 1.0.1)
+project(OrrerySuite VERSION 1.1.0)
 
 set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
