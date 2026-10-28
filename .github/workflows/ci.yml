@@ -1,0 +1,35 @@
+# Builds every Orrery Suite plug-in on Windows, macOS and Linux, runs the unit tests and validates the plug-ins
+# (pluginval at strictness 10, auval on macOS): the build, test and validation jobs of release.yml, which never
+# publishes from here (its release job needs a version tag). On every push to main and on pull requests, or by hand
+# (Actions > CI > Run workflow); nothing when only documents, docs/ or the null-test harnesses change. The installers
+# come out as downloadable artifacts.
+name: CI
+
+on:
+  push:
+    branches: [main]
+    paths-ignore:
+      - '**.md'
+      - 'docs/**'
+      - '**/nulltest/**'
+      - 'LICENSE'
+      - '.github/ISSUE_TEMPLATE/**'
+  pull_request:
+    paths-ignore:
+      - '**.md'
+      - 'docs/**'
+      - '**/nulltest/**'
+      - 'LICENSE'
+      - '.github/ISSUE_TEMPLATE/**'
+  workflow_dispatch:
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: write     # (what release.yml declares; nothing is published from CI)
+
+jobs:
+  build:
+    uses: ./.github/workflows/release.yml

@@ -7,7 +7,7 @@
 
 <p align="center">
   <a href="https://github.com/MaymiPR/OrrerySuite/releases/latest"><img alt="Latest release" src="https://img.shields.io/github/v/release/MaymiPR/OrrerySuite?color=b07cff&label=release"></a>
-  <a href="https://github.com/MaymiPR/OrrerySuite/actions/workflows/release.yml"><img alt="CI" src="https://github.com/MaymiPR/OrrerySuite/actions/workflows/release.yml/badge.svg"></a>
+  <a href="https://github.com/MaymiPR/OrrerySuite/actions/workflows/ci.yml"><img alt="CI" src="https://github.com/MaymiPR/OrrerySuite/actions/workflows/ci.yml/badge.svg"></a>
   <img alt="Formats: VST3, CLAP, AU" src="https://img.shields.io/badge/formats-VST3%20%7C%20CLAP%20%7C%20AU-25202f">
   <img alt="Platforms: Windows, macOS, Linux" src="https://img.shields.io/badge/platforms-Windows%20%7C%20macOS%20%7C%20Linux-25202f">
   <a href="LICENSE"><img alt="License: AGPL v3" src="https://img.shields.io/badge/license-AGPL--3.0-9b6cff"></a>

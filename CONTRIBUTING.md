@@ -58,7 +58,7 @@ folder without administrator rights.
 | `tools/` | hosts for the reference plug-ins: offline renders (RefRender), editor films and screenshots (RefCapture), parameter lists (ParamDump) |
 | `packaging/` | the installers; `plugins.txt` lists the plug-ins they hold |
 | `docs/` | branding and screenshots |
-| `.github/workflows/release.yml` | builds, tests and validates every plug-in on all three systems (pluginval at strictness 10, auval on macOS), makes the installers and, on a `v*` tag, publishes a release with the notes from [CHANGELOG.md](CHANGELOG.md) |
+| `.github/workflows/` | `ci.yml` builds, tests and validates every plug-in on all three systems (pluginval at strictness 10, auval on macOS) on every push to `main` and on pull requests; `release.yml` does the same, makes the installers and, on a `v*` tag, publishes a release with the notes from [CHANGELOG.md](CHANGELOG.md) |
 
 Reference renders, measurement data and anything taken from the original plug-ins stay out of the repository (see
 `.gitignore`); only the write-ups are published.
