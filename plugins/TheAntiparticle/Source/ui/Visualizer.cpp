@@ -40,37 +40,67 @@ Visualizer::Visualizer()
 {
     setInterceptsMouseClicks (false, false);
 
-    // the 1 s loop of sparks (deterministic, so it looks the same in every instance)
+    // the loop of sparks (deterministic, so it looks the same in every instance): the reference's 1 s loop of short-
+    // lived sparks; ours glow longer, over a 4 s loop (as many on screen), and each follows its path round the black
+    // hole in the middle, worked out here
     Random rng (20240704);
     auto gauss = [&rng] { return (float) (std::sqrt (-2.0 * std::log (jmax (1.0e-9, rng.nextDouble()))) * std::cos (MathConstants<double>::twoPi * rng.nextDouble())); };
     // hue shares measured on the reference: white, yellow, cyan-blue, blue, orange, violet, magenta, red
     const float shares[8] { 0.245f, 0.25f, 0.165f, 0.105f, 0.105f, 0.08f, 0.03f, 0.02f };
-    sparks.resize (4600);
+    sparks.resize (4400);
+    tracks.reserve (sparks.size() * 40);
     for (auto& s : sparks)
     {
-        s.birth = rng.nextFloat();
-        s.life = jmin (0.6f, 0.035f + (float) (-std::log (jmax (1.0e-6, rng.nextDouble()))) * 0.085f);
+        s.birth = godLoop * rng.nextFloat();
+        s.life = jmin (0.9f, 0.1f + (float) (-std::log (jmax (1.0e-6, rng.nextDouble()))) * 0.17f);
         // uniform over the ring's area
         TrackPos tp {};
+        float x, y;
         do
         {
-            s.x = cx - halfLength - outerRadius + rng.nextFloat() * 2.0f * (halfLength + outerRadius);
-            s.y = cy - outerRadius + rng.nextFloat() * 2.0f * outerRadius;
-            tp = trackPos (s.x, s.y);
+            x = cx - halfLength - outerRadius + rng.nextFloat() * 2.0f * (halfLength + outerRadius);
+            y = cy - outerRadius + rng.nextFloat() * 2.0f * outerRadius;
+            tp = trackPos (x, y);
         } while (tp.r < pillRadius + 3.0f || tp.r > outerRadius - 2.0f);
         // counter-clockwise drift + scatter; the outer sparks are pulled inwards
         // measured: faster further out (~-70 / -89 / -108 px/s at r 53-70 / 70-90 / 90-112), radial scatter, inward
         // pull from mid-radius
         const float vt = 75.0f + 1.0f * (tp.r - 53.0f) + 30.0f * gauss();
         const float vr = 55.0f * gauss() - (tp.r > 70.0f ? 5.0f * (tp.r - 70.0f) : 0.0f);
-        s.vx = vt * tp.ny + vr * tp.nx;
-        s.vy = -vt * tp.nx + vr * tp.ny;
+        float vx = vt * tp.ny + vr * tp.nx, vy = -vt * tp.nx + vr * tp.ny;
         s.size = jlimit (0.3f, 5.0f, 0.68f * std::exp (0.9f * gauss()));
         s.bright = 0.9f + 0.1f * rng.nextFloat();
         float pick = rng.nextFloat(), acc = 0.0f;
         s.hue = 7;
         for (int h = 0; h < 8; ++h) { acc += shares[h]; if (pick < acc) { s.hue = h; break; } }
-        s.streak = std::hypot (s.vx, s.vy) > 190.0f && rng.nextFloat() < 0.5f;
+        // (ours) its path: the black hole draws it in (pull ~ 1 / (distance + 8)^2, and along the flow half as much, so
+        // it spirals in faster the closer); at the hole's edge it is gone
+        s.first = (int) tracks.size();
+        const int steps = (int) std::ceil (s.life / trackStep) + 1;
+        for (int k = 0; k < steps; ++k)
+        {
+            tracks.push_back ({ x, y });
+            const auto here = trackPos (x, y);
+            const float d = here.r - pillRadius;
+            if (d < 1.0f) { s.life = jmax (trackStep, (float) k * trackStep); break; }
+            const float pull = 7.0e5f / ((d + 8.0f) * (d + 8.0f));
+            vx += (-here.nx * pull + 0.5f * here.ny * pull) * trackStep;
+            vy += (-here.ny * pull - 0.5f * here.nx * pull) * trackStep;
+            x += vx * trackStep; y += vy * trackStep;
+        }
+        s.count = (int) tracks.size() - s.first;
+    }
+    // the neon glow: a tight halo and a wide faint bloom
+    glowSprite = Image (Image::SingleChannel, 64, 64, true);
+    {
+        Image::BitmapData bd (glowSprite, Image::BitmapData::writeOnly);
+        for (int j = 0; j < 64; ++j)
+            for (int i = 0; i < 64; ++i)
+            {
+                const float r = std::hypot ((float) i - 31.5f, (float) j - 31.5f) / 32.0f;
+                const float v = r >= 1.0f ? 0.0f : (std::exp (-r * r / 0.05f) + 0.35f * std::exp (-r * r / 0.3f)) * (1.0f - r * r);
+                bd.setPixelColour (i, j, Colours::white.withAlpha (jmin (1.0f, v / 1.3f)));     // (one channel: its alpha)
+            }
     }
 
     // antiparticle: a 3 s loop of pair creations and annihilations, and the counter-flow of specks
@@ -123,6 +153,21 @@ Visualizer::Visualizer()
     }
 }
 
+void Visualizer::setTempo (float bpm)
+{
+    paceTarget = bpm > 0.0f ? jlimit (1.0f, 3.5f, bpm / 60.0f) : 2.0f;
+}
+
+// (ours) the animation's clock: 60 frames/s, at the tempo's pace, easing to a new one over ~0.5 s
+void Visualizer::timerCallback()
+{
+    const float dt = (float) getTimerInterval() * 0.001f;
+    pace += (paceTarget - pace) * (1.0f - std::exp (-dt / 0.5f));
+    clock += (double) (dt * pace);
+    if (level > 0.0f || glow > 0.0f) repaint();
+    else { stopTimer(); animating = false; }
+}
+
 void Visualizer::advance (float inputPeakDb, float mix, bool animate, bool antiparticle)
 {
     antiStyle = antiparticle;
@@ -144,7 +189,7 @@ void Visualizer::advance (float inputPeakDb, float mix, bool animate, bool antip
         level = std::pow (jlimit (0.0f, 1.0f, (v - 0.4f) / 0.6f), 0.7f);
         glow = std::pow (v, 1.6f);
     }
-    clock += dt;                                                       // free-running, like the reference's loop
+    if ((level > 0.0f || glow > 0.0f) && ! animating) { animating = true; startTimerHz (60); }
     if (wasOn || level > 0.0f || glow > 0.0f) repaint();
 }
 
@@ -312,7 +357,7 @@ void Visualizer::paintAntiparticle (Graphics& g)
     const Colour antimatter = Colours::white.interpolatedWith (Colour (0xffff5ad2), colourMix);
     const Colour gammaCol = Colours::white.interpolatedWith (Colour (0xfffff3c4), colourMix);
     const float loop = 3.0f;
-    const float t = (float) (std::floor (std::fmod (clock, (double) loop) * 30.0) / 30.0);
+    const float t = (float) std::fmod (clock, (double) loop);
     auto ageOf = [t, loop] (float birth) { float a = t - birth; return a < 0.0f ? a + loop : a; };
     auto glowDot = [&g] (Point<float> p, Colour c, float r, float a)
     {
@@ -453,46 +498,68 @@ void Visualizer::paintGodly (Graphics& g)
                                      Colour (0xffff9024), Colour (0xffa678ff), Colour (0xffff4078), Colour (0xffff422c) };
     g.addTransform (AffineTransform::translation (-b.getX(), -b.getY()));
 
-    // while the sparks show, the pill rim and the outer edge catch their light
-    g.setColour (Colours::white.withAlpha (0.3f * glow));
-    g.strokePath (stadiumAround (cx, cy, halfLength, pillRadius), PathStrokeType (1.4f));
+    // while the sparks show, the outer edge catches their light
     g.setColour (Colours::white.withAlpha (0.07f * glow));
     g.strokePath (stadiumAround (cx, cy, halfLength, outerRadius - 0.5f), PathStrokeType (1.2f));
 
-    Graphics::ScopedSaveState s (g);
-    auto ring = stadiumAround (cx, cy, halfLength, outerRadius - 1.0f);
-    ring.setUsingNonZeroWinding (false);
-    ring.addPath (stadiumAround (cx, cy, halfLength, pillRadius + 1.0f));
-    g.reduceClipRegion (ring);
-    // 30 frames per second, looping every second
-    const float t = (float) (std::floor (std::fmod (clock, 1.0) * 30.0) / 30.0);
-    for (auto& sp : sparks)
     {
-        float age = t - sp.birth;
-        if (age < 0.0f) age += 1.0f;
-        if (age > sp.life) continue;
-        const float env = std::pow (std::sin (MathConstants<float>::pi * age / sp.life), 0.3f);
-        const Point<float> pos (sp.x + sp.vx * age, sp.y + sp.vy * age);
-        const auto tp = trackPos (pos.x, pos.y);
-        if (tp.r < pillRadius + 1.0f || tp.r > outerRadius - 1.0f) continue;
-        const auto hue = Colours::white.interpolatedWith (palette[sp.hue], colourMix);
-        const float a = level * env * sp.bright, sz = sp.size;
-        // like the reference's sprite: crisp saturated points with a moderate glow; the fastest blur into short
-        // dashes along their velocity (1/120 s exposure)
-        const Point<float> half (sp.vx / 240.0f, sp.vy / 240.0f);
-        const Line<float> blur (pos - half, pos + half);
-        g.setGradientFill (ColourGradient (hue.withAlpha (0.4f * a), pos, hue.withAlpha (0.0f), pos.translated (sz * 2.3f, 0.0f), true));
-        g.fillEllipse (Rectangle<float> (sz * 4.6f, sz * 4.6f).withCentre (pos));
-        Path dash;
-        dash.startNewSubPath (blur.getStart());
-        dash.lineTo (blur.getEnd());
-        g.setColour (hue.withAlpha (a));
-        g.strokePath (dash, PathStrokeType (sz * 1.35f, PathStrokeType::curved, PathStrokeType::rounded));
-        if (sz > 0.9f)                                                 // only the bigger sparks burn white in the middle
+        Graphics::ScopedSaveState s (g);
+        auto ring = stadiumAround (cx, cy, halfLength, outerRadius - 1.0f);
+        ring.setUsingNonZeroWinding (false);
+        ring.addPath (stadiumAround (cx, cy, halfLength, pillRadius + 1.0f));
+        g.reduceClipRegion (ring);
+        const float t = (float) std::fmod (clock, (double) godLoop);
+        for (auto& sp : sparks)
         {
-            g.setColour (Colours::white.withAlpha (0.75f * a));
-            g.fillEllipse (Rectangle<float> (sz * 0.65f, sz * 0.65f).withCentre (pos));
+            float age = t - sp.birth;
+            if (age < 0.0f) age += godLoop;
+            if (age > sp.life) continue;
+            // where it is on its path, and how fast it goes
+            if (sp.count < 2) continue;
+            const float f = age / trackStep;
+            const int k = jlimit (0, sp.count - 2, (int) f);
+            const auto& p0 = tracks[(size_t) (sp.first + k)];
+            const auto& p1 = tracks[(size_t) (sp.first + k + 1)];
+            const float u = jlimit (0.0f, 1.0f, f - (float) k);
+            const Point<float> pos = p0 + (p1 - p0) * u, vel = (p1 - p0) / trackStep;
+            const auto tp = trackPos (pos.x, pos.y);
+            if (tp.r < pillRadius + 1.0f || tp.r > outerRadius - 1.0f) continue;
+            // glowing up and dying away, like a neon tube switched on and off
+            const float env = std::pow (std::sin (MathConstants<float>::pi * age / sp.life), 0.6f);
+            const auto hue = Colours::white.interpolatedWith (palette[sp.hue], colourMix);
+            const float d = tp.r - pillRadius, thin = jlimit (0.35f, 1.0f, 0.3f + d / 25.0f);   // (thinner near the hole)
+            const float a = level * env * sp.bright, sz = sp.size * thin;
+            // the glow in its pure colour
+            const float gr = (5.0f + 3.5f * sp.size) * (0.6f + 0.4f * thin);
+            g.setColour (hue.withAlpha (jmin (1.0f, 1.1f * a)));
+            g.drawImage (glowSprite, Rectangle<float> (2.0f * gr, 2.0f * gr).withCentre (pos), RectanglePlacement::stretchToFit, true);
+            // the core, a little whiter, drawn out along its way (1/120 s exposure; longer as the hole speeds it up)
+            const Point<float> half = vel * (1.0f / 240.0f);
+            Path dash;
+            dash.startNewSubPath (pos - half);
+            dash.lineTo (pos + half);
+            g.setColour (hue.interpolatedWith (Colours::white, 0.25f).withAlpha (a));
+            g.strokePath (dash, PathStrokeType (sz * 1.2f, PathStrokeType::curved, PathStrokeType::rounded));
+            if (sz > 0.9f)                                                 // the bigger ones burn white in the middle
+            {
+                g.setColour (Colours::white.withAlpha (0.8f * a));
+                g.fillEllipse (Rectangle<float> (sz * 0.6f, sz * 0.6f).withCentre (pos));
+            }
         }
     }
+
+    // (ours) the black hole's edge: a soft glow of the light falling in, and a thin ring of bent light hugging the pill,
+    // brighter on one side, turning with the flow
+    const auto pill = stadiumAround (pillCx, pillCy, pillHalfLength, pillR + 0.6f);
+    const float turn = (float) std::fmod (clock * -0.9, MathConstants<double>::twoPi);
+    const Point<float> centre (pillCx, pillCy), across (std::cos (turn) * (pillHalfLength + pillR), std::sin (turn) * pillR);
+    const Colour warm = Colours::white.interpolatedWith (Colour (0xffffd9a0), colourMix);
+    g.setColour (warm.withAlpha (0.09f * glow));
+    g.strokePath (stadiumAround (pillCx, pillCy, pillHalfLength, pillR + 3.5f), PathStrokeType (6.0f));
+    g.setColour (warm.withAlpha (0.16f * glow));
+    g.strokePath (stadiumAround (pillCx, pillCy, pillHalfLength, pillR + 1.6f), PathStrokeType (2.4f));
+    g.setGradientFill (ColourGradient (Colours::white.withAlpha (0.85f * glow), centre + across,
+                                       warm.withAlpha (0.25f * glow), centre - across, false));
+    g.strokePath (pill, PathStrokeType (0.9f));
 }
 }

@@ -200,3 +200,18 @@ with `AntiparticleSnapshot` + `tools/ui_compare.py` (mean absolute RGB differenc
 
 Font: Whyte is replaced by **Instrument Sans** Regular (SIL OFL, `resources/fonts`), picked by comparing rendered
 words ("amount", "Sidechain", "high", "Preset") with the reference: closest widths and shapes of five candidates.
+
+## Ours: the visualiser at the project's tempo, and the god particle as neon round a black hole
+
+- **Tempo (both styles):** the animation's clock runs at its pace times the project's beats per second (tempo / 60: 2
+  times at 120 BPM; 1 ... 3.5 times; 2 times when the host gives no tempo), easing to a new tempo over ~0.5 s, drawn
+  at 60 frames/s by the visualiser's own timer (the reference's sprite is a fixed 1 s loop at 30 frames/s). The light
+  still follows the input's level in real time. Scorpius does the same (its RESEARCH.md, UI round 10).
+- **Neon (god particle):** each spark a core a little whiter than its colour, in a glow of the pure colour (a tight
+  halo and a wide faint bloom, 5 + 3.5 × its size px across) and glowing up and dying away smoothly (sin^0.6 over its
+  life) instead of the reference's crisp points that pop. Lives 0.1 ... 0.9 s (the reference's mostly under 0.2 s),
+  over a 4 s loop of 4400 sparks, so about as many show at once.
+- **The black hole (god particle):** the amount pill. Each spark's path is worked out when the loop is made (every
+  1/120 s): drawn in at 7·10⁵ / (distance + 8)² px/s² and along the flow half as much, so the ones within ~25 px
+  spiral in, faster the closer, thinner as they go (down to a third), and are gone at its edge. A soft warm glow
+  round the pill and a thin ring of bent light hugging it, brighter on one side, turning with the flow.

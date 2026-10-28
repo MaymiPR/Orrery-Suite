@@ -72,6 +72,7 @@ public:
     // host-only state (not part of presets, as in the reference): side-chain source and the editor's zoom
     std::atomic<bool> sidechainExternal { false };
     std::atomic<float> uiScale { 1.0f };
+    std::atomic<float> hostBpm { 0.0f };     // the project's tempo, as the host last gave it (0: it gives none)
     std::atomic<bool> ioLink { false };      // I/O link (ours): the output gain mirrors the input gain; saved with the session
 
     // meters: input / output L R, multiband gain reduction (high, mid, low) and limiter L R, positive dB

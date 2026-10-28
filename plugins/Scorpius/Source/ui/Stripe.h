@@ -51,7 +51,7 @@ public:
     void setStyle (Style);
     // ours: the low and mid bands' levels (linear, as the circles read them: Visuals.h), for the venom
     void setBands (float lows, float mids);
-    // ours: the project's tempo (BPM; 0 when the host gives none): the ORION style's particles move at their pace times
+    // ours: the project's tempo (BPM; 0 when the host gives none): the particles (both styles) move at their pace times
     // the beats per second (1 ... 3.5 times; 2 times without a tempo), easing to a new one over ~0.5 s
     void setTempo (float bpm);
     // paints what is under the stripe (in the editor's design coordinates), drawn once per scale

@@ -253,9 +253,9 @@ void Stripe::advance (double now)
 {
     const double real = jlimit (0.0, 0.1, now - lastTime);
     lastTime = now;
-    // (ORION) the particles' time runs at the project's tempo
+    // the particles' (and the venom's) time runs at the project's tempo
     pace += (paceTarget - pace) * (float) (1.0 - std::exp (-real / 0.5));
-    const double dt = style == Style::orion ? real * pace : real;
+    const double dt = real * pace;
     elapsed += dt;
     // the light eases to the level's brightness; ours: the heart beats
     envelope += (brightness (levelIn) - envelope) * (float) (1.0 - std::exp (-real / easing));

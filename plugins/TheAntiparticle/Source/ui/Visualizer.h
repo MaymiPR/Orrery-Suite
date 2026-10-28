@@ -16,8 +16,14 @@ namespace ap
 //    from -6 dBFS the light holds ~0.4 s and fades in ~0.4 s, and a quiet ending fades with the music. White at
 //    amount 0 % or with the character section bypassed, blending linearly to full colour at 100 %.
 //  - our own "antiparticle" style (settings page): bubble-chamber pair creation and annihilation, a 3 s loop.
+// Ours, in both styles: the animation runs at the project's tempo (its pace times the beats per second: 2 times at 120
+// BPM, 1 ... 3.5 times, 2 times without a tempo), drawn at 60 frames/s. And in the god particle style the sparks glow
+// like neon (a core a little whiter than its colour in a glow of the pure colour and a wide faint bloom, glowing up
+// and dying away over ~0.1 ... 0.9 s of a 4 s loop) and the amount pill is a black hole: the sparks near it are drawn
+// in, faster the closer, spiralling with the flow, thinner as they go, and gone at its edge, where a thin ring of bent
+// light turns with them.
 // Drawn in editor design coordinates (the component covers the centre column).
-class Visualizer : public juce::Component
+class Visualizer : public juce::Component, private juce::Timer
 {
 public:
     Visualizer();
@@ -27,6 +33,8 @@ public:
     // mix 0 (white / ash) .. 1 (colour), animation on/off, and the style: the god particle (the reference's sparks) or
     // the antiparticle (ours)
     void advance (float inputPeakDb, float colourMix, bool animate, bool antiparticle = false);
+    // the project's tempo (BPM; 0 when the host gives none)
+    void setTempo (float bpm);
 
     // racetrack geometry (editor design px): the glass, and the amount pill on it (not quite concentric: measured)
     static constexpr float cx = 367.75f, cy = 148.25f, halfLength = 75.25f;
@@ -34,8 +42,11 @@ public:
     static constexpr float pillCx = 368.1f, pillCy = 148.9f, pillHalfLength = 74.7f, pillR = 49.75f;
 
 private:
-    struct Spark { float birth, life, x, y, vx, vy, size, bright; int hue; bool streak; };
+    struct Spark { float birth, life, size, bright; int hue, first, count; };
     std::vector<Spark> sparks;
+    std::vector<juce::Point<float>> tracks;      // each spark's path, every 1/120 s from its birth (Spark::first on)
+    static constexpr float godLoop = 4.0f, trackStep = 1.0f / 120.0f;
+    juce::Image glowSprite;                      // a neon spark's glow (one channel, tinted as it is drawn)
     // antiparticle: as in a bubble chamber. A gamma ray turns into a particle / antiparticle pair whose tracks curl
     // away in opposite directions (opposite charge in a magnetic field) and spiral in as they lose energy; elsewhere
     // pairs meet and annihilate in a flash that sends two gamma rays apart. Matter cyan, antimatter magenta.
@@ -53,7 +64,10 @@ private:
     float meterDb = -200.0f;      // the input peak meter that drives both (dBFS)
     double lastAdvance = 0.0;     // when advance() last ran (s)
     float colourMix = 1.0f;
-    double clock = 0.0;           // free-running animation clock (s)
+    double clock = 0.0;           // free-running animation clock (s, at the tempo's pace)
+    float pace = 2.0f, paceTarget = 2.0f;
+    bool animating = false;
+    void timerCallback() override;
     juce::Image frame, lit, litGrey, litViolet;  // the glass unlit / lit (colour, white, antiparticle violet), per size
     float framePx = 0.0f;
     void renderFrame (float scale);

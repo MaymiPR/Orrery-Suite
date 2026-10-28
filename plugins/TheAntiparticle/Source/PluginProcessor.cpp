@@ -124,6 +124,9 @@ void AntiparticleProcessor::measure (const AudioBuffer<float>& b, ap::LevelTap& 
 void AntiparticleProcessor::processBlock (AudioBuffer<float>& buffer, MidiBuffer&)
 {
     ScopedNoDenormals noDenormals;
+    if (auto* head = getPlayHead())
+        if (const auto position = head->getPosition())
+            if (const auto bpm = position->getBpm()) hostBpm = (float) *bpm;
     auto main = getBusBuffer (buffer, true, 0);
     const int n = main.getNumSamples();
     if (main.getNumChannels() < 2) return;

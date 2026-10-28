@@ -402,6 +402,7 @@ void AntiparticleEditor::timerCallback()
     // the visualiser follows this frame's input sample peak (not the meters: they fall slowly); no blocks = silence
     const float inPeak = running ? jmax (inMeter[0].rawPeakDb, inMeter[1].rawPeakDb) : -200.0f;
     const float mix = characterOn ? jlimit (0.0f, 1.0f, characterValue / 0.5f) : 0.0f;
+    visualizer.setTempo (proc.hostBpm.load());
     visualizer.advance (inPeak, mix, ap::Settings::get().animation(), ap::Settings::get().particleStyle() == ap::Settings::Particles::antiparticle);
     content.repaint();
     amountText.repaint();
