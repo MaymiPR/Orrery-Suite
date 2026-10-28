@@ -379,13 +379,17 @@ probe (1 kHz: steps of -10, -4, -14, -2, -8 dBFS, then -4 / -14 alternating ever
   and a few runners, and, venom, eats at the glass: bubbles and wisps rise, a faint mark stays ~3 s. The bass makes
   the globs bigger and deeper green, the mids thicken the mist. The light follows the same level as the ORION style.
   The heart is a soft glow (warm core, crimson, maroon, shading into the green haze) beating lub-dub, resynced to each
-  strike, after which a red pressure wave runs out both ways turning green. **Blood** (the accent): on hits with
-  strong bass, at most once every 1.2 s, 1 or 2 globs of blood fly with the venom and hit the glass as a liquid: a
-  pool of beads spreading out from the hit (slower than water, it is thicker), droplets flung away that streak as they
-  fly, and 1 or 2 heavy beads that run down in fits and starts leaving trails of tiny ones. It is translucent: a layer
-  takes green and blue away from what is behind it (the venom shows through tinted red, darker where the blood is
-  thick), its red is in front (where drops overlap they merge, saturating at a deep red instead of adding up), with a
-  red refracted rim and a wet highlight on top; drying (the second half of its 3 ... 5 s) it loses the shine and
-  darkens, then fades. Cost at 200 %: 3.7 ms a frame (the ORION style 3.2 ... 3.7).
+  strike, after which a red pressure wave runs out both ways turning green. **The sting** (the accent): on hits with
+  strong bass, at most once every 1.6 s, the scorpion's barb (a dark curved spike that covers what is behind it, lit
+  along its edges) thrusts out of the depth from the heart and stabs the glass at a place along the stripe (0.09 s: a
+  glint, a puncture, hairline cracks), shakes, and is torn back out (0.17 s), its tip bloody. The wound spurts blood in
+  time with the heart (as the barb tears free, then on the next lub and dub): a fan of fast drops the way the barb was
+  pulled, a few all round and a mist, each slowing and staying as spatter with a tail back towards the wound; the
+  bigger drops run down. The venom it injected overflows: a green bead wells up out of the wound, swells and trembles,
+  and bursts (0.8 s) in a green splatter with tails, a splash ring and runners, and eats at the glass (bubbles, wisps,
+  a mark). Blood is translucent: a layer takes green and blue away from what is behind it (the venom shows through
+  tinted red, darker where it is thick), its red is in front (overlapping drops merge, saturating at a deep red), with
+  a red refracted rim and a wet highlight on the bigger drops; drying (the second half of its 3 ... 5 s) it loses the
+  shine and darkens, then fades. Cost at 200 %: 3.7 ms a frame (the ORION style 3.2 ... 3.7).
 - **Knobs (both plug-ins):** double-click opens a field over the knob to type its value (Enter or a click elsewhere
   sets it, as one host gesture; Escape leaves it); Alt-click still resets to the default.

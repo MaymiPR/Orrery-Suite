@@ -21,10 +21,13 @@
 // stretching into teardrops as they come, with a fine mist behind. Quiet music: a slow drip and a faint green haze;
 // louder: a steady spray; each beat a strike, the heart squeezing and recoiling as it fires a burst, a ring and 2 ... 4
 // globs, and a red pressure wave runs out from it, turning green. The heart is a soft glow that shades from its warm
-// core through crimson and maroon into the green haze, beating lub-dub. On the biggest hits (strong bass) it also throws
-// blood: it splashes on the glass as a liquid, a pool of beads spreading out and droplets flung away streaking, then
-// runs down in heavy beads that leave trails of tiny ones; it is translucent (it tints what is behind it red, darker
-// where thick, with a red refracted rim and a wet highlight) and, drying, loses its shine and darkens, then fades. A share of the spray and all the globs hit the glass, as water does: a splash ring and droplets flung out on
+// core through crimson and maroon into the green haze, beating lub-dub. On the biggest hits (strong bass) the scorpion
+// stings: its barb thrusts out of the depth and stabs the glass (a glint, a puncture, hairline cracks), then rips back
+// out, and the wound spurts blood after it, in time with the heart (a spurt as the barb tears free, more on the next
+// beats): a fan of fast streaks and a mist, leaving spatter with tails pointing back at the wound and a few drops that
+// run down. The venom it injected overflows the wound: green wells up through the blood, swells and bursts in a green
+// splatter that runs and eats at the glass. Blood is translucent (it tints what is behind it red, darker where thick,
+// with a red refracted rim and a wet highlight) and, drying, loses its shine and darkens, then fades. A share of the spray and all the globs hit the glass, as water does: a splash ring and droplets flung out on
 // impact, then clear beads that stay (a faint tint, a bright highlight, light refracted along their lower edge); the
 // bigger ones run down in fits and starts, leaving a trail of tiny beads, and the globs' pools eat at the glass
 // (bubbles and wisps rise, a faint mark is left). The bass makes the globs bigger and deeper green, the mids thicken
@@ -62,17 +65,23 @@ private:
     // ours: the venom, in 3-D (x and y across, z the distance: 1 far, 0 at the glass), or on the glass
     struct Drop
     {
-        enum class Type { spray, glob, mist, bead, ring, bubble, wisp, etch, flash, wave } type;
+        enum class Type { spray, glob, mist, bead, ring, bubble, wisp, etch, flash, wave, sting, crack, overflow } type;
         float X, Y, Z, vX, vY, vZ, size, r, g, b, level, born, life, seed, sx, sy, px, py;
         bool wet;                    // a spray drop that lands on the glass (the rest fly past)
         bool blood;                  // a glob of blood (the heart's, on the biggest hits)
         float slideAt, travel;       // a bead on the glass: when it starts to run down (0: never), how far it has run
+                                     // (a sting: how many of its stages have happened)
+        float dirX, dirY, tail;      // spatter: the way it flew and the length of its tail (design px)
     };
     void fire (bool strike);
     void emit (Drop::Type, float depth, float speed, float size, float level, float angle = -1.0f);
     void hitGlass (const Drop&);
-    void hitBlood (const Drop&);
+    void sting();
+    void stingStage (Drop&, float age);
+    void spurt (const Drop& wound, int count, float strength);
+    void venomBurst (const Drop& wound);
     void renderBlood (const Drop&, float pxPerDesign);
+    void renderStinger (const Drop&, float pxPerDesign);
     void splatGlow (float x, float y, float rx, float ry, float level, float r, float g, float b, float pxPerDesign);
     void land (const Drop&);
     void bead (float x, float y, float size, float level, const Drop&, float pxPerDesign);
@@ -85,7 +94,7 @@ private:
     void splatLine (float x0, float y0, float x1, float y1, float width, float level, float r, float g, float b, float pxPerDesign);
     std::vector<Drop> drops;
     float sprayDue = 0.0f, globDue = 0.0f, mistDue = 0.0f, charge = 0.0f, squeeze = 0.0f, bass = 0.0f, mids = 0.0f;
-    double lastBurst = -1.0, lastHeartbeat = 0.0, lastBlood = -10.0;
+    double lastBurst = -1.0, lastHeartbeat = 0.0, lastSting = -10.0;
     // the layers (ours): splats add to the canvas, the light by default; blood darkens what is behind it (absorb, per
     // channel) and adds its own colour in front
     float* canvas = nullptr;
