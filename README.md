@@ -32,15 +32,8 @@ Windows, macOS and Linux.
 ## How it was built
 
 Orrery Suite was created entirely with Claude (Anthropic's AI) and [REA](https://github.com/morluto/rea): the code,
-the measurements behind it and this documentation. The originals were the reference throughout:
-
-- **Measured from the outside.** Test signals and music were rendered through each original and through ours, and the
-  differences fitted away. Each plug-in's MEASUREMENTS.md describes how; its NULLTESTS.md shows the result.
-- **Learned where a formula would not do.** Scorpius's drive, harmonics, lift and grit are small neural networks
-  trained on the original's input and output.
-- **Analysed with REA for behaviour only.** The originals' binaries were read to understand how they work, for
-  example how The God Particle designs its oversampling filters, and that Orion runs neural captures in its drive and
-  harmonics. No code or constants were copied: every number in ours was fitted from measurements.
+the measurements behind it and this documentation. The originals were the reference throughout, as described in each
+plug-in's MEASUREMENTS.md.
 
 ## Features
 
