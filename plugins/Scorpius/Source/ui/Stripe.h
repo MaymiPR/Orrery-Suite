@@ -15,23 +15,16 @@
 //     the sound stops, falling at 50 dB/s): dark below -72 dBFS, full from -40 dBFS up, ((dB + 72) / 32)^1.25 between
 //     (measured with tones from -65 to -40 dBFS: 0.16, 0.29, 0.44, 0.61, 0.81, 1), and eased over ~30 ms on screen;
 //   - with the particle animation off (settings), the stripe stays dark.
-// Our own style (settings, "SCORPIUS"): venom, shot at you. Far away in the middle of the stripe beats a crimson heart
-// (Antares, the scorpion's red star), the venom gland; out of it comes green venom (acid lime through the controls'
-// mint to deep teal, white-hot where it is thickest), flying in 3-D towards the viewer: liquid drops, round and glossy,
-// stretching into teardrops as they come, with a fine mist behind. Quiet music: a slow drip and a faint green haze;
-// louder: a steady spray; each beat a strike, the heart squeezing and recoiling as it fires a burst, a ring and 2 ... 4
-// globs, and a red pressure wave runs out from it, turning green. The heart is a soft glow that shades from its warm
-// core through crimson and maroon into the green haze, beating lub-dub. On the biggest hits (strong bass) the scorpion
-// stings: its barb thrusts out of the depth and stabs the glass (a glint, a puncture, hairline cracks), then rips back
-// out, and the wound spurts blood after it, in time with the heart (a spurt as the barb tears free, more on the next
-// beats): a fan of fast streaks and a mist, leaving spatter with tails pointing back at the wound and a few drops that
-// run down. The venom it injected overflows the wound: green wells up through the blood, swells and bursts in a green
-// splatter that runs and eats at the glass. Blood is translucent (it tints what is behind it red, darker where thick,
-// with a red refracted rim and a wet highlight) and, drying, loses its shine and darkens, then fades. A share of the spray and all the globs hit the glass, as water does: a splash ring and droplets flung out on
-// impact, then clear beads that stay (a faint tint, a bright highlight, light refracted along their lower edge); the
-// bigger ones run down in fits and starts, leaving a trail of tiny beads, and the globs' pools eat at the glass
-// (bubbles and wisps rise, a faint mark is left). The bass makes the globs bigger and deeper green, the mids thicken
-// the mist.
+// Our own style (settings, "SCORPIUS"): green venom shot at you, through a pane of glass. Far away in the middle beats a
+// crimson heart (Antares, the scorpion's red star) shading into a green haze; out of it comes venom (acid lime through
+// the controls' mint to deep teal) flying in 3-D towards the viewer, seen with depth of field: far drops small and
+// soft, those in focus sharp and streaking, the nearest big out-of-focus discs. Quiet music: a slow drip; louder: a
+// steady spray; each beat a strike (a burst, a ring, globs, and a pressure wave from the heart). Drops that reach the
+// glass behave as water on a window: they hit flat and spread (a thin uneven film, a splash ring, droplets flung off),
+// pull back into beads, and the beads are lenses: each shows the scene behind it upside down and small, darker at its
+// rim, with a bright caustic at its foot and a glint. Beads that touch merge; once heavy enough they slide down in fits
+// and starts, sweeping up the beads in their way and leaving a wet track, and they shrink as they dry. The glass itself:
+// a faint reflection drifting across it, darker edges, and dust and fine scratches that catch the light of the venom.
 // The light is added (as light), computed per physical pixel and drawn as one image per frame of the editor's clock.
 namespace sc
 {
@@ -65,40 +58,40 @@ private:
     // ours: the venom, in 3-D (x and y across, z the distance: 1 far, 0 at the glass), or on the glass
     struct Drop
     {
-        enum class Type { spray, glob, mist, bead, ring, bubble, wisp, etch, flash, wave, sting, crack, overflow } type;
+        enum class Type { spray, glob, mist, bead, track, ring, flash, wave } type;
         float X, Y, Z, vX, vY, vZ, size, r, g, b, level, born, life, seed, sx, sy, px, py;
         bool wet;                    // a spray drop that lands on the glass (the rest fly past)
-        bool blood;                  // a glob of blood (the heart's, on the biggest hits)
-        float slideAt, travel;       // a bead on the glass: when it starts to run down (0: never), how far it has run
-                                     // (a sting: how many of its stages have happened)
-        float dirX, dirY, tail;      // spatter: the way it flew and the length of its tail (design px)
+        float slideAt, travel;       // a bead: when it started to run down (0: not yet), how far since its last track
+        float spread;                // a bead: how flat it still is from its impact (1 just hit ... 0 a round bead)
     };
     void fire (bool strike);
     void emit (Drop::Type, float depth, float speed, float size, float level, float angle = -1.0f);
-    void hitGlass (const Drop&);
-    void sting();
-    void stingStage (Drop&, float age);
-    void spurt (const Drop& wound, int count, float strength);
-    void venomBurst (const Drop& wound);
-    void renderBlood (const Drop&, float pxPerDesign);
-    void renderStinger (const Drop&, float pxPerDesign);
-    void splatGlow (float x, float y, float rx, float ry, float level, float r, float g, float b, float pxPerDesign);
-    void land (const Drop&);
-    void bead (float x, float y, float size, float level, const Drop&, float pxPerDesign);
     Drop onGlass (const Drop& from, Drop::Type, float x, float y, float size, float life, float delay);
+    void land (const Drop&);
+    void hitGlass (const Drop&);
     void advanceVenom (float dt);
+    void coalesce();
     void addDrop (const Drop&);
     void renderVenom (float pxPerDesign);
     void renderGland (float pxPerDesign);
+    void renderGlass (float pxPerDesign);
+    void lens (const Drop&, float pxPerDesign);
+    void wetTrack (const Drop&, float pxPerDesign);
+    void prepareGlass (int widthPx, int heightPx, float pxPerDesign);
     void droplet (float x, float y, float dx, float dy, float size, float level, const Drop&, float pxPerDesign);
     void splatLine (float x0, float y0, float x1, float y1, float width, float level, float r, float g, float b, float pxPerDesign);
+    void splatGlow (float x, float y, float rx, float ry, float level, float r, float g, float b, float pxPerDesign);
+    void splatDisc (float x, float y, float radius, float level, float r, float g, float b, float pxPerDesign);
     std::vector<Drop> drops;
     float sprayDue = 0.0f, globDue = 0.0f, mistDue = 0.0f, charge = 0.0f, squeeze = 0.0f, bass = 0.0f, mids = 0.0f;
-    double lastBurst = -1.0, lastHeartbeat = 0.0, lastSting = -10.0;
-    // the layers (ours): splats add to the canvas, the light by default; blood darkens what is behind it (absorb, per
-    // channel) and adds its own colour in front
+    double lastBurst = -1.0, lastHeartbeat = 0.0;
+    // ours: splats add to the canvas (the light by default); the scene behind the glass (the light over what is under
+    // it), and the glass's layers: how much the drops on it cover (one channel), what they show (the scene through
+    // them), glints and reflections on top, how much darker its edges are, its dust and scratches (one channel)
     float* canvas = nullptr;
-    std::vector<float> front, absorb, gloss;      // (gloss: blood's highlights, on top of everything)
+    std::vector<float> scene, cover, front, gloss, vignette, dust;
+    std::vector<int> gridHead, gridNext;
+    int glassW = 0, glassH = 0;
     struct Particle
     {
         Kind kind;

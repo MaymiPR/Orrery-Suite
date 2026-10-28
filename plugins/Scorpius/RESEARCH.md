@@ -365,31 +365,23 @@ probe (1 kHz: steps of -10, -4, -14, -2, -8 dBFS, then -4 / -14 alternating ever
   points (9.6 at -50 dBFS, 10.7 at -40, 18 at -10): harmonics 8.29 + 15.80 (a^0.312 - 0.083), up 0.05 s, down
   0.3 s at most 24 px/s; lift 3.76 + 19.07 (a^0.168 - 0.083), up 0.22 s, down 0.4 s. Per-frame radius against the
   reference: harmonics 0.95 px rms (was 2.4), lift 1.5; means and wobble now within 0.15 px.
-- **SCORPIUS style, redone again (ours): green venom shot at you.** Far away in the middle of the stripe beats a
-  crimson heart (Antares, the scorpion's red star), the venom gland, with a dark red halo. Out of it comes green venom
-  only (acid lime through the controls' mint to deep teal, white-hot where it is thickest), flying in 3-D towards the
-  viewer (projected from its distance: small, dim and slow in the middle, growing and speeding outwards as it nears)
-  as liquid drops: round, glossy (a highlight up and left), stretched into teardrops along their motion, with a fine
-  mist behind. Quiet music: a slow drip and a faint haze; louder: a steady spray (up to ~530 drops a second); each
-  beat a strike: the heart squeezes and recoils, its rays flare, and it fires 110 drops, a ring of 36 and 2 ... 4
-  globs. A third of the spray and every glob hit the glass along the stripe, as water does: a splash ring spreading
-  and fading in ~0.2 s, droplets flung out that skid to a stop, and clear beads that stay 1.5 ... 3.5 s (barely
-  tinted, a thin crescent of refracted light along the lower edge, a sharp highlight up and left). Bigger beads run
-  down in fits and starts (sticking and slipping), leaving a trail of tiny beads and shrinking; a glob leaves a pool
-  and a few runners, and, venom, eats at the glass: bubbles and wisps rise, a faint mark stays ~3 s. The bass makes
-  the globs bigger and deeper green, the mids thicken the mist. The light follows the same level as the ORION style.
-  The heart is a soft glow (warm core, crimson, maroon, shading into the green haze) beating lub-dub, resynced to each
-  strike, after which a red pressure wave runs out both ways turning green. **The sting** (the accent): on hits with
-  strong bass, at most once every 1.6 s, the scorpion's barb (a dark curved spike that covers what is behind it, lit
-  along its edges) thrusts out of the depth from the heart and stabs the glass at a place along the stripe (0.09 s: a
-  glint, a puncture, hairline cracks), shakes, and is torn back out (0.17 s), its tip bloody. The wound spurts blood in
-  time with the heart (as the barb tears free, then on the next lub and dub): a fan of fast drops the way the barb was
-  pulled, a few all round and a mist, each slowing and staying as spatter with a tail back towards the wound; the
-  bigger drops run down. The venom it injected overflows: a green bead wells up out of the wound, swells and trembles,
-  and bursts (0.8 s) in a green splatter with tails, a splash ring and runners, and eats at the glass (bubbles, wisps,
-  a mark). Blood is translucent: a layer takes green and blue away from what is behind it (the venom shows through
-  tinted red, darker where it is thick), its red is in front (overlapping drops merge, saturating at a deep red), with
-  a red refracted rim and a wet highlight on the bigger drops; drying (the second half of its 3 ... 5 s) it loses the
-  shine and darkens, then fades. Cost at 200 %: 3.7 ms a frame (the ORION style 3.2 ... 3.7).
+- **SCORPIUS style, redone again (ours): green venom shot at you, through a pane of glass.** Far away in the middle
+  beats a crimson heart (Antares, the scorpion's red star): a soft glow from a warm core through crimson and maroon into
+  the green haze, beating lub-dub in time with the strikes, each followed by a red pressure wave that turns green as it
+  spreads. Out of it comes green venom only (acid lime through the controls' mint to deep teal), flying in 3-D towards
+  the viewer (projected from its distance), seen with **depth of field** (in focus at 0.45 of the way): far drops small
+  and soft, those in focus sharp glossy teardrops streaking, the nearest big out-of-focus discs as dim as their light
+  is spread. Quiet music: a slow drip and a faint haze; louder: a steady spray (up to ~530 drops a second); each beat a
+  strike (110 drops, a ring of 36, 2 ... 4 globs); the bass makes the globs bigger and deeper green, the mids thicken
+  the mist. **On the glass**, as water on a window: 40 % of the spray and every glob land; a drop hits flat (an uneven
+  film, a splash ring, droplets flung off) and pulls back into a bead within ~0.1 s. Each bead is a **lens**: it shows
+  the scene behind it upside down and 2.6 times smaller, darker towards its rim, with a caustic at its foot and a sharp
+  glint up and left. Beads that touch merge (volumes add); from 3 design px wide they run down in fits and starts,
+  sweeping up the beads in their way, leaving a wet track (a thin film that bends what is behind it a little) and now
+  and then a speck; they shrink as they dry (4 ... 9 s). **The glass itself**: darker towards its edges, a faint band of
+  reflected light drifting across it, a thin line of light along its top edge, and dust and fine scratches (a fixed
+  pattern) that show only where the venom lights them. The light follows the same level as the ORION style. Drawn in
+  two passes: the scene (haze, heart, venom in the air) and then the glass over it. Cost at 200 %: 3.2 ms a frame (the
+  ORION style 3.2 ... 3.7). (Tried and dropped: blood, a stinger stabbing the glass, acid bubbles.)
 - **Knobs (both plug-ins):** double-click opens a field over the knob to type its value (Enter or a click elsewhere
   sets it, as one host gesture; Escape leaves it); Alt-click still resets to the default.
