@@ -4,7 +4,10 @@ stands still, so it is more than a gain and a linear filter). Puts our fitted ga
 constants, the same arithmetic) in front: u = x g(x), and writes <case>_u.npz for train_wn.py, with a linear
 estimate of the wet filter (Wiener, 8192 taps) as the Post filter's start, and the linear-only null on the held-out
 pieces as the baseline.
-    python prep_comp.py [a|b ...]"""
+    python prep_comp.py [a|b ...]
+Also writes <case>_r.npz: the same input, the target less what the fitted wet IIR (LinearFits.h compWetA / B, the
+plug-in's cheap linear part) makes of it, for a small network that learns only the rest."""
+import re
 import os, sys
 import numpy as np
 from scipy.signal import fftconvolve
@@ -36,6 +39,16 @@ def gain(x, T, R, W, att, rel, rms):
     return out
 
 
+def iir(name):
+    """a ParallelFilter of LinearFits.h as a function: d x + sum (b0 + b1 z^-1) / (1 + a1 z^-1 + a2 z^-2) x"""
+    from scipy.signal import lfilter
+    src = open(os.path.join(o.PLUGIN, 'Source', 'dsp', 'LinearFits.h')).read()
+    line = re.search(r'inline const Parallel ' + name + r' \{ ([^;]*)\};', src).group(1)
+    nums = [float(v) for v in re.findall(r'[-+]?\d[\d.]*(?:e[-+]?\d+)?', line)]
+    d, secs = nums[0], np.array(nums[1:]).reshape(-1, 4)
+    return lambda x: d * x + sum(lfilter([s[0], s[1]], [1, s[2], s[3]], x) for s in secs)
+
+
 def wiener(us, ys, n=8192, nfft=32768):
     Sxy = np.zeros(nfft // 2 + 1, complex); Sxx = np.zeros(nfft // 2 + 1)
     for u, y in zip(us, ys):
@@ -57,3 +70,8 @@ if __name__ == '__main__':
         nulls = [o.null_db(ys[i][None], fftconvolve(us[i], h)[:len(us[i])][None]) for i, v in enumerate(valid) if v and np.abs(xs[i]).max() <= 10 ** (4 / 20)]
         print(f'comp_{m}: linear (gain + Wiener filter) held-out nulls', ' '.join('%.1f' % v for v in nulls), 'mean %.1f' % np.mean(nulls), flush=True)
         np.savez_compressed(os.path.join(NN, f'comp_{m}_u.npz'), x=np.array(us, dtype=object), y=d['y'], kind=d['kind'], valid=d['valid'], xraw=d['x'])
+        lin = iir('compWet' + m.upper())
+        rs = [(y.astype(np.float64) - lin(u.astype(np.float64))).astype(np.float32) for u, y in zip(us, ys)]
+        nulls = [o.null_db(ys[i][None], (ys[i] - rs[i])[None]) for i, v in enumerate(valid) if v and np.abs(xs[i]).max() <= 10 ** (4 / 20)]
+        print(f'comp_{m}: linear (gain + fitted IIR) held-out nulls', ' '.join('%.1f' % v for v in nulls), 'mean %.1f' % np.mean(nulls), flush=True)
+        np.savez_compressed(os.path.join(NN, f'comp_{m}_r.npz'), x=np.array(us, dtype=object), y=np.array(rs, dtype=object), kind=d['kind'], valid=d['valid'])

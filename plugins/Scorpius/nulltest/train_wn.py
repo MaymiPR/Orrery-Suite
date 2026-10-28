@@ -13,7 +13,8 @@ import orion as o
 from train_wh import fftconv, NN, IR, load
 
 FS = 48000
-KPRE, KPOST, SEG, BATCH = int(os.environ.get("KPRE", 64)), 8192, 4096, 16
+KPRE, KPOST, SEG, BATCH = int(os.environ.get("KPRE", 64)), int(os.environ.get("KPOST", 8192)), 4096, 16
+POSTZERO = os.environ.get("POSTZERO") == "1"   # the Post filter starts at zero (a residual target: prep_comp.py's _r cases)
 STACK = int(os.environ.get("STACK", 12))
 # FEAT: time constants (ms) of slow envelopes of the input, one-pole averages of |x|, given to the network as extra
 # inputs (memory far beyond its receptive field, cheap to compute in the plug-in), e.g. FEAT=10,50,200,1000
@@ -109,7 +110,9 @@ def train(case, steps, irname, ch, layers):
         x_, y_, v_ = load(extra); xs += x_; ys += y_; valid += v_
     if EQUIV: ys = [x + (y - x) / amount_weight(EQUIV) for x, y in zip(xs, ys)]
     keep = [i for i, x in enumerate(xs) if 20 * np.log10(np.abs(x).max() + 1e-9) <= MAXPEAK]
-    if irname is None:                  # (grit: steady signals pass unchanged, so the filters start as the identity)
+    if POSTZERO:
+        h = np.zeros(KPOST, np.float32)
+    elif irname is None:                # (grit: steady signals pass unchanged, so the filters start as the identity)
         h = np.zeros(KPOST, np.float32); h[0] = 1.0
     else:
         h = np.load(os.path.join(IR, irname + '.npy'))[0].astype(np.float32)

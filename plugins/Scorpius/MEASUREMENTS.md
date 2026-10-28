@@ -254,16 +254,17 @@ down more of how it is built:
   **The gain comes before the wet filters**, not after (`fit_comp_timing.py`): the two agree on steady tones but
   not when the gain moves fast through the filters' low cut (a kick's attack): loud drums −30.5 → −47.5 dB (mode
   b), −29.7 → −40.2 (a). Neither a hold before the release, a detector low shelf, feedback from the output nor a
-  detector high-pass helps further. **The colour learned** (`prep_comp.py`, `capture_nn.py comp_a / comp_b`): our
-  gain in front (the same arithmetic as Compressor.h), the reference's wet output as the target, a WaveNet beside a
-  long filter (`train_wn.py BYPASS=1 KERNEL=3 MIXIN=1`, 4 channels, 8 layers: 8 channels and 10 layers do no
-  better). On held-out pieces the best linear filter after our gain nulls at −36.6 (a) / −42.2 dB (b), the learned
-  colour at −43.8 / −54.0. In the plug-in it gains less: drums −39.8 → −40.0 (a), −47.8 → −48.5 (b), the track
-  −46.2 → −47.2 / −48.3 → −49.4, as loud material is limited by the gain's dynamics, which the network does not
-  correct even when it hears the dry signal too (`XCOND`: no better). For about twice the plug-in's CPU, so it is
-  off by default (`compLearned`). Mode a's one bad held-out piece (a quiet excerpt, −28 dB with either model) is a
-  start-up effect: −19 … −22 dB over the first 1.2 s, then −38 … −45 like the rest; only quiet input after the
-  plug-in is created shows it (perhaps a recurrent model settling from its initial state: unverified).
+  detector high-pass helps further. **The colour is not worth modelling** (`prep_comp.py`, `capture_nn.py comp_a /
+  comp_b`, 174 s per mode, our gain in front with the same arithmetic as Compressor.h): on held-out pieces our gain
+  and the fitted wet IIR already null at −43.2 (a) / −53.8 dB (b); a WaveNet learning the whole wet path reaches
+  −43.8 / −54.0 (in the plug-in drums −39.8 → −40.0, −47.8 → −48.5), and one learning only what the IIR leaves
+  (`train_wn.py KPOST=64 POSTZERO=1`) nothing (−0.5 / +0.7 dB on that rest), so the plug-in keeps the IIR. What is
+  left is the gain's dynamics, which the network after the gain does not correct even when it hears the dry
+  signal too (`XCOND`: no better); the even harmonics (−65 … −88 dB) lie under it. (A first comparison against a
+  Wiener estimate of the linear part, −36.6 / −42.2, made the network look 7 … 12 dB better: the estimate was poor,
+  not the IIR.) Mode a's one bad held-out piece (a quiet excerpt, −28 dB with any model) is a start-up effect:
+  −19 … −22 dB over the first 1.2 s, then −38 … −45 like the rest; only quiet input after the plug-in is created
+  shows it (perhaps a recurrent model settling from its initial state: unverified).
 - **Low** (`fit_low2.py`): a subharmonic synthesizer, an octave below the bass: an **octave divider times an
   envelope**. On a steady tone its contribution is a square wave at half the frequency whose height follows the
   tone's level (at 25 Hz: −0.9 x the tone's amplitude for one cycle, +0.9 for the next), not the input times ±1 (the
@@ -351,7 +352,8 @@ down more of how it is built:
 
 - The drive on loud, dense material (all of the default preset's error), compression mode a on drums (−40 against
   b's −48), which crossings the low path's flip-flop counts on music, its soft limit on loud bass, grit after the
-  compressor on stereo material, mode a's start-up on quiet input, a cheaper learned compression colour.
+  compressor on stereo material, mode a's start-up on quiet input, compression's gain dynamics (what is left of
+  its error).
 - Tried and dropped (2026-10-28): an LSTM drive (3 layers of 24, as the binary's model names suggest) trained from
   the state half a second of material leaves instead of a zero state 512 samples before each window
   (`train_gru.py STATEWARM=24000`): −20.9 dB held out against −21.0 without it, both well behind the WaveNet's
