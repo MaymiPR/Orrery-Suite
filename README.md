@@ -7,123 +7,95 @@
 
 <p align="center">
   <a href="https://github.com/MaymiPR/OrrerySuite/releases/latest"><img alt="Latest release" src="https://img.shields.io/github/v/release/MaymiPR/OrrerySuite?color=b07cff&label=release"></a>
-  <img alt="Formats" src="https://img.shields.io/badge/formats-VST3%20%7C%20CLAP%20%7C%20AU-25202f">
-  <img alt="Platforms" src="https://img.shields.io/badge/platforms-Windows%20%7C%20macOS%20%7C%20Linux-25202f">
+  <img alt="Platforms: Windows, macOS, Linux" src="https://img.shields.io/badge/platforms-Windows%20%7C%20macOS%20%7C%20Linux-25202f">
   <a href="LICENSE"><img alt="License: AGPL v3" src="https://img.shields.io/badge/license-AGPL--3.0-9b6cff"></a>
 </p>
 
 # Orrery Suite
 
-Open-source mix-bus processors (**VST3**, **CLAP**, **AU**) for Windows, macOS and Linux, built with JUCE. Each Orrery
-plug-in is an independent, from-scratch recreation of a well-known mixing tool: its controls and look studied, its sound
-measured black-box, and the result null-tested against the original, with the numbers published as they are.
+Free, open-source recreations of Cradle's mix-bus plug-ins, null-tested against the originals. VST3, CLAP and AU for
+Windows, macOS and Linux.
 
-An orrery is a clockwork model of the heavens that reproduces their motions. Each Orrery plug-in is a working model
-of a well-known original in the same spirit.
+<p align="center">
+  <img src="docs/screenshots/hero.png" alt="The Antiparticle (left) and Scorpius (right), side by side" width="100%">
+</p>
+
+| Plug-in | Recreates | What it does |
+|---|---|---|
+| **[The Antiparticle](plugins/TheAntiparticle)** | Cradle The God Particle | Mix-bus EQ, multiband "character" saturation and compression, look-ahead limiter |
+| **[Scorpius](plugins/Scorpius)** | Cradle Orion | Drum-bus drive, harmonics, compression, lift, harmonic EQ and four parallel paths |
 
 > Orrery Suite is an independent project. It is not affiliated with, endorsed by or sponsored by Cradle or Jaycen
-> Joshua. Other companies' product names appear only to describe what a Orrery plug-in is modelled on and belong to
-> their owners. No code of theirs is included: the sound and the look were measured from the outside.
+> Joshua. Product names are theirs and only describe what each plug-in is modelled on. No code, models or data of
+> theirs is included: the sound and look were measured by testing the originals.
 
-## Install
+## Features
 
-Download from the [Releases](https://github.com/MaymiPR/OrrerySuite/releases)
-page. One installer per system holds every plug-in in the suite:
+- **Null-tested sound.** Each plug-in is measured against its original with the same audio, and every result is
+  published, good or bad ([How close](#how-close)).
+- **The originals' controls and editors**: same layout, knobs, meters, factory presets and visualisers, measured from
+  the originals.
+- **A few additions**, in the same top bar on both plug-ins: A / B compare, an external side-chain (INT / EXT) and
+  **I/O LINK**, which turns the output down as you turn the input up so you can drive harder at the same level.
 
-- **Windows:** `OrrerySuite-<version>-Windows-Setup.exe` installs the VST3 and
-  the CLAP to `C:\Program Files\Common Files\` (in `Orrery Suite` folders) and,
-  if you choose, the standalone apps (Start menu), with an uninstaller.
-- **macOS** (universal, 10.13 or later): `OrrerySuite-<version>-macOS.pkg`
-  installs the AU, the VST3 and the CLAP (you can choose which).
-- **Linux** (x86-64, glibc 2.35 or later): `OrrerySuite-<version>-Linux.tar.gz`
-  holds the VST3 and the CLAP; run `sh install-linux.sh` to copy them to
-  `~/.vst3` and `~/.clap` (see its `INSTALL.txt`).
+  <img src="docs/screenshots/top-bar.png" alt="The shared top bar: A / B compare, preset menu, side-chain INT / EXT, I/O LINK, UI scale" width="100%">
 
-Then rescan plugins in your DAW.
+- **Particle visualisers that follow your music**, in each original's style or ours, moving with the project's tempo.
 
-**Security warnings.** Orrery Suite isn't code-signed or notarized (that needs
-paid certificates), so the first time you open it:
-- Windows SmartScreen: *More info* → *Run anyway*.
-- macOS 15 and later: open it once, then System Settings → Privacy & Security
-  → *Open Anyway*. On earlier macOS: right-click → *Open*.
+  <img src="docs/screenshots/particle-styles.png" alt="Particle styles. Top: The Antiparticle's antiparticle style (left) and God particle style (right). Bottom: Scorpius's own style, then the Orion style" width="100%">
 
-Each release lists the files' SHA-256 checksums in `SHA256SUMS.txt`, so you can
-check that a download is the published one.
+- **Resizable** from 50 to 200 %. Oversampling up to 8x in The Antiparticle.
 
-## Plug-ins
+## Quick start
 
-| Orrery plug-in | Modelled on | Status |
+1. Download the installer for your system from the [latest release](https://github.com/MaymiPR/OrrerySuite/releases/latest).
+   One installer holds every plug-in:
+
+   | System | File | Installs |
+   |---|---|---|
+   | Windows | `OrrerySuite-<version>-Windows-Setup.exe` | VST3 and CLAP to `C:\Program Files\Common Files\`, standalone apps if you choose, with an uninstaller |
+   | macOS 10.13+ (universal) | `OrrerySuite-<version>-macOS.pkg` | AU, VST3 and CLAP (you choose which) |
+   | Linux x86-64 (glibc 2.35+) | `OrrerySuite-<version>-Linux.tar.gz` | VST3 and CLAP: run `sh install-linux.sh` to copy them to `~/.vst3` and `~/.clap` |
+
+2. Run it, then rescan plug-ins in your DAW.
+
+The installers are not code-signed (that needs paid certificates), so the first launch shows a warning:
+
+- **Windows SmartScreen:** *More info*, then *Run anyway*.
+- **macOS 15 and later:** open it once, then System Settings > Privacy & Security > *Open Anyway*. Earlier macOS:
+  right-click, then *Open*.
+
+Each release lists SHA-256 checksums in `SHA256SUMS.txt`, so you can check a download.
+
+## Usage
+
+Both plug-ins work the same way:
+
+- **Knobs:** drag up or down. Shift drags finely, Alt-click resets, double-click types a value.
+- **Presets:** pick one from the menu or step with the arrows; the disk button saves your own.
+- **A / B:** click A or B to switch between two complete settings; the arrow copies the active one over the other.
+- **Settings** (gear): particle animation on or off and its style. The Antiparticle also has oversampling and the
+  meter mode (RMS or LUFS).
+
+Each plug-in's page covers its controls in detail: [The Antiparticle](plugins/TheAntiparticle#using-it),
+[Scorpius](plugins/Scorpius#using-it).
+
+## How close
+
+The residual is the difference between the original's output and ours, in dB below the original's level. Lower is
+better: -60 dB is inaudible in practice.
+
+| | The Antiparticle | Scorpius |
 |---|---|---|
-| **[The Antiparticle](plugins/TheAntiparticle)** | Cradle The God Particle: mix-bus EQ, multiband character and limiter | released: close, not a null on every material (see below) |
-| **[Scorpius](plugins/Scorpius)** | Cradle Orion: drum-bus drive, harmonics, compression, lift, harmonic EQ and parallels | released in 1.1.0: close on everything but the drive (see below) |
+| Mastered track, default settings | -44.3 dB | -22.4 dB |
+| Synthetic music / drums, default settings | -62 to -74 dB | -26.6 dB (drums) |
+| Best parts | EQ, crossover, signal path: -79 to -87 dB | EQ, sub, rate converters: -50 to -70 dB |
+| Weakest part | the character section's high band on loud, bright material (about -40 dB) | the drive on loud, dense material (the reason for the default's -22 to -27 dB) |
 
-## The Antiparticle
+Every case is listed in each plug-in's NULLTESTS.md ([The Antiparticle](plugins/TheAntiparticle/NULLTESTS.md),
+[Scorpius](plugins/Scorpius/NULLTESTS.md)), and how the originals were measured in its MEASUREMENTS.md.
 
-<p align="center">
-  <img src="docs/screenshots/the-antiparticle@2x.png" alt="The Antiparticle" width="80%">
-</p>
-
-The God Particle's chain, rebuilt: input gain, a three-band EQ, the "character" section (a 3-band linear-phase split,
-each band a stereo-linked parallel compressor and a sine shaper, amount 0 – 200 %), a look-ahead limiter with a
-−0.1 dBFS ceiling, output gain. Oversampling 1 – 8x, an external side-chain for the character section's detectors, the
-original's editor, meters and particle visualiser. Two additions of ours: an **I/O LINK** switch (the output follows
-the input gain inverted, so driving the chain harder doesn't change the level) and an "antiparticle" particle style.
-More: [plugins/TheAntiparticle](plugins/TheAntiparticle).
-
-### Null test (honest numbers)
-
-Residual of The Antiparticle against the original, in dB re the original's output (lower is better; −60 dB is
-inaudible in practice):
-
-- **A mastered track** (future house, about −10 dBFS RMS) at the default settings: **−44.3 dB**; the limiter alone
-  −60.8 dB, the character section alone −46.1 dB. Character at 125 / 150 / 175 / 200 %: −44.0 / −42.5 / −40.9 / −39.4 dB.
-- **Synthetic music** −62 to −74 dB at the defaults; the path, EQ and crossover −79 to −87 dB; amount 0 % −135 dB.
-- **Stress suite:** 163 cases over the settings, levels, signals, automation, sample rates and block sizes: **median
-  −63.3 dB**, worst −40.4 dB.
-- **Weakest:** loud, dense, bright material through the character section's high band (pink noise at −6 dBFS RMS
-  −40 dB). Its steady gain curve matches to 0.02 dB; what is left is how fast its detector moves.
-- **How:** the crossover filters were identified exactly from the original's impulse responses; the limiter's
-  look-ahead planning was identified with probe signals (its inter-sample interpolator fitted per sample rate); the
-  character section's laws were fitted against the original on program material and probes. The meters, knobs and
-  particles were filmed from the original's editor and matched frame by frame.
-
-Every case: [NULLTESTS.md](plugins/TheAntiparticle/NULLTESTS.md). How it was measured:
-[MEASUREMENTS.md](plugins/TheAntiparticle/MEASUREMENTS.md). The editor and controls:
-[RESEARCH.md](plugins/TheAntiparticle/RESEARCH.md).
-
-## Scorpius
-
-<p align="center">
-  <img src="docs/screenshots/scorpius@2x.png" alt="Scorpius" width="80%">
-</p>
-
-Orion's drum-bus chain, rebuilt: input gain, drive (three colours, optional hi-pass), harmonics at 50 or 80 Hz,
-compression (two modes), lift, a five-band harmonic EQ, then four parallels mixed in (sub, low, loud, grit) and output
-gain. The original's nine factory presets, its A / B compare, editor, meters and particle stripe. Ours on top: an
-external side-chain for the compressor, **I/O LINK**, and a "Scorpius" particle style. More:
-[plugins/Scorpius](plugins/Scorpius).
-
-### Null test (honest numbers)
-
-- **The fixed parts are close to exact:** the harmonic EQ, the sub and the rate converters (the original's own filters,
-  identified from its responses) null at −50 to −70 dB, everything off at 44.1 to 192 kHz at −51 to −110 dB.
-- **Everything but the drive** together: −44.6 to −51.0 dB (the default preset with the drive off). Compression
-  −41 to −60 dB, harmonics −50 to −71 dB, lift −43.5 to −51.5 dB.
-- **The whole default preset:** −26.6 dB on loud drums, −22.4 dB on a mastered track (−34.6 / −31.2 dB 10 to 12 dB
-  lower). The limit is the drive: the original runs neural captures there, Scorpius learns its own model
-  from the original's input and output, and loud, dense material is where they part.
-- **Automation** follows the original's control rate (128-sample chunks, its parameter ramps and switches): an amount
-  jump nulls at −60 dB, as well as the setting held still.
-- **How:** the original was measured black-box (renders through it offline); the nonlinear modules are small neural
-  networks trained on its input and output (on a GPU), the linear parts fitted or identified exactly.
-
-Every case: [NULLTESTS.md](plugins/Scorpius/NULLTESTS.md). How it was measured:
-[MEASUREMENTS.md](plugins/Scorpius/MEASUREMENTS.md). The editor and controls:
-[RESEARCH.md](plugins/Scorpius/RESEARCH.md).
-
-## Building
-
-CMake 3.22+ and a C++17 compiler. JUCE 8 and clap-juce-extensions are fetched by CMake.
+## Building from source
 
 ```bash
 cmake -B build -DAP_TOOLS=OFF
@@ -131,33 +103,14 @@ cmake --build build --config Release
 ctest --test-dir build -C Release --output-on-failure
 ```
 
-That builds every plug-in in every format for the platform (VST3, CLAP and standalone; AU on macOS) and the unit tests.
-Without `-DAP_TOOLS=OFF` the measurement tools are built too: hosts for the reference plug-ins (`tools/`) and each
-plug-in's fitting helpers. The Windows installer is made with Inno Setup 6:
+You need CMake 3.22+ and a C++17 compiler; JUCE is fetched by CMake. Linux packages, installers, the measurement tools
+and the repository layout are in [docs/DEVELOPING.md](docs/DEVELOPING.md).
 
-```bash
-pwsh packaging/make_iss_include.ps1 build
-iscc /DAppVersion=1.1.0 packaging/OrrerySuite.iss
-```
+## Contributing
 
-## Repository layout
-
-| Path | What it holds |
-|---|---|
-| `plugins/<Name>/` | one plug-in: `Source/`, `resources/`, `tests/`, its null-test harness (`nulltest/`, Python, needs the original installed), its fitting tools and its documents |
-| `tools/` | hosts for reference plug-ins shared by the suite: offline renders (RefRender), editor films and screenshots (RefCapture), parameter lists (ParamDump) |
-| `packaging/` | the installers; `plugins.txt` lists the plug-ins they hold |
-| `docs/` | branding and screenshots |
-| `.github/workflows/release.yml` | builds, tests and validates every plug-in on all three systems (pluginval at strictness 10, auval on macOS), makes the installers and, on a `v*` tag, publishes a release with the notes from [CHANGELOG.md](CHANGELOG.md) |
-
-Reference renders, measurement data and anything taken from the original plug-ins stay out of the repository (see
-`.gitignore`); only the write-ups are published.
-
-## Versions
-
-1.0.0 is the first release, with The Antiparticle; 1.1.0 adds Scorpius. Each new plug-in raises the middle number (the
-next one 1.2.0), and fixes and small updates in between raise the last (1.1.1, 1.1.2 ...). Every plug-in carries the
-suite's version; [CHANGELOG.md](CHANGELOG.md) lists what changed in each.
+Bug reports and pull requests are welcome on GitHub. If a change affects the sound, run the plug-in's null tests
+(they need the original installed; see [docs/DEVELOPING.md](docs/DEVELOPING.md#null-tests)). What changed in each
+release: [CHANGELOG.md](CHANGELOG.md).
 
 ## License
 
