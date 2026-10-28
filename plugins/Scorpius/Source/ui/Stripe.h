@@ -51,8 +51,8 @@ public:
     void setStyle (Style);
     // ours: the low and mid bands' levels (linear, as the circles read them: Visuals.h), for the venom
     void setBands (float lows, float mids);
-    // ours: the project's tempo (BPM; 0 when the host gives none): the ORION style's particles move at tempo / 100 times
-    // their pace (0.6 ... 2 times; 1.2 times without a tempo), easing to a new one over ~0.5 s
+    // ours: the project's tempo (BPM; 0 when the host gives none): the ORION style's particles move at their pace times
+    // the beats per second (1 ... 3.5 times; 2 times without a tempo), easing to a new one over ~0.5 s
     void setTempo (float bpm);
     // paints what is under the stripe (in the editor's design coordinates), drawn once per scale
     std::function<void (juce::Graphics&)> paintBackground;
@@ -122,7 +122,7 @@ private:
     std::vector<Particle> particles;
     float envelope = 0.0f, levelIn = -200.0f, heart = 0.0f;
     double lastTime = 0.0, elapsed = 0.0;
-    float pace = 1.2f, paceTarget = 1.2f;
+    float pace = 2.0f, paceTarget = 2.0f;
     bool animated = true, frozen = false, moving = false, beat = false;
     Style style = Style::orion;
     std::vector<float> light, glow, glowHeart, under;   // RGB per physical pixel: this frame's light, the glow at full

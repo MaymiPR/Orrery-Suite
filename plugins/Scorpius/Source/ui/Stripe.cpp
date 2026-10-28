@@ -236,7 +236,7 @@ void Stripe::setBands (float lows, float mid)
 
 void Stripe::setTempo (float bpm)
 {
-    paceTarget = bpm > 0.0f ? jlimit (0.6f, 2.0f, bpm / 100.0f) : 1.2f;
+    paceTarget = bpm > 0.0f ? jlimit (1.0f, 3.5f, bpm / 60.0f) : 2.0f;
 }
 
 void Stripe::setStyle (Style s)
