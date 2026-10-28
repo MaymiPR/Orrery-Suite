@@ -112,8 +112,8 @@ cmake --build build --config Release
 ctest --test-dir build -C Release --output-on-failure
 ```
 
-You need CMake 3.22+ and a C++17 compiler; JUCE is fetched by CMake. Linux packages, installers, the measurement tools
-and the repository layout are in [CONTRIBUTING.md](CONTRIBUTING.md).
+You need CMake 3.22+, Git and a C++17 compiler; JUCE is fetched by CMake. The per-platform commands and Linux packages
+are in the [build guide](docs/BUILDING.md).
 
 ## Contributing
 
@@ -129,5 +129,10 @@ A file that makes a plug-in crash or misbehave is a security bug. Please report 
 
 ## License
 
-[AGPL-3.0](LICENSE). The interface font, Instrument Sans, is under the
-[SIL Open Font License 1.1](shared/resources/fonts/OFL-InstrumentSans.txt).
+Orrery Suite is free software under the [GNU Affero General Public License v3](LICENSE). It is built with
+[JUCE](https://juce.com) (used under the AGPLv3), the VST3 SDK, CLAP and clap-juce-extensions (MIT), and uses the
+Instrument Sans font (SIL Open Font License 1.1). Their licenses are in
+[THIRD-PARTY-NOTICES.txt](packaging/THIRD-PARTY-NOTICES.txt) and ship with every download.
+
+Cradle, The God Particle and Orion are names of their owners and are used only to describe what each plug-in is
+modelled on.

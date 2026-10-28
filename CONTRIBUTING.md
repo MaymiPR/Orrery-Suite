@@ -13,29 +13,22 @@ it is. Never commit the originals' renders, files or anything taken from them.
 
 ## Build
 
-CMake 3.22 or later and a C++17 compiler. JUCE 8 and clap-juce-extensions are fetched by CMake.
+Requirements, and the commands per platform, are in the [build guide](docs/BUILDING.md). Building with the
+measurement tools (the default, `-DAP_TOOLS=ON`) also makes the hosts for the reference plug-ins (`tools/`) and each
+plug-in's offline renderer (ApRender, ScRender), editor snapshot and fitting helpers, in
+`build/<tool>_artefacts/Release/`.
 
-```bash
-cmake -B build -DAP_TOOLS=OFF
-cmake --build build --config Release
-ctest --test-dir build -C Release --output-on-failure
-```
+| Test | What it does |
+|---|---|
+| `AntiparticleTests` | The Antiparticle's DSP and processor: filters, the FIR crossover, latency, bypass, the limiter's ceiling, oversampling, state, extreme input. |
+| `ScorpiusTests` | Scorpius's DSP and processor: the modules, presets, A / B, the side-chain, state; `bench` times the learned models. |
 
-This builds every plug-in in every format for the platform (VST3, CLAP and standalone; AU on macOS) and the unit
-tests. The artefacts land in `build/<Target>_artefacts/Release/`.
+Both run with `ctest --test-dir build -C Release --output-on-failure` and return non-zero on a failure.
 
-- **Linux** needs JUCE's development packages first (Ubuntu / Debian):
-
-  ```bash
-  sudo apt-get install -y --no-install-recommends ninja-build libasound2-dev libjack-jackd2-dev libfreetype6-dev \
-    libfontconfig1-dev libx11-dev libxcomposite-dev libxcursor-dev libxext-dev libxinerama-dev libxrandr-dev \
-    libxrender-dev libglu1-mesa-dev mesa-common-dev
-  ```
-
-- **macOS universal binaries:** add `-G Xcode -DCMAKE_OSX_ARCHITECTURES="arm64;x86_64" -DCMAKE_OSX_DEPLOYMENT_TARGET=10.13`.
-- **Without CLAP:** add `-DAP_CLAP=OFF`.
-- **Measurement tools:** leave out `-DAP_TOOLS=OFF` to also build the hosts for the reference plug-ins (`tools/`) and
-  each plug-in's offline renderer, editor snapshot and fitting helpers.
+GitHub Actions builds both plug-ins and runs the tests on Windows, macOS and Linux (`.github/workflows/ci.yml`) for
+every push to `main` and every pull request, and from Actions > *CI* > *Run workflow*. Changes to documents, `docs/`
+or the null-test harnesses alone don't start it. The installers, CLAP, AU and the pluginval / auval checks are made
+at each release (`release.yml`).
 
 ## Windows installer
 
@@ -57,8 +50,8 @@ folder without administrator rights.
 | `shared/` | code and resources shared by the plug-ins: the UI library, the font |
 | `tools/` | hosts for the reference plug-ins: offline renders (RefRender), editor films and screenshots (RefCapture), parameter lists (ParamDump) |
 | `packaging/` | the installers; `plugins.txt` lists the plug-ins they hold |
-| `docs/` | branding and screenshots |
-| `.github/workflows/` | `ci.yml` builds, tests and validates every plug-in on all three systems (pluginval at strictness 10, auval on macOS) on every push to `main` and on pull requests; `release.yml` does the same, makes the installers and, on a `v*` tag, publishes a release with the notes from [CHANGELOG.md](CHANGELOG.md) |
+| `docs/` | the build guide, branding and screenshots |
+| `.github/workflows/` | `ci.yml` builds the plug-ins and runs the tests on all three systems for every push to `main` and pull request; `release.yml` builds every format, validates it (pluginval at strictness 10, auval on macOS), makes the installers and, on a `v*` tag, publishes a release with the notes from [CHANGELOG.md](CHANGELOG.md) |
 
 Reference renders, measurement data and anything taken from the original plug-ins stay out of the repository (see
 `.gitignore`); only the write-ups are published.

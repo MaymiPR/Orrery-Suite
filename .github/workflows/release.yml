@@ -4,26 +4,29 @@
 #   Windows  OrrerySuite-<version>-Windows-Setup.exe   (Inno Setup, packaging/OrrerySuite.iss)
 #   macOS    OrrerySuite-<version>-macOS.pkg           (productbuild, packaging/distribution.xml)
 #   Linux    OrrerySuite-<version>-Linux.tar.gz        (with packaging/install-linux.sh)
-# Runs when a version tag is pushed (git tag v1.0.0 && git push origin v1.0.0), which also publishes the installers as a
-# GitHub Release with that version's notes from CHANGELOG.md and their SHA-256 checksums, or when started by hand
-# (Actions tab > Run workflow; the installers come out as downloadable artifacts). ci.yml runs the same build, test and
-# validation jobs on every push to main (workflow_call; the release job only runs for a tag).
+# Run it by hand from the Actions tab to get the installers as downloadable artifacts, or push a version tag (see
+# CONTRIBUTING.md) to also publish them as a GitHub Release, with that version's notes from CHANGELOG.md and their
+# SHA-256 checksums. Everyday builds and tests: ci.yml.
 name: Build and release
 
 on:
   push:
     tags: ['v*']
   workflow_dispatch:
-  workflow_call:
 
 permissions:
-  contents: write
+  contents: read
+
+env:
+  PLUGINVAL: https://github.com/Tracktion/pluginval/releases/download/v1.0.4   # pinned: a new pluginval can fail an unchanged plug-in
 
 jobs:
   windows:
     runs-on: windows-latest
     steps:
-      - uses: actions/checkout@v5
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09   # v5
+        with:
+          persist-credentials: false
 
       - name: Configure
         run: cmake -B build -A x64 -DAP_TOOLS=OFF
@@ -37,7 +40,7 @@ jobs:
       - name: Validate every VST3 (pluginval, strictness 10)
         shell: pwsh
         run: |
-          Invoke-WebRequest https://github.com/Tracktion/pluginval/releases/latest/download/pluginval_Windows.zip -OutFile pluginval.zip
+          Invoke-WebRequest $env:PLUGINVAL/pluginval_Windows.zip -OutFile pluginval.zip
           Expand-Archive pluginval.zip -DestinationPath pluginval
           $failed = 0
           foreach ($line in Get-Content packaging/plugins.txt) {
@@ -62,7 +65,7 @@ jobs:
           & $iscc "/DAppVersion=$version" "packaging\OrrerySuite.iss"
           if ($LASTEXITCODE -ne 0) { exit 1 }
 
-      - uses: actions/upload-artifact@v6
+      - uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f   # v6
         with:
           name: OrrerySuite-Windows
           path: dist/*.exe
@@ -70,7 +73,9 @@ jobs:
   macos:
     runs-on: macos-latest
     steps:
-      - uses: actions/checkout@v5
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09   # v5
+        with:
+          persist-credentials: false
 
       - name: "Configure (universal: Apple Silicon + Intel)"
         run: cmake -B build -G Xcode -DAP_TOOLS=OFF -DCMAKE_OSX_ARCHITECTURES="arm64;x86_64" -DCMAKE_OSX_DEPLOYMENT_TARGET=10.13
@@ -102,7 +107,7 @@ jobs:
           mkdir -p ~/Library/Audio/Plug-Ins/Components
           cp -R stage/au/* ~/Library/Audio/Plug-Ins/Components/
           killall -9 AudioComponentRegistrar || true
-          curl -sL -o pluginval.zip https://github.com/Tracktion/pluginval/releases/latest/download/pluginval_macOS.zip
+          curl -sL -o pluginval.zip $PLUGINVAL/pluginval_macOS.zip
           unzip -q pluginval.zip
           P=pluginval.app/Contents/MacOS/pluginval
           grep -v '^#' packaging/plugins.txt | grep -v '^\s*$' | while IFS='|' read -r t p code mfr; do
@@ -125,12 +130,12 @@ jobs:
           pkgbuild --root stage/au   --component-plist pkg/au.plist   --install-location "/Library/Audio/Plug-Ins/Components"         --identifier com.orrerysuite.au   --version "$V" pkg/OrrerySuite-AU.pkg
           pkgbuild --root stage/vst3 --component-plist pkg/vst3.plist --install-location "/Library/Audio/Plug-Ins/VST3/Orrery Suite" --identifier com.orrerysuite.vst3 --version "$V" pkg/OrrerySuite-VST3.pkg
           pkgbuild --root stage/clap --component-plist pkg/clap.plist --install-location "/Library/Audio/Plug-Ins/CLAP/Orrery Suite" --identifier com.orrerysuite.clap --version "$V" pkg/OrrerySuite-CLAP.pkg
-          cp LICENSE pkg/res/LICENSE.txt
+          cat LICENSE packaging/THIRD-PARTY-NOTICES.txt > pkg/res/LICENSE.txt   # the installer's license page
           sed "s/VERSION/$V/g" packaging/distribution.xml > pkg/distribution.xml
           productbuild --distribution pkg/distribution.xml --package-path pkg --resources pkg/res "dist/OrrerySuite-$V-macOS.pkg"
           pkgutil --payload-files "dist/OrrerySuite-$V-macOS.pkg" | head -20
 
-      - uses: actions/upload-artifact@v6
+      - uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f   # v6
         with:
           name: OrrerySuite-macOS
           path: dist/*.pkg
@@ -138,7 +143,9 @@ jobs:
   linux:
     runs-on: ubuntu-22.04   # the oldest glibc we support (2.35), so the build runs on newer systems too
     steps:
-      - uses: actions/checkout@v5
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09   # v5
+        with:
+          persist-credentials: false
 
       - name: Dependencies
         run: |
@@ -159,7 +166,7 @@ jobs:
       - name: Validate every VST3 (pluginval, strictness 10)
         run: |
           set -e
-          curl -sL -o pluginval.zip https://github.com/Tracktion/pluginval/releases/latest/download/pluginval_Linux.zip
+          curl -sL -o pluginval.zip $PLUGINVAL/pluginval_Linux.zip
           unzip -q pluginval.zip
           grep -v '^#' packaging/plugins.txt | grep -v '^\s*$' | while IFS='|' read -r t p code mfr; do
             xvfb-run -a ./pluginval --strictness-level 10 --skip-gui-tests --timeout-ms 900000 --validate "build/${t}_artefacts/Release/VST3/$p.vst3"
@@ -179,10 +186,10 @@ jobs:
           cp packaging/install-linux.sh "$D/" && chmod +x "$D/install-linux.sh"
           cp packaging/INSTALL-Linux.txt "$D/INSTALL.txt"
           cp LICENSE "$D/LICENSE.txt"
-          cp shared/resources/fonts/OFL-InstrumentSans.txt "$D/"
+          cp packaging/THIRD-PARTY-NOTICES.txt "$D/"
           tar -czf "dist/$D.tar.gz" "$D"
 
-      - uses: actions/upload-artifact@v6
+      - uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f   # v6
         with:
           name: OrrerySuite-Linux
           path: dist/*.tar.gz
@@ -191,9 +198,13 @@ jobs:
     if: startsWith(github.ref, 'refs/tags/v')
     needs: [windows, macos, linux]
     runs-on: ubuntu-latest
+    permissions:
+      contents: write   # only this job publishes
     steps:
-      - uses: actions/checkout@v5
-      - uses: actions/download-artifact@v7
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09   # v5
+        with:
+          persist-credentials: false
+      - uses: actions/download-artifact@37930b1c2abaa49bbe596cd826c3c89aef350131   # v7
         with:
           path: artifacts
           merge-multiple: true

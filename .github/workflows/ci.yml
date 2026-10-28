@@ -1,8 +1,7 @@
-# Builds every Orrery Suite plug-in on Windows, macOS and Linux, runs the unit tests and validates the plug-ins
-# (pluginval at strictness 10, auval on macOS): the build, test and validation jobs of release.yml, which never
-# publishes from here (its release job needs a version tag). On every push to main and on pull requests, or by hand
-# (Actions > CI > Run workflow); nothing when only documents, docs/ or the null-test harnesses change. The installers
-# come out as downloadable artifacts.
+# Builds every Orrery Suite plug-in (VST3) and runs the unit tests (AntiparticleTests, ScorpiusTests: the DSP, the
+# processors, presets, state and A / B) on Windows, macOS and Linux. On every push to main and on pull requests, or by
+# hand (Actions -> CI -> Run workflow); nothing when only documents, docs/ or the null-test harnesses change. The
+# installers, CLAP, AU and the pluginval / auval checks are built and run by release.yml at each release.
 name: CI
 
 on:
@@ -28,8 +27,60 @@ concurrency:
   cancel-in-progress: true
 
 permissions:
-  contents: write     # (what release.yml declares; nothing is published from CI)
+  contents: read
 
 jobs:
-  build:
-    uses: ./.github/workflows/release.yml
+  linux:
+    runs-on: ubuntu-22.04
+    steps:
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09   # v5
+        with:
+          persist-credentials: false
+
+      - name: Dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends ninja-build libasound2-dev libjack-jackd2-dev libfreetype6-dev libfontconfig1-dev \
+            libx11-dev libxcomposite-dev libxcursor-dev libxext-dev libxinerama-dev libxrandr-dev libxrender-dev \
+            libglu1-mesa-dev mesa-common-dev xvfb
+
+      - name: Configure
+        run: cmake -B build -G Ninja -DCMAKE_BUILD_TYPE=Release -DAP_TOOLS=OFF -DAP_CLAP=OFF
+
+      - name: Build
+        run: cmake --build build --target AntiparticleTests ScorpiusTests TheAntiparticle_VST3 Scorpius_VST3
+
+      - name: Unit tests
+        run: xvfb-run -a ctest --test-dir build --output-on-failure
+
+  windows:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09   # v5
+        with:
+          persist-credentials: false
+
+      - name: Configure
+        run: cmake -B build -A x64 -DAP_TOOLS=OFF -DAP_CLAP=OFF
+
+      - name: Build
+        run: cmake --build build --config Release --target AntiparticleTests ScorpiusTests TheAntiparticle_VST3 Scorpius_VST3 --parallel
+
+      - name: Unit tests
+        run: ctest --test-dir build -C Release --output-on-failure
+
+  macos:
+    runs-on: macos-latest
+    steps:
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09   # v5
+        with:
+          persist-credentials: false
+
+      - name: Configure
+        run: cmake -B build -DCMAKE_BUILD_TYPE=Release -DAP_TOOLS=OFF -DAP_CLAP=OFF
+
+      - name: Build
+        run: cmake --build build --target AntiparticleTests ScorpiusTests TheAntiparticle_VST3 Scorpius_VST3 --parallel
+
+      - name: Unit tests
+        run: ctest --test-dir build --output-on-failure
