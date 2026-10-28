@@ -39,7 +39,7 @@ Colour venomColour (float depth, float white = 0.0f)
 }
 constexpr int numParticles = 560, numFlares = 9;
 // ORION style (ours): a black hole past each end of the tube, off screen, drawing in what comes near
-constexpr float holeX[2] { Stripe::left - 12.0f, Stripe::left + Stripe::width + 12.0f }, holeY = 291.0f, reach = 150.0f;
+constexpr float holeX[2] { Stripe::left - 12.0f, Stripe::left + Stripe::width + 12.0f }, holeY = 291.0f, holeReach = 150.0f;
 constexpr float lanes[] { 289.1f, 291.6f, 294.25f, 302.5f };   // the rows the band's dashes keep to (the last one less)
 // where the reference's particles are (local maxima per frame, measured): along the stripe in bins of 18.5 design px
 // from x 0 (thinned towards the ends, where ours stood out more: the reference has ~60 per frame in each end sixth),
@@ -180,7 +180,7 @@ void Stripe::spawn (Particle& p, double now, bool anyAge)
         p.life = uniform (rng, 1.0f, 2.0f);
     }
     // (ours) near an end, a funnel into the black hole past it: the band pinches towards its height, thinner the closer
-    const float k = jmax (0.0f, 1.0f - jmin (p.x - holeX[0], holeX[1] - p.x) / reach);
+    const float k = jmax (0.0f, 1.0f - jmin (p.x - holeX[0], holeX[1] - p.x) / holeReach);
     if (k > 0.0f) p.y = holeY + (p.y - holeY) * (1.0f - 0.85f * k);
     p.born = (float) (anyAge ? now - uniform (rng, 0.0f, p.life) : now);
 }
@@ -234,6 +234,11 @@ void Stripe::setBands (float lows, float mid)
     bass = level (lows); mids = level (mid);
 }
 
+void Stripe::setTempo (float bpm)
+{
+    paceTarget = bpm > 0.0f ? jlimit (0.6f, 2.0f, bpm / 100.0f) : 1.2f;
+}
+
 void Stripe::setStyle (Style s)
 {
     if (s == style) return;
@@ -246,12 +251,15 @@ void Stripe::setStyle (Style s)
 
 void Stripe::advance (double now)
 {
-    const double dt = jlimit (0.0, 0.1, now - lastTime);
+    const double real = jlimit (0.0, 0.1, now - lastTime);
     lastTime = now;
+    // (ORION) the particles' time runs at the project's tempo
+    pace += (paceTarget - pace) * (float) (1.0 - std::exp (-real / 0.5));
+    const double dt = style == Style::orion ? real * pace : real;
     elapsed += dt;
     // the light eases to the level's brightness; ours: the heart beats
-    envelope += (brightness (levelIn) - envelope) * (float) (1.0 - std::exp (-dt / easing));
-    heart = beat ? 1.0f : heart * (float) std::exp (-dt / 0.35);
+    envelope += (brightness (levelIn) - envelope) * (float) (1.0 - std::exp (-real / easing));
+    heart = beat ? 1.0f : heart * (float) std::exp (-real / 0.35);
     if (style == Style::scorpius)
     {
         if (beat && envelope > 0.02f && elapsed - lastBurst > 0.2) { fire (true); lastBurst = elapsed; }
@@ -269,11 +277,11 @@ void Stripe::advance (double now)
         if (style == Style::orion && p.kind != Kind::flare && p.life > 0.1f)
         {
             const float hx = p.x < 444.0f ? holeX[0] : holeX[1], dx = hx - p.x, d = std::abs (dx);
-            if (d < reach)
+            if (d < holeReach)
             {
                 const float pull = 400000.0f / (d * d + 400.0f);           // (px/s^2)
                 p.vx += (dx > 0.0f ? 1.0f : -1.0f) * pull * (float) dt;
-                p.vy += (holeY - p.y) * (1.0f - d / reach) * 90.0f * (float) dt;
+                p.vy += (holeY - p.y) * (1.0f - d / holeReach) * 90.0f * (float) dt;
                 p.vy *= (float) std::exp (-dt / 0.15);
                 p.expand = 0.0f;                                            // (the hole has it now)
             }
@@ -413,7 +421,7 @@ void Stripe::heavenly (const Particle& p, float level, float u, float s)
     auto whiter = [&] (Particle q, float k) { q.r += (1.0f - q.r) * k; q.g += (1.0f - q.g) * k; q.b += (1.0f - q.b) * k; return q; };
     // (ours) like neon: a hot core a little whiter than its colour, in a glow of the pure colour and a wide faint bloom;
     // near the black holes thinner and drawn out along its way
-    const float k = jmax (0.0f, 1.0f - jmin (p.x - holeX[0], holeX[1] - p.x) / reach), thin = 1.0f - 0.55f * k;
+    const float k = jmax (0.0f, 1.0f - jmin (p.x - holeX[0], holeX[1] - p.x) / holeReach), thin = 1.0f - 0.55f * k;
     switch (p.kind)
     {
         case Kind::dot:

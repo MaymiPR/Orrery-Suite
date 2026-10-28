@@ -439,3 +439,6 @@ coloured pillars, the glass's reflections), with our own take where the user ask
   the 99th percentile of the rows on the rim was 249 ... 255, the reference's 66 ... 116; now 44 ... 73).
 - Against the reference with the same music: mean brightness 60 (57), hue bins .24 .15 .01 / .16 .16 .13 .03 .03 .09
   (.18 .19 .02 / .15 .13 .16 .03 .03 .09), saturated share .34 (.38). Cost at 200 %: 4.1 ms a frame.
+- **The project's tempo (ours):** the ORION style's particles move at tempo / 100 times the pace above (0.6 ... 2
+  times; 1.2 times when the host gives no tempo), easing to a new tempo over ~0.5 s; the light's brightness still
+  follows the level in real time.

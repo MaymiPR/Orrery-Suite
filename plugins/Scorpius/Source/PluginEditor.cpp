@@ -491,6 +491,7 @@ void ScorpiusEditor::stepStripe (bool playing, float dt)
     lastBeats = beats;
     stripe.setStyle (proc.particleStyle.load() == 0 ? sc::Stripe::Style::orion : sc::Stripe::Style::scorpius);
     stripe.setBands (lastLows, lastMids);
+    stripe.setTempo (proc.hostBpm.load());
     stripe.setInput (lightDb, beat, proc.animation.load());
 }
 

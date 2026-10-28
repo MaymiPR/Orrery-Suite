@@ -64,6 +64,7 @@ public:
     sc::Visuals visuals;                     // what the circles follow (dsp/Visuals.h)
     sc::Light light;                         // what the stripe's light follows (dsp/Light.h)
     std::atomic<int> blocksProcessed { 0 };
+    std::atomic<float> hostBpm { 0.0f };     // the project's tempo, as the host last gave it (0: it gives none)
 
 private:
     juce::ValueTree captureSlot() const;
