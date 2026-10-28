@@ -27,7 +27,20 @@ Windows, macOS and Linux.
 
 > Orrery Suite is an independent project. It is not affiliated with, endorsed by or sponsored by Cradle or Jaycen
 > Joshua. Product names are theirs and only describe what each plug-in is modelled on. No code, models or data of
-> theirs is included: the sound and look were measured by testing the originals.
+> theirs is included.
+
+## How it was built
+
+Orrery Suite was created entirely with Claude (Anthropic's AI) and [REA](https://github.com/morluto/rea): the code,
+the measurements behind it and this documentation. The originals were the reference throughout:
+
+- **Measured from the outside.** Test signals and music were rendered through each original and through ours, and the
+  differences fitted away. Each plug-in's MEASUREMENTS.md describes how; its NULLTESTS.md shows the result.
+- **Learned where a formula would not do.** Scorpius's drive, harmonics, lift and grit are small neural networks
+  trained on the original's input and output.
+- **Analysed with REA for behaviour only.** The originals' binaries were read to understand how they work, for
+  example how The God Particle designs its oversampling filters, and that Orion runs neural captures in its drive and
+  harmonics. No code or constants were copied: every number in ours was fitted from measurements.
 
 ## Features
 
