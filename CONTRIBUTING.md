@@ -1,7 +1,15 @@
-# Developing Orrery Suite
+# Working on Orrery Suite
 
-How to build the plug-ins, make the installers and run the measurement tools. For what the plug-ins are, see the
-[README](../README.md).
+Bug reports and null-test findings are welcome as
+[issues](https://github.com/MaymiPR/OrrerySuite/issues/new/choose). This page is for changing the code: how it's
+built and tested, how a change is checked against the originals, and how a release is made.
+
+## The one rule
+
+Each plug-in follows its original, and the original is the reference for every behaviour. A change that affects the
+sound is measured against the original's own render of the same settings (see [Null tests](#null-tests)), and what was
+measured goes into the plug-in's MEASUREMENTS.md and NULLTESTS.md, so the next person can see why the code is the way
+it is. Never commit the originals' renders, files or anything taken from them.
 
 ## Build
 
@@ -49,8 +57,8 @@ folder without administrator rights.
 | `shared/` | code and resources shared by the plug-ins: the UI library, the font |
 | `tools/` | hosts for the reference plug-ins: offline renders (RefRender), editor films and screenshots (RefCapture), parameter lists (ParamDump) |
 | `packaging/` | the installers; `plugins.txt` lists the plug-ins they hold |
-| `docs/` | branding, screenshots and this file |
-| `.github/workflows/release.yml` | builds, tests and validates every plug-in on all three systems (pluginval at strictness 10, auval on macOS), makes the installers and, on a `v*` tag, publishes a release with the notes from [CHANGELOG.md](../CHANGELOG.md) |
+| `docs/` | branding and screenshots |
+| `.github/workflows/release.yml` | builds, tests and validates every plug-in on all three systems (pluginval at strictness 10, auval on macOS), makes the installers and, on a `v*` tag, publishes a release with the notes from [CHANGELOG.md](CHANGELOG.md) |
 
 Reference renders, measurement data and anything taken from the original plug-ins stay out of the repository (see
 `.gitignore`); only the write-ups are published.
@@ -65,5 +73,5 @@ residual. It needs Windows, Python 3 with numpy and scipy, the original plug-in 
 
 One version for the whole suite (`project(... VERSION ...)` in `CMakeLists.txt`). Each new plug-in raises the middle
 number (1.1.0 added Scorpius), fixes and small updates raise the last. A release is: raise the version, add a
-`## x.y.z` section to [CHANGELOG.md](../CHANGELOG.md), run the release workflow by hand as a test, then push the tag
+`## x.y.z` section to [CHANGELOG.md](CHANGELOG.md), run the release workflow by hand as a test, then push the tag
 `vx.y.z`.

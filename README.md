@@ -32,8 +32,9 @@ Windows, macOS and Linux.
 ## How it was built
 
 Orrery Suite was created entirely with Claude (Anthropic's AI) and [REA](https://github.com/morluto/rea): the code,
-the measurements behind it and this documentation. The originals were the reference throughout, as described in each
-plug-in's MEASUREMENTS.md.
+the measurements behind it and this documentation. The originals were the reference throughout, as described in
+[The Antiparticle's](plugins/TheAntiparticle/MEASUREMENTS.md) and [Scorpius's](plugins/Scorpius/MEASUREMENTS.md)
+measurements.
 
 ## Features
 
@@ -110,13 +111,19 @@ ctest --test-dir build -C Release --output-on-failure
 ```
 
 You need CMake 3.22+ and a C++17 compiler; JUCE is fetched by CMake. Linux packages, installers, the measurement tools
-and the repository layout are in [docs/DEVELOPING.md](docs/DEVELOPING.md).
+and the repository layout are in [CONTRIBUTING.md](CONTRIBUTING.md).
 
 ## Contributing
 
-Bug reports and pull requests are welcome on GitHub. If a change affects the sound, run the plug-in's null tests
-(they need the original installed; see [docs/DEVELOPING.md](docs/DEVELOPING.md#null-tests)). What changed in each
-release: [CHANGELOG.md](CHANGELOG.md).
+Found a bug or a difference from the original? Open an
+[issue](https://github.com/MaymiPR/OrrerySuite/issues/new/choose) and attach the settings or a preset that shows it.
+To change the code, read [CONTRIBUTING.md](CONTRIBUTING.md) for the tests, the null tests against the originals and
+the release steps. Changes per version are in [CHANGELOG.md](CHANGELOG.md).
+
+## Security
+
+A file that makes a plug-in crash or misbehave is a security bug. Please report it privately, as described in
+[SECURITY.md](SECURITY.md), not in a public issue.
 
 ## License
 
