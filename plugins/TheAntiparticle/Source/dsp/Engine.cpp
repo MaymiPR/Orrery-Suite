@@ -5,9 +5,19 @@ namespace ap::dsp
 namespace
 {
 constexpr int kSub = 16;                                        // parameter ramps advance per 16 samples
-// the core path's extra delay with oversampling (bypassed-path impulse peak at 48 kHz: 174 / 179 / 181 vs 151.3)
-// (group delay at 1 kHz: 173.767 / 178.990 vs 151.279; 8x is exactly 4x two samples later)
-double oversamplingExtra (int factor) { return factor >= 8 ? 27.711 + 2.0 : factor >= 4 ? 27.711 : factor >= 2 ? 22.488 : 0.0; }
+// with oversampling the reference's path is its filters' delay plus a fraction of a sample, measured per rate at 2x and
+// 4x (nulltest/os_rates_fit.py: the whole path's delay fitted with the designed filters in place); its 8x is its 4x
+// exactly 2 samples later (music -64.8 dB that way; its bypassed path alone fits 1.95)
+double oversamplingResidual (double fs, int factor)
+{
+    if (factor < 2) return 0.0;
+    const double r[4] { 44100, 48000, 88200, 96000 };
+    const double d[4][2] { { -0.0113, 0.4660 }, { 0.4865, 0.7097 }, { -0.0453, -0.1358 }, { 0.4464, 0.3391 } };
+    double v = 0.0;
+    for (int i = 0; i < 4; ++i)
+        if (std::abs (fs - r[i]) < 1.0) v = d[i][factor >= 4 ? 1 : 0];
+    return v + (factor >= 8 ? 2.0 : 0.0);
+}
 }
 
 void Engine::prepare (double sampleRate, int block, int oversampling, const Tuning& t)
@@ -16,18 +26,17 @@ void Engine::prepare (double sampleRate, int block, int oversampling, const Tuni
     fs = sampleRate;
     maxBlock = std::max (block, kSub);
     selectedFactor = oversampling >= 8 ? 8 : oversampling >= 4 ? 4 : oversampling >= 2 ? 2 : 1;
-    // the reference's 8x sounds exactly like its 4x (residual -82 dB below 16 kHz, nulltest/NULLTESTS.md), only
-    // ~2 samples later: process at 4x and add the difference to the fixed delay
-    osFactor = std::min (selectedFactor, 4);
+    // the reference's 8x sounds exactly like its 4x (residual -82 dB below 16 kHz, nulltest/NULLTESTS.md), only ~2
+    // samples later: process at 4x with the longer delay (Oversampler.h)
+    os.prepare (fs, selectedFactor, kSub);
+    osFactor = os.factor();
     osRate = fs * osFactor;
-
-    os.prepare (osFactor, kSub);
     const double osLatency = os.latency();
     for (auto& w : work) w.assign ((size_t) kSub, 0.0);
     for (auto& w : scWork) w.assign ((size_t) (kSub * osFactor), 0.0);
 
     // the fixed delay is a fixed time; with oversampling the reference's path is a little longer
-    const double pathDelay = coreDelay (fs, t) + oversamplingExtra (selectedFactor) * fs / 48000.0;
+    const double pathDelay = coreDelay (fs, t) + (selectedFactor > 1 ? osLatency + oversamplingResidual (fs, selectedFactor) + t.osDelayAdd : 0.0);
     // the fixed delay sits inside the oversampled part, fraction included (the reference's too: our first-stage filters
     // are fitted with it in place, nulltest/fit_oversampling.py)
     const double osDelay = std::max (0.0, pathDelay - osLatency) * osFactor;     // at the processing rate
@@ -36,10 +45,18 @@ void Engine::prepare (double sampleRate, int block, int oversampling, const Tuni
     reportedLatency = (int) std::lround (pathDelay + limiter.latency());
     bypassDelay.prepare ((double) reportedLatency);
 
-    // with oversampling the reference's character path is a little later than its bypassed path (phase vs frequency of
-    // the small-signal response: +0.012 / +0.040 samples at 2x / 4x)
-    const double charOffset = osFactor >= 4 ? 0.0395 : osFactor >= 2 ? 0.0117 : 0.0;
-    character.prepare (osRate, osDelay + charOffset * osFactor, t, osFactor == 1);
+    // with oversampling the reference's character path is a little later than its bypassed path (48 kHz: from the
+    // phase of the small-signal response, then refined on drums and pink, nulltest/os_probe.py: the nulls move by
+    // 10 dB per 0.002 samples, drums and pink agreeing)
+    const double offs[3][3] { { 0.0097, 0.0330, 0.0330 }, { 0.0137, 0.0395, 0.0395 }, { 0.0517, 0.1595, 0.0395 } };   // 44.1 / 48 / 96 kHz; 2x / 4x / 8x
+    const int row = std::abs (fs - 44100.0) < 1.0 ? 0 : std::abs (fs - 96000.0) < 1.0 ? 2 : 1;
+    const double charOffset = selectedFactor >= 2 ? offs[row][selectedFactor >= 8 ? 2 : selectedFactor >= 4 ? 1 : 0] : 0.0;
+    // above 48 kHz the crossover is the host rate's own redrawn at the processing rate; at 44.1 kHz the 48 kHz one
+    // redrawn nulls far better (drums -59 vs -31 dB). 88.2 kHz is not measured: treated like 96 kHz
+    const bool aboveBase = fs > 48001.0;
+    const bool hostFilters = t.osHostFilters >= 0 ? t.osHostFilters > 0.5 : aboveBase;
+    character.prepare (osRate, osDelay + charOffset * osFactor, t, osFactor == 1, hostFilters ? fs : 48000.0,
+                       hostFilters ? coreDelay (fs, t) : coreDelay (48000.0, t));
     // the control-rate smoothing (Tuning.h, MEASUREMENTS.md 5)
     const double paramRamp = t.paramRampMs * 1.0e-3 * fs, glide = t.glideMs * 1.0e-3 * fs;
     inParam.setLength (paramRamp); amountParam.setLength (paramRamp); eqOnParam.setLength (paramRamp);

@@ -86,6 +86,8 @@ struct Tuning
     double eqGlideDomain = 1;             // the EQ gains glide in dB (0), in amplitude 10^(dB/20) (1) or in A = 10^(dB/40) (2)
 
     double forceOversampling = 0;         // > 0: use this ratio instead of the settings page's (offline renders)
+    double osDelayAdd = 0;                // probes: added to the oversampled path's delay (host samples)
+    double osHostFilters = -1;            // probes: 1 / 0 = the crossover redrawn from the host rate's / 48 kHz filters
 
     Tuning() { setDefaults(); }
 
@@ -110,7 +112,7 @@ struct Tuning
                             { "limWindow", &limWindow }, { "limWindowAt", &limWindowAt }, { "limPeakTest", &limPeakTest }, { "limReach", &limReach }, { "limSub", &limSub }, { "limTaps", &limTaps }, { "limCut", &limCut }, { "limGauss", &limGauss }, { "limBeta", &limBeta }, { "limLevelScale", &limLevelScale }, { "limReleaseAt", &limReleaseAt }, { "limReleaseSteps", &limReleaseSteps }, { "limSlowAttackMs", &limSlowAttackMs },
                             { "limSlowReleaseMs", &limSlowReleaseMs }, { "limTrimDb", &limTrimDb }, { "ctlChunk", &ctlChunk }, { "paramRampMs", &paramRampMs }, { "gainTauMs", &gainTauMs },
                             { "glideMs", &glideMs }, { "limRampMs", &limRampMs }, { "eqForm", &eqForm }, { "eqPerSample", &eqPerSample }, { "eqGlideDomain", &eqGlideDomain }, { "charZeroRest", &charZeroRest },
-                            { "oversampling", &forceOversampling } };
+                            { "oversampling", &forceOversampling }, { "osDelayAdd", &osDelayAdd }, { "osHostFilters", &osHostFilters } };
         for (auto& s : scalars)
             if (key == s.n) { *s.p = v; return true; }
         for (int b = 0; b < 3; ++b)

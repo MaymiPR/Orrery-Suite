@@ -20,10 +20,11 @@ class FirBank
 public:
     static constexpr int kFilters = 6;       // low, mid, high, then what their nonlinear stages hear
     // exactRates: at 44.1 / 88.2 / 96 / 192 kHz use the reference's own filters for that rate (BandFiltersRates.h;
-    // only when the delay is the plain core delay, i.e. without oversampling)
-    void prepare (double rate, double delaySamples, bool exactRates = false)
+    // only when the delay is the plain core delay, i.e. without oversampling). hostRate / hostDelay: with oversampling
+    // the filters are the host rate's ones (its own set where there is one, else the 48 kHz one) redrawn at `rate`
+    void prepare (double rate, double delaySamples, bool exactRates = false, double hostRate = 48000.0, double hostDelay = 151.27917)
     {
-        design (rate, delaySamples, exactRates);
+        design (rate, delaySamples, exactRates, hostRate, hostDelay);
         int n = 0;
         for (auto& h : ir) n = std::max (n, (int) h.size());
         block = n < 1000 ? 64 : 128;                 // direct head vs FFT tail: about the cheapest split for these lengths
@@ -158,9 +159,10 @@ private:
         if (inverse) for (auto& x : a) x /= (double) n;
     }
 
-    // the filters at `rate`: the 48 kHz responses, delay moved to `delaySamples`. Above 23 kHz (higher rates) all
-    // bands are zero: the reference's section keeps its ~22.5 kHz low-pass with oversampling (-45 dB at 23 kHz at 2x)
-    void design (double rate, double delaySamples, bool exactRates)
+    // the filters at `rate`: the host rate's responses, delay moved to `delaySamples`. Above 0.479 of the host rate
+    // all bands are zero: the reference's section keeps its low-pass with oversampling (48 kHz: ~22.5 kHz, -45 dB at
+    // 23 kHz at 2x; at 96 kHz its own 96 kHz filters, nulltest/null_oversampling.py)
+    void design (double rate, double delaySamples, bool exactRates, double hostRate, double hostDelay)
     {
         if (exactRates)
             for (const auto& set : bandFilterSets)
@@ -173,29 +175,32 @@ private:
                     }
                     return;
                 }
-        const double d48 = 151.27917;
-        auto source = [] (int b) { return b < 3 ? bandIr48k[b] : nlBandIr48k[b - 3]; };
-        auto taps = [] (int b) { return b < 3 ? bandTaps48k : nlBandTaps48k; };
-        if (std::abs (rate - 48000.0) < 1.0 && std::abs (delaySamples - d48) < 1.0e-6)
+        double d48 = 151.27917, srcRate = 48000.0;
+        const BandFilterSet* src = nullptr;
+        for (const auto& set : bandFilterSets)
+            if (std::abs (hostRate - set.rate) < 1.0) { src = &set; srcRate = set.rate; d48 = hostDelay; }
+        auto source = [src] (int b) { return src != nullptr ? (b < 3 ? src->ir[b] : src->nl[b - 3]) : b < 3 ? bandIr48k[b] : nlBandIr48k[b - 3]; };
+        auto taps = [src] (int b) { return src != nullptr ? (b < 3 ? src->taps : src->nlTaps) : b < 3 ? bandTaps48k : nlBandTaps48k; };
+        if (src == nullptr && std::abs (rate - 48000.0) < 1.0 && std::abs (delaySamples - d48) < 1.0e-6)
         {
             for (int b = 0; b < kFilters; ++b) ir[b].assign (source (b), source (b) + taps (b));
             return;
         }
-        const double shift = delaySamples / rate - d48 / 48000.0;      // seconds
+        const double shift = delaySamples / rate - d48 / srcRate;      // seconds
         for (int b = 0; b < kFilters; ++b)
         {
             const double* h48 = source (b);
-            const int n48 = taps (b), n = (int) std::ceil (n48 * rate / 48000.0);
+            const int n48 = taps (b), n = (int) std::ceil (n48 * rate / srcRate);
             int m = 1; while (m < 4 * n) m <<= 1;
             std::vector<std::complex<double>> spec ((size_t) m);
             for (int k = 0; k <= m / 2; ++k)
             {
                 const double f = (double) k * rate / m;
                 std::complex<double> v;
-                if (f <= 23000.0)
+                if (f <= 23000.0 * srcRate / 48000.0)
                 {
-                    // DTFT of the 48 kHz response (exact, it is finite)
-                    const double w = -2 * kPi * f / 48000.0;
+                    // DTFT of the host rate's response (exact, it is finite)
+                    const double w = -2 * kPi * f / srcRate;
                     const std::complex<double> step (std::cos (w), std::sin (w));
                     std::complex<double> e (1);
                     for (int i = 0; i < n48; ++i) { v += h48[i] * e; e *= step; }

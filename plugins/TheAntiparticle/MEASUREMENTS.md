@@ -1,8 +1,10 @@
 # Measurements (Phase 3)
 
 What the reference, **Cradle The God Particle 1.2.4** (VST3, Windows), does to audio. Everything here was measured
-by rendering test signals through it offline. The DSP was not decompiled and Cradle's encrypted scripts were not
-opened. The numbers are the targets for The Antiparticle's DSP (Phase 4).
+by rendering test signals through it offline. Cradle's encrypted scripts were not opened. One exception to pure
+measurement (2026-10-28, with the owner's go-ahead): the binary was read for the *structure* of its oversampling
+filters (how they are designed, section 7); no code or constants were copied, and the filters' numbers were fitted
+from the measurements below. The numbers are the targets for The Antiparticle's DSP (Phase 4).
 
 **Data and plots stay local.** The data and plots live in `measurements/` and the renders in `nulltest/renders/`.
 Both folders are git-ignored by the project rule, so this file is the published record. Every number below can be
@@ -719,6 +721,31 @@ small-signal response below 15 kHz do not change.
 - With oversampling the reference's character path keeps its ~22.5 kHz low-pass and sits 0.012 / 0.040 samples
   later than its bypassed path (2x / 4x). Ours does the same.
 
+**Filters designed when prepared (2026-10-28).** The binary shows how the reference makes these filters (behaviour
+only, nothing copied): each stage k runs at 2^(k+1) times the host rate and is designed on the spot, a
+Kaiser-windowed sinc cut at a quarter of the stage's rate (so a half-band filter), its length and window set by the
+textbook Kaiser formulas from a transition band (a passband edge in Hz and its mirror image) and a stopband depth,
+scaled to unit gain at DC. So its filters, its latency and its top octave **change with the host rate**, while ours
+were fixed taps fitted at 48 kHz. The two numbers were fitted from measurements (`fit_oversampling.py`,
+`measure_os_rates.py`, `os_rates_fit.py`):
+- At 48 kHz any edge from 16.7 to 17.1 kHz with a 100 dB depth gives the measured lengths (45 / 21 / 17 taps) and
+  the measured path to 0.03 dB. 44.1 kHz narrows the edge to 16.9 … 17.0 kHz (57 / 23 / 17 taps). With 17 kHz and
+  100 dB the whole path matches **to 0.000 dB at 44.1, 48, 88.2 and 96 kHz** and every ratio.
+- The reported latencies agree: e.g. 44.1 kHz 1x / 2x / 4x / 8x = 179 / 207 / 213 / 215, 96 kHz 357 / 367 / 371 / 373
+  (our old fixed taps gave 2x 44.1 kHz 22 extra samples instead of 28).
+- What is left of the path's delay after the filters is a fraction of a sample per rate and ratio (−0.14 … +0.71),
+  tabulated. 8x: its bypassed path alone is 1.95 samples later than 4x, but with the character on exactly 2.0 nulls
+  best (music −64.8 vs −45 dB).
+- The character's crossover with oversampling: above 48 kHz it is the host rate's own (at 96 kHz its 96 kHz filters
+  redrawn at the processing rate: drums −41 vs −36 dB), at 44.1 kHz the 48 kHz one redrawn (−59 vs −31 dB). The
+  character path's offset was refined per rate on drums and pink (the nulls move about 10 dB per 0.002 samples; both
+  signals agree): 44.1 kHz +0.010 / +0.033 / +0.033, 48 kHz +0.014 / +0.040 / +0.040, 96 kHz +0.052 / +0.160 / +0.040
+  samples at 2x / 4x / 8x. 88.2 kHz was not measured with music (treated like 96 kHz).
+- Nulls: 44.1 kHz drums −14 → −61 dB (2x), −11 → −61 (4x); 96 kHz −19 → −57 (2x), −37 → −56 (4x); 48 kHz 2x
+  −60.7 → −60.8, 4x −53.0 → −59.1, 8x −53.0 → −59.0 ([NULLTESTS.md](NULLTESTS.md)).
+- Tried and dropped: processing 8x's third stage as a fixed filter at 4x (it filters the character's harmonics twice:
+  music −45 dB).
+
 ## 8. Still open after Phase 4
 
 How closely the result matches is in [NULLTESTS.md](NULLTESTS.md).
@@ -729,7 +756,8 @@ How closely the result matches is in [NULLTESTS.md](NULLTESTS.md).
 - the stereo behaviour: mid-only detectors, per-channel shaping, a side gain per band after the shaper (3.10)
 - the limiter's algorithm (4.1)
 - the 8x setting: it behaves exactly like 4x, two samples later. Its output equals the 4x output to −82 dB below 16 kHz.
-- the oversampled path: matched within 0.002 dB (7)
+- the oversampled path: matched within 0.002 dB (7); since 2026-10-28 designed per host rate like the reference's
+  (0.000 dB at 44.1 to 96 kHz)
 
 Also settled since: the shapers' exact form, a dry share and a mid/side difference (3.14); the high band's sample-peak
 detector (3.13); host blocks under 128 samples (5.1: the switches wait for a full control chunk; 64-sample blocks

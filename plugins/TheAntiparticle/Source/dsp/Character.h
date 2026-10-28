@@ -19,11 +19,13 @@ class Character
 public:
     // delaySamples: the section's latency at the processing rate (the FIR filters' delay)
     // exactRates: the FIR filters may be the reference's own ones for this rate (FirBank::prepare)
-    void prepare (double processingRate, double delaySamples, const Tuning& t, bool exactRates = false)
+    // hostRate / hostDelay: with oversampling, the rate the filters are taken from and their delay there
+    void prepare (double processingRate, double delaySamples, const Tuning& t, bool exactRates = false,
+                  double hostRate = 48000.0, double hostDelay = 151.27917)
     {
         fs = processingRate;
         tune = &t;
-        firs.prepare (fs, delaySamples, exactRates);
+        firs.prepare (fs, delaySamples, exactRates, hostRate, hostDelay);
         scXo.design (t.fc1, t.fc2, fs);
         reset();
         lastAmount = -1.0;

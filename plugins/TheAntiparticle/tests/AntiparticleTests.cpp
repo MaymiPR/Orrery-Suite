@@ -95,12 +95,12 @@ static void testFirBank()
 static void testOversampler()
 {
     // up then down with nothing in between: flat to 18 kHz, the reference's roll-off above (-0.53 dB at 20 kHz),
-    // and the latency the engine assumes
+    // and the filters' lengths at 48 kHz (45 / 21 taps: 22 / 27 samples; 8x processes at 4x)
     for (int factor : { 2, 4, 8 })
     {
         Oversampler os;
-        os.prepare (factor, 16);
-        CHECK_NEAR (os.latency(), factor == 2 ? 22.0 : factor == 4 ? 27.0 : 28.75, 1e-9);
+        os.prepare (48000.0, factor, 16);
+        CHECK_NEAR (os.latency(), factor == 2 ? 22.0 : 27.0, 1e-9);
         auto gainAt = [&] (double f)
         {
             os.reset();
@@ -123,6 +123,12 @@ static void testOversampler()
         CHECK_NEAR (gainAt (15000.0), 0.0, 0.05);
         CHECK (gainAt (20000.0) < -0.2);
     }
+    // the filters follow the host rate as the reference's do: at 44.1 kHz the first stage is longer (57 taps), at
+    // 96 kHz shorter (21)
+    Oversampler o44, o96;
+    o44.prepare (44100.0, 2, 16); o96.prepare (96000.0, 2, 16);
+    CHECK_NEAR (o44.latency(), 28.0, 1e-9);
+    CHECK_NEAR (o96.latency(), 10.0, 1e-9);
 }
 
 static AntiparticleProcessor* makeProcessor (double fs, int block)

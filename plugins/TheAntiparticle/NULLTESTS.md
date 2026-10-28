@@ -76,19 +76,39 @@ irregular host blocks as FL Studio does, with the same results). The worst secon
 ## Oversampling
 
 Default settings with the reference switched to 2x / 4x / 8x through its own settings page (then back to 1x) and
-ours forced to the same ratio (`python nulltest/null_oversampling.py`).
+ours forced to the same ratio, at 48, 44.1 and 96 kHz (`python nulltest/null_oversampling.py`). Since 2026-10-28 the
+filters are designed per host rate like the reference's (MEASUREMENTS.md 7); before, 44.1 kHz drums nulled at
+-14 / -11 / -14 dB (2x / 4x / 8x) and 96 kHz at -19 / -37 / -38.
 
 | Ratio, signal | Residual, ours (dB) |
 |---|---|
-| 2x, defaults, music -10 | -65.07 |
-| 2x, defaults, drums -6 | -59.27 |
-| 2x, defaults, pink -18 | -54.5 |
-| 4x, defaults, music -10 | -61.84 |
-| 4x, defaults, drums -6 | -52.73 |
-| 4x, defaults, pink -18 | -52.03 |
-| 8x, defaults, music -10 | -62.2 |
-| 8x, defaults, drums -6 | -52.7 |
-| 8x, defaults, pink -18 | -52.13 |
+| 2x, defaults, music -10 | -66.52 |
+| 2x, defaults, drums -6 | -60.77 |
+| 2x, defaults, pink -18 | -54.6 |
+| 2x, defaults, music -10 at 44.1 kHz | -72.28 |
+| 2x, defaults, drums -6 at 44.1 kHz | -61.5 |
+| 2x, defaults, pink -18 at 44.1 kHz | -54.64 |
+| 2x, defaults, music -10 at 96 kHz | -65.7 |
+| 2x, defaults, drums -6 at 96 kHz | -56.88 |
+| 2x, defaults, pink -18 at 96 kHz | -51.35 |
+| 4x, defaults, music -10 | -64.2 |
+| 4x, defaults, drums -6 | -59.13 |
+| 4x, defaults, pink -18 | -53.97 |
+| 4x, defaults, music -10 at 44.1 kHz | -66.23 |
+| 4x, defaults, drums -6 at 44.1 kHz | -61.33 |
+| 4x, defaults, pink -18 at 44.1 kHz | -54.15 |
+| 4x, defaults, music -10 at 96 kHz | -66.08 |
+| 4x, defaults, drums -6 at 96 kHz | -56.47 |
+| 4x, defaults, pink -18 at 96 kHz | -51.44 |
+| 8x, defaults, music -10 | -64.77 |
+| 8x, defaults, drums -6 | -58.95 |
+| 8x, defaults, pink -18 | -54.07 |
+| 8x, defaults, music -10 at 44.1 kHz | -65.0 |
+| 8x, defaults, drums -6 at 44.1 kHz | -60.54 |
+| 8x, defaults, pink -18 at 44.1 kHz | -54.03 |
+| 8x, defaults, music -10 at 96 kHz | -65.1 |
+| 8x, defaults, drums -6 at 96 kHz | -55.66 |
+| 8x, defaults, pink -18 at 96 kHz | -51.09 |
 
 ## Stress tests
 

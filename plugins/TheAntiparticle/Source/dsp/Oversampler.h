@@ -1,20 +1,55 @@
 #pragma once
 #include <algorithm>
+#include <cmath>
 #include <vector>
-#include "OsFilters.h"
 
-// 2x / 4x / 8x oversampling with linear-phase half-band FIR stages sized like the reference's (its path gets 22.49 /
-// 27.71 / 29.66 samples longer at 2x / 4x / 8x; ours 22 / 27 / 28.75, the rest is in the fixed delay). Stage 1 is
-// designed to give the reference's top-octave roll-off (nulltest/fit_oversampling.py -> OsFilters.h). Stereo, double.
+// 2x / 4x / 8x oversampling with linear-phase FIR stages designed when prepared, as the reference's are: stage k runs
+// at 2^(k+1) times the host rate and is a Kaiser-windowed sinc cut at a quarter of that rate (so a half-band filter),
+// its length and window set by the textbook Kaiser formulas from a transition band between a passband edge in Hz and
+// its mirror image, and a stopband depth; unit gain at DC. The edge and the depth are fitted from the reference's
+// measured paths (nulltest/fit_oversampling.py: 16.9 ... 17.0 kHz and 100 dB match it to 0.000 dB at 44.1 / 48 /
+// 88.2 / 96 kHz and every ratio), so the filters, and the latency, change with the host rate like the reference's.
+// 8x processes at 4x (the reference's 8x output equals its 4x output, ~2 samples later, to -82 dB below 16 kHz; folding
+// its third stage into a filter at 4x nulled worse on music, -45 vs -62 dB, as it filters the character's harmonics
+// twice). Stereo, double.
 namespace ap::dsp
 {
+inline constexpr double kOsEdgeHz = 17000.0, kOsDepthDb = 100.0;
+
+// stage k's taps for host rate fs (odd length, symmetric)
+inline std::vector<double> designOsStage (int k, double fs)
+{
+    const double rate = fs * (double) (2 << k);
+    const double width = (rate - 4.0 * kOsEdgeHz) / (2.0 * rate);           // (stop - pass) / rate, stop = rate/2 - pass
+    int order = (int) std::ceil ((kOsDepthDb - 7.95) / (2.285 * width * 2.0 * 3.14159265358979323846));
+    order += order % 2;
+    const double beta = 0.1102 * (kOsDepthDb - 8.7);
+    auto i0 = [] (double x)
+    {
+        double s = 1.0, term = 1.0;
+        for (int m = 1; m < 64 && term > 1.0e-20 * s; ++m) { term *= (x / (2.0 * m)) * (x / (2.0 * m)); s += term; }
+        return s;
+    };
+    std::vector<double> h ((size_t) order + 1);
+    double sum = 0.0;
+    for (int n = 0; n <= order; ++n)
+    {
+        const double t = n - order / 2, r = 2.0 * n / order - 1.0;
+        const double sinc = t == 0 ? 0.5 : std::sin (0.5 * 3.14159265358979323846 * t) / (3.14159265358979323846 * t);
+        h[(size_t) n] = sinc * i0 (beta * std::sqrt (std::max (0.0, 1.0 - r * r))) / i0 (beta);
+        sum += h[(size_t) n];
+    }
+    for (auto& v : h) v /= sum;
+    return h;
+}
+
 class HalfbandStage
 {
 public:
-    void prepare (const double* taps, int n)
+    void prepare (const std::vector<double>& taps)
     {
-        h.assign (taps, taps + n);
-        len = n;
+        h = taps;
+        len = (int) h.size();
         for (auto& c : ch) { c.up.assign ((size_t) len, 0.0); c.down.assign ((size_t) len, 0.0); c.upPos = c.downPos = 0; }
     }
     void reset() { for (auto& c : ch) { std::fill (c.up.begin(), c.up.end(), 0.0); std::fill (c.down.begin(), c.down.end(), 0.0); c.upPos = c.downPos = 0; } }
@@ -61,25 +96,24 @@ private:
 class Oversampler
 {
 public:
-    void prepare (int factor, int maxBlock)
+    // factor as selected (1 / 2 / 4 / 8); 8 processes at 4 (factor())
+    void prepare (double sampleRate, int selected, int maxBlock)
     {
-        stages = factor >= 8 ? 3 : factor >= 4 ? 2 : factor >= 2 ? 1 : 0;
-        const double* taps[3] { stages == 1 ? osStage1x2 : osStage1x4, osStage2, osStage3 };
-        const int lens[3] { stages == 1 ? osStage1x2Taps : osStage1x4Taps, osStage2Taps, osStage3Taps };
-        for (int s = 0; s < stages; ++s) st[s].prepare (taps[s], lens[s]);
+        stages = selected >= 4 ? 2 : selected >= 2 ? 1 : 0;
+        for (int s = 0; s < stages; ++s) st[s].prepare (designOsStage (s, sampleRate));
         for (int s = 0; s <= stages; ++s)
             for (auto& b : buf[s]) b.assign ((size_t) (maxBlock << s), 0.0);
     }
     void reset() { for (auto& s : st) s.reset(); }
     int factor() const { return 1 << stages; }
-    // latency in base-rate samples (up + down)
+    // latency in host-rate samples (up + down)
     double latency() const
     {
         double l = 0.0;
         for (int s = 0; s < stages; ++s) l += (double) st[s].latencyAtOwnRate() / (double) (2 << s);
         return l;
     }
-    // base-rate block in -> pointers to the oversampled block (n * factor samples per channel)
+    // host-rate block in -> pointers to the oversampled block (n * factor samples per channel)
     void up (const double* l, const double* r, int n, double*& ol, double*& orr)
     {
         std::copy (l, l + n, buf[0][0].begin());
@@ -91,7 +125,7 @@ public:
                     st[s].up (c, buf[s][c][(size_t) i], buf[s + 1][c][(size_t) (2 * i)], buf[s + 1][c][(size_t) (2 * i + 1)]);
         ol = buf[stages][0].data(); orr = buf[stages][1].data();
     }
-    // the oversampled block (as returned by up, processed in place) -> base rate
+    // the oversampled block (as returned by up, processed in place) -> host rate
     void down (double* l, double* r, int n)
     {
         int m = n << stages;
@@ -104,8 +138,8 @@ public:
     }
 
 private:
-    HalfbandStage st[3];
-    std::vector<double> buf[4][2];
+    HalfbandStage st[2];
+    std::vector<double> buf[3][2];
     int stages = 0;
 };
 }
