@@ -22,7 +22,9 @@ namespace ap
 // a wide faint bloom, burning whiter where they crowd; glowing up
 // and dying away over ~0.1 ... 0.9 s of a 4 s loop) and the amount pill is a black hole: the sparks near it are drawn
 // in, faster the closer, spiralling with the flow, thinner as they go, and gone at its edge, where a thin ring of bent
-// light turns with them.
+// light turns with them; each spark is reflected in the glass, squeezed against its outer and inner rims. In both
+// styles the glass reads clearer: its lit haze lighter, a sheen across its top, a streak of light along its upper
+// outer curve and thin bright edges where it turns.
 // Drawn in editor design coordinates (the component covers the centre column).
 class Visualizer : public juce::Component, private juce::Timer
 {
@@ -61,6 +63,7 @@ private:
     bool antiStyle = false;
     void paintGodly (juce::Graphics&);
     void paintAntiparticle (juce::Graphics&);
+    void paintGlass (juce::Graphics&);
     float level = 0.0f;           // the sparks' visibility 0 .. 1
     float glow = 0.0f;            // the lit glass's visibility 0 .. 1 (fades slower than the sparks)
     float meterDb = -200.0f;      // the input peak meter that drives both (dBFS)

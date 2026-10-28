@@ -317,8 +317,41 @@ void Visualizer::paint (Graphics& g)
     const float scale = theme::pixelScale (g, *this);
     if (frame.isNull() || (std::abs (scale - framePx) > 0.001f && ! theme::liveResizing (*this))) renderFrame (scale);
     g.drawImage (frame, getLocalBounds().toFloat());
-    if (level <= 0.0f && glow <= 0.0f) return;
-    if (antiStyle) paintAntiparticle (g); else paintGodly (g);
+    if (level > 0.0f || glow > 0.0f)
+    {
+        Graphics::ScopedSaveState s (g);
+        if (antiStyle) paintAntiparticle (g); else paintGodly (g);
+    }
+    paintGlass (g);
+}
+
+// (ours) clear glass over it all: a faint sheen across the top of the ring (and fainter along the bottom), a streak of
+// light along its upper outer curve, brightest up and to the left, and thin bright edges where the glass turns, at its
+// outer and inner rims (a little brighter while it is lit)
+void Visualizer::paintGlass (Graphics& g)
+{
+    const auto b = getBounds().toFloat();
+    Graphics::ScopedSaveState s (g);
+    g.addTransform (AffineTransform::translation (-b.getX(), -b.getY()));
+    const float top = cy - outerRadius, bottom = cy + outerRadius;
+    {
+        Graphics::ScopedSaveState s1 (g);
+        auto ring = stadiumAround (cx, cy, halfLength, outerRadius - 1.0f);
+        ring.setUsingNonZeroWinding (false);
+        ring.addPath (stadiumAround (cx, cy, halfLength, pillRadius + 1.0f));
+        g.reduceClipRegion (ring);
+        g.setGradientFill (ColourGradient (Colours::white.withAlpha (0.075f), cx, top, Colours::white.withAlpha (0.0f), cx, cy - pillRadius, false));
+        g.fillPath (ring);
+        g.setGradientFill (ColourGradient (Colours::white.withAlpha (0.0f), cx, cy + pillRadius, Colours::white.withAlpha (0.03f), cx, bottom, false));
+        g.fillPath (ring);
+    }
+    g.setGradientFill (ColourGradient (Colours::white.withAlpha (0.3f), cx - halfLength - 50.0f, top + 12.0f,
+                                       Colours::white.withAlpha (0.0f), cx + 0.6f * halfLength, cy + 10.0f, false));
+    g.strokePath (stadiumAround (cx, cy, halfLength, outerRadius - 6.5f), PathStrokeType (1.8f));
+    g.setColour (Colours::white.withAlpha (0.1f + 0.1f * glow));
+    g.strokePath (stadiumAround (cx, cy, halfLength, outerRadius - 1.6f), PathStrokeType (0.8f));
+    g.setColour (Colours::white.withAlpha (0.07f + 0.08f * glow));
+    g.strokePath (stadiumAround (cx, cy, halfLength, pillRadius + 2.4f), PathStrokeType (0.7f));
 }
 
 void Visualizer::paintAntiparticle (Graphics& g)
@@ -326,9 +359,9 @@ void Visualizer::paintAntiparticle (Graphics& g)
     const auto b = getBounds().toFloat();
     {
         Graphics::ScopedSaveState s0 (g);
-        g.setOpacity (glow * colourMix);
+        g.setOpacity (0.65f * glow * colourMix);                     // (ours: lighter, clearer glass)
         g.drawImage (litViolet, getLocalBounds().toFloat());
-        g.setOpacity (glow * (1.0f - colourMix));
+        g.setOpacity (0.65f * glow * (1.0f - colourMix));
         g.drawImage (litGrey, getLocalBounds().toFloat());
     }
     g.addTransform (AffineTransform::translation (-b.getX(), -b.getY()));
@@ -473,9 +506,9 @@ void Visualizer::paintGodly (Graphics& g)
         // the glass lit by the sparks (drawn to match the reference's active frames on average); desaturated with
         // the sparks' colour mix
         Graphics::ScopedSaveState s0 (g);
-        g.setOpacity (glow * colourMix);
+        g.setOpacity (0.65f * glow * colourMix);                     // (ours: lighter, clearer glass)
         g.drawImage (lit, getLocalBounds().toFloat());
-        g.setOpacity (glow * (1.0f - colourMix));
+        g.setOpacity (0.65f * glow * (1.0f - colourMix));
         g.drawImage (litGrey, getLocalBounds().toFloat());
     }
 
@@ -552,6 +585,20 @@ void Visualizer::paintGodly (Graphics& g)
             for (int q = 0; q < n; ++q)
                 addGlow (n == 1 ? pos : pos - half + half * (2.0f * (float) q / (float) (n - 1)), 0.3f + 0.4f * sz,
                          1.1f * a / std::sqrt ((float) n), core);
+            // its reflections in the glass: the rims are curved mirrors, so each image is squeezed against the rim
+            // (a tenth of its distance from it) and drawn out along it, fainter the further the spark is
+            const Point<float> out (tp.nx, tp.ny), along (tp.ny, -tp.nx);
+            const float dOut = outerRadius - tp.r;
+            for (int m = 0; m < 2; ++m)
+            {
+                const float dist = m == 0 ? dOut : d;
+                const float rr = m == 0 ? outerRadius - 1.8f - 0.1f * dist : pillRadius + 1.8f + 0.1f * dist;
+                const float kr = (m == 0 ? 0.7f : 0.55f) * a * std::exp (-dist / 40.0f);
+                if (kr < 0.004f) continue;
+                const Point<float> at = pos + out * (rr - tp.r);
+                for (float o : { -2.6f, -1.3f, 0.0f, 1.3f, 2.6f })
+                    addGlow (at + along * o, 0.6f, (1.0f - 0.25f * std::abs (o)) * 0.5f * kr, core);
+            }
         }
         // as an image over the glass: the light itself (past white it spills into the other channels), as opaque as
         // it is bright

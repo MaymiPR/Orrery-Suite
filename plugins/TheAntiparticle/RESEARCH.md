@@ -217,3 +217,10 @@ words ("amount", "Sidechain", "high", "Preset") with the reference: closest widt
   1/120 s): drawn in at 7·10⁵ / (distance + 8)² px/s² and along the flow half as much, so the ones within ~25 px
   spiral in, faster the closer, thinner as they go (down to a third), and are gone at its edge. A soft warm glow
   round the pill and a thin ring of bent light hugging it, brighter on one side, turning with the flow.
+- **Clearer glass (both styles):** the lit haze drawn at 0.65 of the reference's strength, and over everything (lit or
+  not) a faint sheen across the top of the ring (white 7.5 % fading to nothing by the pill's top; 3 % along the
+  bottom), a streak of light along the upper outer curve (white 30 % up and to the left, fading across), and thin
+  bright edges at the outer and inner rims (10 / 7 %, up to 20 / 15 % while lit).
+- **The sparks reflected in the glass (god particle):** the rims are curved mirrors, so each spark shows there
+  squeezed against the rim (at a tenth of its distance from it) and drawn out along it over ~5 px, at 0.7 (outer) /
+  0.55 (inner) of its brightness, fading as e^(−distance / 40 px).
