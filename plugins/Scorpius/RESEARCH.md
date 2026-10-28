@@ -409,3 +409,33 @@ frame). What differed, and what ours does now:
 - Cost at 200 %: 3.5 ms a frame.
 - **Knobs (both plug-ins):** double-click opens a field over the knob to type its value (Enter or a click elsewhere
   sets it, as one host gesture; Escape leaves it); Alt-click still resets to the default.
+
+## UI round 9: speed and the glass's reflections, frame by frame (RefCapture films at 200 %)
+
+- **Frame rate:** the reference never repeats a frame in a 36 fps film; ours repeated about one in five at a 40 Hz clock.
+  The editor's clock is now 60 Hz.
+- **How long a particle shows:** with the music's own swings taken out (each frame less a Gaussian smooth of it), the
+  reference's particles correlate 0.01 from one frame to the next and outlast chance not at all: they are scattered
+  anew every frame. Its flares show for 1.7 frames on average (three in four for one frame only), ~4.8 a frame.
+- **Streamers above the band:** sideways at sign × (30 + 0.38 × the distance from x 444) px/s, rising ~36 px/s.
+- **Fixed reflections** (the 10th percentile of the lit frames less the idle frame): two dotted lines at y 282.25 and
+  304, a dot every 3.5 px, made of segments whose bright ends fall at the same x on both (234, 314, 394, 465.5, 529.5,
+  593.5, 652.5, 698, 744, 790: closer together to the right), bright bumps at both ends of the lower one, three short
+  violet lines across each end cap, the band reflected in the lower rim (y ~306). Ours draws them (`addReflections`).
+
+## UI round 10: the ORION style redone (ours, after the user's review)
+
+The reference's look kept (its palette, a dense band of streaks through the middle, streamers flowing outwards, tall
+coloured pillars, the glass's reflections), with our own take where the user asked for it:
+- **Neon:** each particle a hot core a little whiter than its colour in a glow of the pure colour and a wide faint
+  bloom, glowing up and dying away over 0.1 ... 0.35 s (the reference re-scatters every frame, which read as frantic at
+  60 Hz and, with lives shorter than a frame, left some frames empty: the band's brightness jumped between ~55 and
+  ~115 frame to frame; now steady at 91 ... 96). Fewer particles (560 + 9 pillars), larger.
+- **Black holes past the ends, off screen:** the whole field drifts outwards (8 px/s plus 0.08 × the distance from x
+  444; streamers 18 px/s plus 0.18 ... 0.3 × it), and within 150 px of an end it is drawn in, faster the closer
+  (4·10⁵ / (d² + 400) px/s²), funnelled to the band's height, the stream pinching thinner and drawn out the closer it
+  gets, dimming over the last 40 px and gone past the end.
+- **Kept inside the glass:** the particles' light fades out above y 275 and below 304 (it had reached the top rim:
+  the 99th percentile of the rows on the rim was 249 ... 255, the reference's 66 ... 116; now 44 ... 73).
+- Against the reference with the same music: mean brightness 60 (57), hue bins .24 .15 .01 / .16 .16 .13 .03 .03 .09
+  (.18 .19 .02 / .15 .13 .16 .03 .03 .09), saturated share .34 (.38). Cost at 200 %: 4.1 ms a frame.

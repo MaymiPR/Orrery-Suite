@@ -220,7 +220,8 @@ ScorpiusEditor::ScorpiusEditor (ScorpiusProcessor& p) : AudioProcessorEditor (p)
     grip->setAlwaysOnTop (true);
     setUiScale (proc.uiScale.load());
     animateChanges = true;
-    startTimerHz (40);                   // (the animations' clock: the reference draws ~37 frames a second)
+    startTimerHz (60);                   // (the animations' clock: the reference's stripe never repeats a frame in a film at 36
+                                         // frames a second; at 40 Hz ours, busy painting, managed ~31)
     readoutClock.startTimer (46);
 }
 

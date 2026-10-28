@@ -3,21 +3,26 @@
 #include <functional>
 #include <vector>
 
-// The visualiser stripe's light, over the dark tube the editor paints: a glow and a field of small coloured particles,
-// as the reference shows while audio plays (filmed at 200 % with RefCapture, plugins/Scorpius/tools/fit_stripe.py).
-// Measured on the reference:
-//   - the light does not move with the music in detail: a fixed glow (a bell along the stripe, brightest a little right
-//     of its middle) and particles: dots, round blobs and short horizontal dashes in amber, orange-red, azure, blue-
-//     violet, cyan and white, dense in a band through the middle (three bright lanes about 2.5 px apart) where most
-//     twinkle in place, thinning out up, down and towards the ends; above the band they stream outwards from the
-//     middle as if coming at you (sideways at ~0.45 times their distance from it per second, rising 10 ... 40 px/s);
-//     ~3 tall flares at any time (bright capsules up to ~20 px high, white, violet, red, cyan, yellow) swelling and
-//     shrinking within ~0.15 s, barely sliding; and the band is reflected in the glass's lower rim (a line of
-//     its light, strongest towards the ends) (UI round 8: films of music, particle tracking);
+// The visualiser stripe's light, over the dark tube the editor paints. ORION style: ours after the reference (its
+// films measured with tones and music, plugins/Scorpius/tools/fit_stripe.py, RESEARCH.md UI rounds 3, 4, 6, 8, 9 and 10),
+// a heavenly field of light filling the tube from end to end:
+//   - starlike sparks, white-hot at the core in coloured halos (gold, amber, rose, ice blue, cyan, azure, lavender, in
+//     the reference's balance of hues), and short streaks of light in three lanes through the middle; like the
+//     reference's, they are scattered afresh every frame (from one frame of its film to the next its particles keep no
+//     more of their places than chance), so the field shimmers;
+//   - streamers flowing out of the middle as if coming at you: outwards at ~30 px/s plus ~0.4 times their distance from
+//     the middle per second, rising above the band and sinking below it (the reference's, tracked frame by frame);
+//   - pillars of light (~5 at a time, each a frame or two, as the reference's flares) with soft halos;
+//   - ours: now and then a star that glints with long thin rays, and a few slow, soft orbs drifting in the haze;
+//   - a fixed glow (fitted to the reference) with a faint violet haze above the band;
+//   - ours: a black hole past each end of the tube, off screen: what flows out of the middle is drawn in, faster the
+//     closer, funnelled to the middle's height and stretched, dimming into the dark at the ends and gone;
+//   - the glass: the band's light reflected in its lower rim, two dotted lines of reflected light (y 282.25 and 304,
+//     segments ending at the same places on both, closer together to the right) and bright spots at the ends of the
+//     lower one;
 //   - its brightness follows a level the processor keeps (dsp/Light.h: the input's peak, taken when it jumps and when
-//     the sound stops, falling at 50 dB/s): dark below -72 dBFS, full from -40 dBFS up, ((dB + 72) / 32)^1.25 between
-//     (measured with tones from -65 to -40 dBFS: 0.16, 0.29, 0.44, 0.61, 0.81, 1), and eased over ~30 ms on screen;
-//   - with the particle animation off (settings), the stripe stays dark.
+//     the sound stops, falling at 50 dB/s): dark below -72 dBFS, full from -40 dBFS up, ((dB + 72) / 32)^1.25 between,
+//     eased over ~30 ms on screen; with the particle animation off (settings), the stripe stays dark.
 // Our own style (settings, "SCORPIUS"): green venom shot at you, through a pane of glass. Far away in the middle beats a
 // crimson heart (Antares, the scorpion's red star) shading into a green haze; out of it comes venom (acid lime through
 // the controls' mint to deep teal) flying in 3-D towards the viewer, seen with depth of field: far drops small and
@@ -105,8 +110,10 @@ private:
     void spawn (Particle&, double now, bool anyAge);
     void render (int widthPx, int heightPx, float pxPerDesign);
     void renderGlow (int widthPx, int heightPx, float pxPerDesign);
+    void addReflections (int widthPx, int heightPx, float pxPerDesign);
     void splat (const Particle&, float level, float pxPerDesign);
     void splatStar (const Particle&, float level, float pxPerDesign);
+    void heavenly (const Particle&, float level, float age, float pxPerDesign);
 
     juce::Random rng { 1234 };
     std::vector<Particle> particles;
