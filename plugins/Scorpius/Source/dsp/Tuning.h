@@ -26,8 +26,11 @@ struct Tuning
     double eqLaw[8] { 0, 0.622, 1.2385, 2.4552, 3.6506, 4.826, 5.9828, 7.1224 };   // (nulltest/fit_eqlaw.py)
     double eqHpAfter = 1;                  // 1: the high-pass after the soft clip (fitted: nulls 10 ... 16 dB deeper)
     double eqRampMs = 5.0;                 // a band's gain moves linearly to a new value over this time
-    double switchMs = 5.0;                 // a module's power crossfades over this time
+    double switchMs = 0.0;                 // > 0: a module's power crossfades over this time; 0: it switches (the reference)
     double amountRampMs = 10.0;            // harmonics, compression and lift amounts move linearly over this time
+    // Cradle's control rate (Filters.h Ramp::setChunked; 0 = off): chunk (samples), the parameter's ramp (ms, read
+    // per chunk), the glide to each reading (ms); and modules starting afresh when switched on
+    double ctlChunk = 128, paramRampMs = 5.0, glideMs = 5.0, chunkEq = 0, chunkPar = 0, restartOnEnable = 23;   // per module (bits: drive 1, harmonics 2, compression 4, lift 8, EQ 16): restart on enable, else pause while off
     // the rate converters' cutoffs (into and out of 48 kHz, shares of the lower rate's Nyquist), for hosts below and
     // above 48 kHz (fitted by nulls with every module off: 44.1 kHz -42 dB; above 48 kHz still to fit)
     double resampleCutoffIn = 1.0, resampleCutoffOut = 1.1, resampleCutoffInHigh = 1.228, resampleCutoffOutHigh = 0.834;   // (high: nulltest/fit_resample_high.py)
@@ -60,7 +63,7 @@ struct Tuning
     std::vector<std::pair<const char*, double*>> entries()
     {
         std::vector<std::pair<const char*, double*>> e { { "eqCeiling", &eqCeiling }, { "eqKnee", &eqKnee }, { "eqRampMs", &eqRampMs },
-                                                         { "switchMs", &switchMs }, { "amountRampMs", &amountRampMs }, { "resampleCutoffIn", &resampleCutoffIn }, { "resampleCutoffOut", &resampleCutoffOut },
+                                                         { "switchMs", &switchMs }, { "amountRampMs", &amountRampMs }, { "ctlChunk", &ctlChunk }, { "paramRampMs", &paramRampMs }, { "glideMs", &glideMs }, { "chunkEq", &chunkEq }, { "chunkPar", &chunkPar }, { "restartOnEnable", &restartOnEnable }, { "resampleCutoffIn", &resampleCutoffIn }, { "resampleCutoffOut", &resampleCutoffOut },
                                                          { "resampleCutoffInHigh", &resampleCutoffInHigh }, { "resampleCutoffOutHigh", &resampleCutoffOutHigh }, { "resampleDelayTrimHigh", &resampleDelayTrimHigh },
                                                          { "resampleHalfInHigh", &resampleHalfInHigh }, { "resampleHalfOutHigh", &resampleHalfOutHigh }, { "resampleBetaHigh", &resampleBetaHigh }, { "eqHpAfter", &eqHpAfter },
                                                          { "parRampMs", &parRampMs }, { "subGain", &subGain }, { "subLowPassHz", &subLowPassHz },

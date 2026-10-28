@@ -216,6 +216,27 @@ Changes at a block boundary (64-sample blocks), a 1 kHz tone at −20 dBFS:
 | input gain 0 → +6 dB | 19 ms, exponential (τ ≈ 8 ms) |
 | a parallel's power | within 2 ms |
 
+**Measured again on drums (2026-10-28, `nulltest/autom_probe.py`, `autom_curve.py`):** a change at 1 s and back at
+2 s, the output during it fitted as a blend of the steady outputs at the two values, in 4-sample windows, at host
+blocks of 32 … 512. The God Particle's framework behaviour, which Orion turns out to share (The Antiparticle's
+MEASUREMENTS.md 5; both run on the same Cradle framework, reference/rea notes):
+- **Amounts follow two stages.** A 5 ms ramp read once per 128-sample control chunk (chunks from the block's start),
+  then a 5 ms linear glide to each reading, started afresh every chunk. That predicts the measured curve: 0.284 at the
+  first chunk's end, then 0.0030 per sample, there at 368 samples; the same at blocks of 128, 256 and 512.
+- **A module's power switches** at the block's start, no crossfade (the 5 ms above was the module restarting). With
+  blocks under 128 samples a change waits until a whole chunk has gathered: 128 − n, rounded up to whole blocks
+  (+64 at 64, +96 at 32), as on The God Particle.
+- **Switched back on**, drive, harmonics, compression and the EQ start afresh (EQ on: −21 → −54 dB around the switch
+  that way); the lift carries on from where it paused (restarting it: −11 dB). The drive's capture settles for
+  ~100 ms after being switched on (its output unlike either steady state for the first ~10 ms): a neural capture
+  starting cold, which ours (a WaveNet) does not reproduce: −8 dB around the switch.
+- The EQ gains keep a plain 5 ms ramp (the chunked one nulls worse, −39 vs −44 dB); the parallels' levels are
+  limited by the parallels themselves.
+- Our harmonics (models learned per amount, interpolated) had a model coming in start from silence when the amount
+  crossed a node: now it first hears the input it missed, its whole memory (−23.5 → −33.6 dB around an amount jump).
+  What is left there: the reference's own output swings well away from both steady states during the ramp
+  (−15 dB, while they differ by −36), and ours swings differently.
+
 ## 13. CPU
 
 Offline, one instance, 60 s of drums at 48 kHz (wall time less the ~1.2 s of loading): the default preset takes

@@ -28,7 +28,9 @@ public:
                 h = Biquad();
                 if (t.eqHpHz[b] > 0) h.set (highPass (t.eqHpHz[b], t.eqHpQ[b]).data());
             }
-            gain[b].setLength ((int) std::lround (t.eqRampMs * 0.001 * fs));
+            const bool chunked = t.ctlChunk > 0 && t.chunkEq > 0.5;
+            gain[b].setLength ((int) std::lround ((chunked ? t.glideMs : t.eqRampMs) * 0.001 * fs));
+            gain[b].setChunked (chunked ? (int) std::lround (t.ctlChunk) : 0, (int) std::lround (t.paramRampMs * 0.001 * fs));
         }
         reset();
     }
@@ -48,6 +50,7 @@ public:
             if (jump) { gain[b].jump (g); design (b); } else gain[b].set (g);
         }
     }
+    void beginBlock (int n) { for (auto& g : gain) g.beginBlock (n); }
     // in place, both channels
     void process (double* l, double* r, int n)
     {

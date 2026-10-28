@@ -9,8 +9,9 @@
 #include "Filters.h"
 
 // Scorpius's processing between the input and output gains (MEASUREMENTS.md 1): drive -> harmonics -> compression ->
-// lift -> harmonic EQ, then the four parallels (sub, low, loud, grit) mixed in from the end of the chain. Each module's
-// power crossfades over a few ms. Modules not built yet pass the signal through.
+// lift -> harmonic EQ, then the four parallels (sub, low, loud, grit) mixed in from the end of the chain. Parameters
+// follow Cradle's control rate (128-sample chunks, Filters.h Ramp); a module's power switches at a block's start and
+// most modules start afresh when switched on (MEASUREMENTS.md 12).
 namespace sc::dsp
 {
 struct Params
@@ -36,9 +37,12 @@ private:
     struct Power
     {
         Ramp mix;
+        bool on = false, target = false; long wait = 0;    // the switch as the module sees it, and a pending change
+        int bit = 0;                                       // its bit in Tuning::restartOnEnable
         bool active() const { return mix.value > 0.0 || mix.moving(); }
     };
-    void runModule (Power&, bool on, int n, const std::function<void (double*, double*, int)>& fn);
+    void runModule (Power&, bool on, int n, const std::function<void (double*, double*, int)>& fn,
+                    const std::function<void()>& restart = {});
 
     double fs = 48000.0;
     std::vector<double> bufL, bufR, wetL, wetR;
@@ -46,7 +50,7 @@ private:
     Power eqPower, harmPower, compPower, drivePower, liftPower;
     Drive drive;
     Lift lift;
-    Ramp harmAmount, compAmount, liftAmount;   // the amounts move linearly over ~10 ms (MEASUREMENTS.md 12)
+    Ramp harmAmount, compAmount, liftAmount;   // the amounts: Cradle's chunked smoothing, ~8 ms (MEASUREMENTS.md 12)
     std::vector<double> keyBufL, keyBufR;
     Compressor comp;
 public:

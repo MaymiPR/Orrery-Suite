@@ -49,12 +49,21 @@ public:
                 for (auto& m : model[f][k]) m.prepare (*w[f][k]);
         for (auto& v : tmp) for (auto& b : v) b.assign ((size_t) std::max (1, maxBlock), 0.0);
         amounts.assign ((size_t) std::max (1, maxBlock), 0.0);
+        int mem = 0;
+        for (auto& f : model) for (auto& k : f) mem = std::max (mem, k[0].memory());
+        for (auto& h : history) h.assign ((size_t) mem, 0.0);
+        warm.assign ((size_t) mem, 0.0);
     }
-    void reset() { for (auto& f : model) for (auto& k : f) for (auto& m : k) m.reset(); pair = -1; }
+    void reset()
+    {
+        for (auto& f : model) for (auto& k : f) for (auto& m : k) m.reset();
+        for (auto& h : history) std::fill (h.begin(), h.end(), 0.0);
+        active0 = active1 = -1;
+    }
     void setMode (int freqHz)
     {
         const int f = freqHz == 50 ? 1 : 0;
-        if (f != current) { current = f; pair = -1; }
+        if (f != current) { current = f; active0 = active1 = -1; }
     }
     // in place: the wet signal mixed with the dry one by the amount (0 ... 1)
     void process (double* l, double* r, int n, Ramp& amount)
@@ -62,23 +71,36 @@ public:
         const int f = current < 0 ? 0 : current;
         double* ch[2] { l, r };
         for (int i = 0; i < n; ++i) amounts[(size_t) i] = amount.next();
-        // the two models either side of the amount (at the block's middle); one coming in starts from silence
-        const double mid = amounts[(size_t) (n / 2)];
-        int lo = 0;
-        while (lo < 2 && mid > nodes[lo + 1]) ++lo;
-        if (lo != pair)
-            for (int k = lo; k <= lo + 1; ++k)
-                if (pair < 0 || k < pair || k > pair + 1) for (auto& m : model[f][k]) m.reset();
-        pair = lo;
-        for (int s = 0; s < 2; ++s)
-            for (int c = 0; c < 2; ++c) model[f][lo + s][c].process (ch[c], tmp[s][c].data(), n);
+        // the models either side of every amount in the block (a ramp may cross nodes); one coming in first hears
+        // the input it missed (its whole memory), so it joins in the state it would have had running all along
+        auto lowerNode = [] (double a) { int k = 0; while (k < 2 && a > nodes[k + 1]) ++k; return k; };
+        const auto [aMin, aMax] = std::minmax_element (amounts.begin(), amounts.begin() + n);
+        const int first = lowerNode (*aMin), last = lowerNode (*aMax) + 1;
+        for (int k = first; k <= last; ++k)
+            if (k < active0 || k > active1)
+                for (int c = 0; c < 2; ++c)
+                {
+                    model[f][k][c].reset();
+                    if (active0 >= 0) model[f][k][c].process (history[c].data(), warm.data(), (int) history[c].size());
+                }
+        active0 = first; active1 = last;
+        for (int k = first; k <= last; ++k)
+            for (int c = 0; c < 2; ++c) model[f][k][c].process (ch[c], tmp[k][c].data(), n);
+        for (int c = 0; c < 2; ++c)          // the latest input, for the next model coming in
+        {
+            auto& h = history[c];
+            const int keep = (int) h.size() - n;
+            if (keep > 0) { std::move (h.begin() + n, h.end(), h.begin()); std::copy (ch[c], ch[c] + n, h.begin() + keep); }
+            else std::copy (ch[c] + (n - (int) h.size()), ch[c] + n, h.begin());
+        }
         for (int i = 0; i < n; ++i)
         {
             const double a = amounts[(size_t) i], w = weight (a);
+            const int lo = lowerNode (a);
             const double t = std::clamp ((a - nodes[lo]) / (nodes[lo + 1] - nodes[lo]), 0.0, 1.0);
             for (int c = 0; c < 2; ++c)
             {
-                const double wet = tmp[0][c][(size_t) i] + t * (tmp[1][c][(size_t) i] - tmp[0][c][(size_t) i]);
+                const double wet = tmp[lo][c][(size_t) i] + t * (tmp[lo + 1][c][(size_t) i] - tmp[lo][c][(size_t) i]);
                 ch[c][i] += w * (wet - ch[c][i]);
             }
         }
@@ -95,8 +117,8 @@ public:
 
 private:
     LearnedWaveNet model[2][4][2];        // [frequency][amount node][channel]
-    std::vector<double> tmp[2][2], amounts;
-    int current = -1, pair = -1;
+    std::vector<double> tmp[4][2], amounts, history[2], warm;
+    int current = -1, active0 = -1, active1 = -1;          // the models running (amount nodes)
 };
 
 class Lift

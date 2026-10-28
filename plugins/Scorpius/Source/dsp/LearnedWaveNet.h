@@ -169,6 +169,13 @@ public:
         }
         reset();
     }
+    // how many past input samples the output depends on (the network has no other state)
+    int memory() const
+    {
+        int m = (int) weights->pre.size() + (int) weights->post.size();
+        for (int d : weights->dilations) m += (weights->kernel - 1) * d;
+        return m;
+    }
     void reset()
     {
         std::fill (pre.begin(), pre.end(), 0.0f);

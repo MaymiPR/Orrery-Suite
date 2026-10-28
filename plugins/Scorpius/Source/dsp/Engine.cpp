@@ -18,8 +18,18 @@ void Engine::prepare (double sampleRate, int maxBlock)
     drive.prepare();
     lift.prepare (maxBlock);
     expander.prepare (fs);
-    for (auto* a : { &harmAmount, &compAmount, &liftAmount }) a->setLength ((int) std::lround (tuning().amountRampMs * 0.001 * fs));
-    for (auto& w : parWeight) w.setLength ((int) std::lround (tuning().parRampMs * 0.001 * fs));
+    const int chunk = (int) std::lround (tuning().ctlChunk);
+    for (auto* a : { &harmAmount, &compAmount, &liftAmount })
+    {
+        a->setLength ((int) std::lround ((chunk > 0 ? tuning().glideMs : tuning().amountRampMs) * 0.001 * fs));
+        a->setChunked (chunk, (int) std::lround (tuning().paramRampMs * 0.001 * fs));
+    }
+    const bool parChunked = chunk > 0 && tuning().chunkPar > 0.5;
+    for (auto& w : parWeight)
+    {
+        w.setLength ((int) std::lround ((parChunked ? tuning().glideMs : tuning().parRampMs) * 0.001 * fs));
+        w.setChunked (parChunked ? chunk : 0, (int) std::lround (tuning().paramRampMs * 0.001 * fs));
+    }
     reset();
 }
 
@@ -38,10 +48,29 @@ void Engine::reset()
     first = true;
 }
 
-// runs a module on the buffer, crossfading between its input and its output while its power changes
-void Engine::runModule (Power& power, bool on, int n, const std::function<void (double*, double*, int)>& fn)
+// runs a module on the buffer, crossfading between its input and its output while its power changes (switchMs > 0)
+// or switching at the block's start, as the reference does (Cradle's framework: with host blocks under a control chunk
+// the switch waits until a whole chunk has gathered, 128 - n rounded up to whole blocks; MEASUREMENTS.md 12)
+void Engine::runModule (Power& power, bool on, int n, const std::function<void (double*, double*, int)>& fn,
+                        const std::function<void()>& restart)
 {
-    if (first) power.mix.jump (on ? 1.0 : 0.0); else power.mix.set (on ? 1.0 : 0.0);
+    const auto& t = tuning();
+    power.bit = &power == &drivePower ? 1 : &power == &harmPower ? 2 : &power == &compPower ? 4 : &power == &liftPower ? 8 : 16;
+    const int chunk = (int) std::lround (t.ctlChunk);
+    if (first) { power.on = power.target = on; power.wait = 0; }
+    else if (on != power.target)
+    {
+        power.target = on;
+        power.wait = chunk > 0 && n < chunk ? (long) ((chunk - n + n - 1) / n) * n : 0;
+    }
+    else if (power.wait > 0) power.wait -= n;
+    if (power.wait <= 0 && power.on != power.target)
+    {
+        power.on = power.target;
+        if (power.on && ((int) t.restartOnEnable & power.bit) != 0 && restart) restart();
+    }
+    on = power.on;
+    if (first || t.switchMs <= 0) power.mix.jump (on ? 1.0 : 0.0); else power.mix.set (on ? 1.0 : 0.0);
     if (! power.active()) return;
     if (! power.mix.moving() && power.mix.value >= 1.0)
     {
@@ -63,7 +92,10 @@ void Engine::process (float* l, float* r, int n, const Params& p, const float* k
 {
     const std::pair<Ramp*, double> amounts[] { { &harmAmount, p.harmAmount }, { &compAmount, p.compAmount }, { &liftAmount, p.liftAmount } };
     for (auto& a : amounts)
+    {
         if (first) a.first->jump (a.second); else a.first->set (a.second);
+        a.first->beginBlock (n);
+    }
     if (keyL != nullptr)
         for (int i = 0; i < n; ++i) { keyBufL[(size_t) i] = keyL[i]; keyBufR[(size_t) i] = keyR[i]; }
     for (int i = 0; i < n; ++i) { bufL[(size_t) i] = l[i]; bufR[(size_t) i] = r[i]; }
@@ -75,23 +107,27 @@ void Engine::process (float* l, float* r, int n, const Params& p, const float* k
     }
     else expander.reset();
     const int colour = p.driveColor; const bool hiPass = p.hiPass;
-    runModule (drivePower, p.driveOn, n, [this, colour, hiPass] (double* a, double* b, int m) { drive.process (a, b, m, colour, hiPass); });
+    runModule (drivePower, p.driveOn, n, [this, colour, hiPass] (double* a, double* b, int m) { drive.process (a, b, m, colour, hiPass); },
+               [this] { drive.reset(); });
     harm.setMode (p.harmFreq);
-    runModule (harmPower, p.harmOn, n, [this] (double* a, double* b, int m) { harm.process (a, b, m, harmAmount); });
+    runModule (harmPower, p.harmOn, n, [this] (double* a, double* b, int m) { harm.process (a, b, m, harmAmount); }, [this] { harm.reset(); });
     const int compMode = p.compMode;
     const bool ext = keyL != nullptr;
     compReduction = 0;
     runModule (compPower, p.compOn, n, [this, compMode, ext] (double* a, double* b, int m)
-               { compReduction = comp.process (a, b, m, compMode, compAmount, ext ? keyBufL.data() : nullptr, ext ? keyBufR.data() : nullptr); });
-    runModule (liftPower, p.liftOn, n, [this] (double* a, double* b, int m) { lift.process (a, b, m, liftAmount); });
+               { compReduction = comp.process (a, b, m, compMode, compAmount, ext ? keyBufL.data() : nullptr, ext ? keyBufR.data() : nullptr); },
+               [this] { comp.reset(); });
+    runModule (liftPower, p.liftOn, n, [this] (double* a, double* b, int m) { lift.process (a, b, m, liftAmount); }, [this] { lift.reset(); });
     eq.setGains (p.eq, first);
-    runModule (eqPower, p.eqOn, n, [this] (double* a, double* b, int m) { eq.process (a, b, m); });
+    eq.beginBlock (n);
+    runModule (eqPower, p.eqOn, n, [this] (double* a, double* b, int m) { eq.process (a, b, m); }, [this] { eq.reset(); });
 
     // the parallels: each adds its weighted contribution, all listening to the chain's output
     for (int k = 0; k < 4; ++k)
     {
         const double w = p.parOn[k] ? faderTaper (p.parLevel[k]) : 0.0;
         if (first) parWeight[k].jump (w); else parWeight[k].set (w);
+        parWeight[k].beginBlock (n);
     }
     if (parWeight[0].value > 0 || parWeight[0].moving() || parWeight[1].value > 0 || parWeight[2].value > 0 || parWeight[3].value > 0
         || parWeight[1].moving() || parWeight[2].moving() || parWeight[3].moving())

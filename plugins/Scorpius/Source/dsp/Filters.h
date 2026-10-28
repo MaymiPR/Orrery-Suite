@@ -1,4 +1,5 @@
 #pragma once
+#include <algorithm>
 #include <cmath>
 
 // Small building blocks of the DSP: a biquad (transposed direct form II, double precision) and a linear ramp.
@@ -18,23 +19,48 @@ struct Biquad
     }
 };
 
-// moves linearly to each new target over a fixed number of samples
+// moves linearly to each new target over a fixed number of samples. With setChunked, as Cradle's framework smooths its
+// parameters (measured on both references, The Antiparticle's MEASUREMENTS.md 5 and Scorpius's 12): a new target first
+// moves along a ramp of its own that is read once per control chunk (chunks counted from the block's start), and the
+// value glides linearly to each reading over `length` samples
 struct Ramp
 {
     double value = 0, target = 0, step = 0;
     int left = 0, length = 1;
     void setLength (int samples) { length = samples < 1 ? 1 : samples; }
-    void jump (double v) { value = target = v; left = 0; }
+    void setChunked (int chunkSamples, int paramSamples) { chunk = chunkSamples; paramLen = paramSamples < 1 ? 1 : paramSamples; }
+    void jump (double v) { value = target = goal = pValue = v; left = pLeft = 0; }
     void set (double t)
+    {
+        if (chunk > 0)
+        {
+            if (t != goal) { goal = t; pLeft = paramLen; pStep = (goal - pValue) / paramLen; }
+            return;
+        }
+        glideTo (t);
+    }
+    void beginBlock (int n) { pos = 0; blockLen = n; }
+    double next()
+    {
+        if (chunk > 0 && pos % chunk == 0)
+        {
+            const int len = blockLen > pos ? std::min (chunk, blockLen - pos) : chunk;
+            if (pLeft > 0) { if (len >= pLeft) { pValue = goal; pLeft = 0; } else { pValue += pStep * len; pLeft -= len; } }
+            glideTo (pValue);
+        }
+        ++pos;
+        if (left > 0) { value += step; if (--left == 0) value = target; }
+        return value;
+    }
+    bool moving() const { return left > 0 || pLeft > 0; }
+
+private:
+    void glideTo (double t)
     {
         if (t == target) return;
         target = t; left = length; step = (target - value) / length;
     }
-    double next()
-    {
-        if (left > 0) { value += step; if (--left == 0) value = target; }
-        return value;
-    }
-    bool moving() const { return left > 0; }
+    int chunk = 0, paramLen = 1, pos = 0, blockLen = 0, pLeft = 0;
+    double goal = 0, pValue = 0, pStep = 0;
 };
 }
