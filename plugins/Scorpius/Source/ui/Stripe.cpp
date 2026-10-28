@@ -13,16 +13,18 @@ namespace
 // its particles read nearly white)
 struct Tint { float r, g, b, share; };
 constexpr Tint palette[] {
-    { 1.00f, 0.96f, 0.94f, 0.18f },     // white
-    { 1.00f, 0.88f, 0.72f, 0.10f },     // warm white
-    { 1.00f, 0.28f, 0.06f, 0.09f },     // red-orange (hue 15)
-    { 1.00f, 0.60f, 0.08f, 0.19f },     // amber (45)
+    { 1.00f, 0.96f, 0.94f, 0.07f },     // white
+    { 1.00f, 0.88f, 0.72f, 0.04f },     // warm white
+    { 1.00f, 0.28f, 0.06f, 0.065f },    // red-orange (hue 15)
+    { 1.00f, 0.60f, 0.08f, 0.18f },     // amber (45)
     { 1.00f, 0.92f, 0.15f, 0.03f },     // yellow (75)
-    { 0.05f, 0.78f, 1.00f, 0.15f },     // cyan (195)
-    { 0.12f, 0.45f, 1.00f, 0.05f },     // azure (225)
-    { 0.38f, 0.28f, 1.00f, 0.07f },     // blue-violet (255)
-    { 0.72f, 0.25f, 1.00f, 0.01f },     // violet (285)
-    { 1.00f, 0.18f, 0.40f, 0.08f } };   // pink-red (345)
+    { 0.05f, 0.78f, 1.00f, 0.10f },     // cyan (195)
+    { 0.12f, 0.45f, 1.00f, 0.08f },     // azure (225)
+    { 0.38f, 0.28f, 1.00f, 0.125f },    // blue-violet (255)
+    { 0.72f, 0.25f, 1.00f, 0.015f },    // violet (285)
+    { 1.00f, 0.18f, 0.40f, 0.056f } };  // pink-red (345)
+// (the shares of the saturated hues fitted to films of music, UI round 8: the reference's 30-degree hue bins read
+// 0.18 0.19 0.02 / 0.15 0.13 0.16 0.03 0.03 0.09 from red-orange to pink)
 constexpr Tint flareTints[] {
     { 1.00f, 0.95f, 0.80f, 0.25f }, { 1.00f, 0.90f, 0.35f, 0.25f }, { 0.25f, 0.88f, 1.00f, 0.20f },
     { 1.00f, 0.60f, 0.15f, 0.12f }, { 1.00f, 0.25f, 0.25f, 0.08f }, { 0.70f, 0.50f, 1.00f, 0.10f } };
@@ -48,7 +50,7 @@ Colour venomColour (float depth, float white = 0.0f)
 // how warm a place is: 1 at the heart, 0 at the ends
 float warmth (float x) { return std::pow (1.0f - jlimit (0.0f, 1.0f, std::abs (x - heartX) / 420.0f), 1.3f); }
 
-constexpr int numParticles = 1700, numFlares = 10;
+constexpr int numParticles = 1400, numFlares = 9;
 constexpr float lanes[] { 289.1f, 291.6f, 294.25f, 302.5f };   // the rows the band's dashes keep to (the last one less)
 // where the reference's particles are (local maxima per frame, measured): along the stripe in bins of 18.5 design px
 // from x 0 (thinned towards the ends, where ours stood out more: the reference has ~60 per frame in each end sixth),
@@ -57,7 +59,7 @@ constexpr float alongBins[48] { 0, 0.5f, 1.6f, 4.1f, 7.7f, 10.5f, 13.7f, 18, 22.
                                 55, 55, 45, 52, 46, 43, 47, 44, 42, 47, 43, 38, 38, 35, 29.1f, 22.9f, 17.2f, 12.9f, 10.5f, 7, 3.5f, 1, 0, 0 };
 constexpr float acrossBins[17] { 31, 16, 21, 23, 28, 31, 47, 103, 240, 241, 209, 161, 124, 100, 88, 45, 15 };
 // the same for the dots and blobs alone (the band's dashes are added on top of them)
-constexpr float dotBins[17] { 3, 4, 6, 8, 10, 13, 22, 50, 90, 90, 85, 140, 90, 45, 25, 10, 3 };
+constexpr float dotBins[17] { 3, 4, 6, 8, 11, 15, 28, 55, 90, 90, 85, 140, 150, 120, 80, 25, 5 };   // (more below: UI round 8)
 
 float gauss (Random& r)
 {
@@ -107,19 +109,19 @@ void Stripe::spawn (Particle& p, double now, bool anyAge)
 {
     if (p.kind == Kind::flare)
     {
-        // a flare: a narrow bar that swells to its height and shrinks again while it slides sideways
+        // a flare: a narrow bar that swells to its height and shrinks again, sliding a little sideways
         p.x = jlimit (40.0f, 840.0f, 455.0f + 190.0f * gauss (rng));
         const auto& t = style == Style::scorpius ? pick (rng, starTints) : pick (rng, flareTints);
         p.r = t.r; p.g = t.g; p.b = t.b;
         p.y = 287.0f + 4.0f * gauss (rng);              // (mostly a little above the band)
-        p.vx = (rng.nextBool() ? 1.0f : -1.0f) * uniform (rng, 40.0f, 180.0f);
+        p.vx = (rng.nextBool() ? 1.0f : -1.0f) * uniform (rng, 0.0f, 35.0f);    // (they barely slide: UI round 8)
         p.vy = 0.0f;
-        p.w = uniform (rng, 2.4f, 4.0f);                  // (glowing ovals, as the reference's)
-        p.h = p.w + uniform (rng, 2.0f, 11.0f);
+        p.w = uniform (rng, 2.4f, 4.0f);                  // (glowing capsules, as the reference's: ~3 tall ones at
+        p.h = p.w + uniform (rng, 4.0f, 20.0f);           // any time, half of them over 11 px high)
         p.level = uniform (rng, 1.05f, 1.5f);
         p.life = uniform (rng, 0.10f, 0.22f);
         p.born = (float) (now + (anyAge ? uniform (rng, -0.2f, 0.3f) : uniform (rng, 0.0f, 0.15f)));
-        p.flicker = 0.0f; p.rate = 0.0f;
+        p.flicker = 0.0f; p.rate = 0.0f; p.expand = 0.0f;
         return;
     }
     p.x = fromBins (rng, alongBins, 0.0f, 18.5f);
@@ -138,25 +140,31 @@ void Stripe::spawn (Particle& p, double now, bool anyAge)
     else
     {
         const float v = rng.nextFloat();
-        p.kind = v < 0.64f ? Kind::dot : v < 0.94f ? Kind::faint : Kind::blob;
+        p.kind = v < 0.66f ? Kind::dot : v < 0.86f ? Kind::faint : Kind::blob;
         if (style == Style::scorpius && p.kind == Kind::blob && rng.nextFloat() < 0.6f) p.kind = Kind::star;   // (ours)
         p.y = fromBins (rng, dotBins, 272.5f, 2.0f);
+        // (UI round 8) above the band the reference has fewer, bigger glowing orbs than dots: most there are orbs
+        if (p.y < 286.0f) p.kind = rng.nextFloat() < 0.3f ? Kind::blob : Kind::dot;
     }
-    // moving (measured with frame-to-frame cross-correlation): in the band sideways, either way, at 90 ... 200 px/s;
-    // above and below it outwards (rising above, sinking below) and sideways at up to ~100 px/s
+    // moving (measured by tracking the reference's particles from frame to frame, UI round 8): above the band they
+    // stream outwards from the middle as if coming at you (sideways at ~0.45 times their distance from it per second,
+    // rising 10 ... 40 px/s); in the band most twinkle in place and a fifth stream outwards; below it they barely move
     const float off = p.y - 291.0f;
-    if (std::abs (off) < 4.5f) { p.vx = (rng.nextBool() ? 1.0f : -1.0f) * uniform (rng, 90.0f, 200.0f); p.vy = 0.0f; }
-    else { p.vx = 50.0f * gauss (rng); p.vy = (off > 0.0f ? 1.0f : -1.0f) * uniform (rng, 0.0f, 60.0f); }
+    p.expand = 0.0f; p.vx = 8.0f * gauss (rng); p.vy = 0.0f;
+    if (off < -4.5f) { p.expand = uniform (rng, 0.32f, 0.6f); p.vy = -uniform (rng, 10.0f, 40.0f); }
+    else if (off < 4.5f) { if (rng.nextFloat() < 0.2f) p.expand = uniform (rng, 0.3f, 0.6f); }
+    else p.vy = uniform (rng, 0.0f, 8.0f);
     switch (p.kind)
     {
-        case Kind::dot:   p.w = uniform (rng, 0.5f, 1.0f); p.h = uniform (rng, 0.5f, 0.8f); p.level = uniform (rng, 0.6f, 1.25f); break;
-        case Kind::dash:  p.w = uniform (rng, 1.8f, 5.0f); p.h = uniform (rng, 0.7f, 1.0f); p.level = uniform (rng, 0.5f, 1.0f); break;
+        case Kind::dot:   p.w = uniform (rng, 0.5f, 1.0f); p.h = uniform (rng, 0.5f, 0.8f); p.level = uniform (rng, 0.55f, 0.9f); break;
+        case Kind::dash:  p.w = uniform (rng, 1.8f, 5.0f); p.h = uniform (rng, 0.7f, 1.0f); p.level = uniform (rng, 0.5f, 0.95f); break;
         case Kind::faint: p.w = 0.6f; p.h = 0.6f; p.level = uniform (rng, 0.3f, 0.6f); break;
-        case Kind::blob:  p.w = uniform (rng, 1.6f, 3.5f); p.h = p.w * uniform (rng, 0.8f, 1.3f); p.level = uniform (rng, 0.6f, 1.1f); break;
+        case Kind::blob:  p.w = p.y < 286.0f ? uniform (rng, 1.2f, 2.6f) : uniform (rng, 1.6f, 3.5f); p.h = p.w * uniform (rng, 0.8f, 1.3f);
+                          p.level = p.y < 286.0f ? uniform (rng, 0.4f, 0.8f) : uniform (rng, 0.6f, 1.1f); break;
         case Kind::star:  p.w = uniform (rng, 3.0f, 5.5f); p.h = p.w * uniform (rng, 0.7f, 1.0f); p.level = uniform (rng, 0.7f, 1.2f); break;
         case Kind::flare: break;
     }
-    p.life = uniform (rng, 0.05f, 0.3f);
+    p.life = p.expand > 0.0f && off < -4.5f ? uniform (rng, 0.3f, 0.9f) : uniform (rng, 0.05f, 0.3f);   // (the streaming ones last)
     p.born = (float) (anyAge ? now - uniform (rng, 0.0f, p.life) : now);
     p.flicker = uniform (rng, 0.0f, MathConstants<float>::twoPi);
     p.rate = uniform (rng, 15.0f, 45.0f);
@@ -238,6 +246,7 @@ void Stripe::advance (double now)
     for (auto& p : particles)
     {
         if (elapsed - p.born > p.life) spawn (p, elapsed, false);
+        if (p.expand > 0.0f) p.vx = p.expand * (p.x - 444.0f);
         p.x += p.vx * (float) dt;
         p.y += p.vy * (float) dt;
     }
@@ -268,7 +277,23 @@ void Stripe::renderGlow (int w, int h, float s)
         }
     }
     glowHeart.assign (glow.size(), 0.0f);
-    if (style != Style::scorpius) return;
+    if (style != Style::scorpius)
+    {
+        // (the reference's, measured with music: UI round 8) a faint violet haze above the band, brightest in the middle
+        for (int j = 0; j < h; ++j)
+        {
+            const float y = top + ((float) j + 0.5f) / s;
+            const float rows = jlimit (0.0f, 1.0f, (287.0f - y) / 3.0f) * jlimit (0.0f, 1.0f, (y - 272.5f) / 1.5f);
+            if (rows <= 0.0f) continue;
+            for (int i = 0; i < w; ++i)
+            {
+                const float x = left + ((float) i + 0.5f) / s, along = 0.45f + 0.55f * std::exp (-std::pow ((x - 460.0f) / 300.0f, 2.0f));
+                float* px = glow.data() + (size_t) ((j * w + i) * 3);
+                px[0] += 0.036f * rows * along; px[1] += 0.028f * rows * along; px[2] += 0.052f * rows * along;
+            }
+        }
+        return;
+    }
     // ours: a dim haze of venom, lime in the middle to teal at the ends; a beat flares the middle, crimson at the heart
     for (int j = 0; j < h; ++j)
         for (int i = 0; i < w; ++i)
@@ -414,6 +439,24 @@ void Stripe::render (int w, int h, float s)
             if (a * envelope <= 0.005f) continue;
             splat (p, p.level * a * envelope, s);
         }
+    // (the reference's) the band reflected in the glass's lower rim: a line of light under it, following the light of
+    // the lower band above it column by column, strongest towards the ends (measured: at the ends three times ours was)
+    if (! glass)
+    {
+        const int r0 = jlimit (0, h - 1, (int) ((296.0f - top) * s)), r1 = jlimit (0, h - 1, (int) ((303.0f - top) * s));
+        const int m0 = jlimit (0, h - 1, (int) ((305.7f - top) * s)), m1 = jlimit (0, h - 1, (int) ((306.6f - top) * s));
+        for (int i = 0; i < w; ++i)
+        {
+            float acc[3] {};
+            for (int j = r0; j <= r1; ++j) for (int c = 0; c < 3; ++c) acc[c] += light[(size_t) ((j * w + i) * 3 + c)];
+            const float x = left + ((float) i + 0.5f) / s, gain = (0.5f + 1.5f * jmin (1.0f, std::abs (x - 444.0f) / 400.0f)) / (float) (r1 - r0 + 1);
+            for (int j = m0; j <= m1; ++j)
+            {
+                const float shape = std::sin (MathConstants<float>::pi * ((float) (j - m0) + 0.5f) / (float) (m1 - m0 + 1));
+                for (int c = 0; c < 3; ++c) light[(size_t) ((j * w + i) * 3 + c)] += gain * shape * acc[c];
+            }
+        }
+    }
     // the scene: the light added to what is under it (light past white spills into the other channels: bright cores
     // turn white)
     scene.resize (light.size());
@@ -910,9 +953,10 @@ void Stripe::renderGlass (float s)
     }
 }
 
-// a bead of venom on the glass is a lens: it shows the scene behind it upside down and small, darker towards its rim
-// (light bent away), with a bright caustic at its foot (light gathered through it) and a sharp glint up and left; just
-// after it hits it is a flat, uneven film; drying, it shrinks
+// a bead of venom on the inside of the glass is a lens: it shows the scene behind it upside down and small, darker
+// towards its rim (light bent away), with a caustic at its foot (light gathered through it); it is lit from behind (a
+// bright rim on the side the heart's light comes from), and seen through the glass (a little dimmer, the glass's
+// reflections over it); just after it hits it is a flat, uneven film; drying, it shrinks
 void Stripe::lens (const Drop& d, float s)
 {
     const float age = (float) elapsed - d.born, u = age / jmax (0.001f, d.life);
@@ -926,6 +970,7 @@ void Stripe::lens (const Drop& d, float s)
     const int j0 = jmax (0, (int) (cy - 1.3f * Ry - 1.0f)), j1 = jmin (bufH - 1, (int) (cy + 1.3f * Ry + 1.0f));
     const float* behind = scene.data() + (size_t) ((jlimit (0, bufH - 1, (int) cy) * bufW + jlimit (0, bufW - 1, (int) cx)) * 3);
     const float glow = 0.3f * behind[0] + 0.55f * behind[1] + 0.15f * behind[2];
+    const float toLight = std::atan2 ((glandY - d.sy) * 3.0f, heartX - d.sx);       // (the heart's side, mostly along)
     const float shown = jmin (1.0f, envelope * 1.5f) * jmin (1.0f, 6.0f * evaporate);
     constexpr float minify = 2.6f;
     for (int j = j0; j <= j1; ++j)
@@ -944,21 +989,16 @@ void Stripe::lens (const Drop& d, float s)
             const float* c = scene.data() + (size_t) ((sy * bufW + sx) * 3);
             const float rim = jlimit (0.0f, 1.0f, (rho - 0.55f) / 0.45f), dark = 1.0f - 0.72f * rim * rim;
             const float foot = dy > 0.0f ? dy / Ry : 0.0f, caustic = foot * std::exp (-((rho - 0.8f) / 0.11f) * ((rho - 0.8f) / 0.11f)) * (0.15f + 0.9f * glow);
-            const float out[3] { c[0] * dark * 0.95f + 0.05f * d.r + caustic * (0.4f + 0.6f * d.r),
-                                 c[1] * dark * 0.95f + 0.05f * d.g + caustic * (0.4f + 0.6f * d.g),
-                                 c[2] * dark * 0.95f + 0.05f * d.b + caustic * (0.4f + 0.6f * d.b) };
+            const float facing = jmax (0.0f, std::cos (std::atan2 (dy / Ry, dx / R) - toLight));
+            const float backlit = facing * std::exp (-((rho - 0.88f) / 0.09f) * ((rho - 0.88f) / 0.09f)) * (0.12f + 0.8f * glow);
+            const float out[3] { 0.9f * (c[0] * dark + 0.05f * d.r + caustic * (0.4f + 0.6f * d.r) + backlit * (0.5f + 0.5f * d.r)),
+                                 0.9f * (c[1] * dark + 0.05f * d.g + caustic * (0.4f + 0.6f * d.g) + backlit * (0.5f + 0.5f * d.g)),
+                                 0.9f * (c[2] * dark + 0.05f * d.b + caustic * (0.4f + 0.6f * d.b) + backlit * (0.5f + 0.5f * d.b)) };
             const size_t k = (size_t) (j * bufW + i);
             float* f = front.data() + k * 3;
             for (int ch = 0; ch < 3; ++ch) f[ch] = f[ch] * (1.0f - a) + a * out[ch];
             cover[k] += a * (1.0f - cover[k]);
         }
-    // the glint
-    Particle p {};
-    p.kind = Kind::dot; p.x = d.sx - 0.3f * size; p.y = d.sy - 0.32f * size; p.w = p.h = jmax (0.4f, 0.2f * size);
-    p.r = p.g = p.b = 1.0f;
-    canvas = gloss.data();
-    splat (p, (size < 1.0f ? 0.12f : size < 1.6f ? 0.45f : 0.8f) * shown, s);
-    canvas = light.data();
 }
 
 // the wet track a running bead leaves: a thin film, which bends what is behind it a little (sideways), with a faint line
@@ -980,9 +1020,9 @@ void Stripe::wetTrack (const Drop& d, float s)
             for (int ch = 0; ch < 3; ++ch) f[ch] = f[ch] * (1.0f - a) + a * jmin (1.0f, 1.1f * c[ch]);
             cover[k] += a * (1.0f - cover[k]);
         }
-    float* g = gloss.data();
+    // (its edge catches the light from behind, a little)
     for (int j = j0; j <= j1; ++j)
-        if (i0 >= 0 && i0 < bufW) { float* px = g + (size_t) ((j * bufW + i0) * 3); px[0] += 0.12f * a; px[1] += 0.14f * a; px[2] += 0.14f * a; }
+        if (i0 >= 0 && i0 < bufW) { float* px = front.data() + (size_t) ((j * bufW + i0) * 3); px[0] += 0.08f * a; px[1] += 0.1f * a; px[2] += 0.1f * a; }
 }
 
 void Stripe::paint (Graphics& g)

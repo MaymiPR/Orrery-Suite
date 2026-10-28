@@ -383,5 +383,29 @@ probe (1 kHz: steps of -10, -4, -14, -2, -8 dBFS, then -4 / -14 alternating ever
   pattern) that show only where the venom lights them. The light follows the same level as the ORION style. Drawn in
   two passes: the scene (haze, heart, venom in the air) and then the glass over it. Cost at 200 %: 3.2 ms a frame (the
   ORION style 3.2 ... 3.7). (Tried and dropped: blood, a stinger stabbing the glass, acid bubbles.)
+  The beads are on the inside of the glass: lit from behind (a bright rim on the side the heart's light comes from, no
+  front glint), a little dimmer, the glass's reflections and dust over them.
+
+## UI round 8: the ORION style's particles against the reference's, with music (RefCapture films at 200 %)
+
+Filmed the reference's stripe and ours (ORION style) with the same 20 s of the demo track (rows 0.66 ... 0.775), and
+compared frame statistics, time averages, 0.4 s max-projections and particle tracks (local maxima linked from frame to
+frame). What differed, and what ours does now:
+- **Motion:** above the band the reference's particles stream outwards from the middle as if coming at you: sideways
+  at ~0.45 times their distance from x 444 per second (−159 px/s at the left end, +168 at the right), rising 18 ... 36
+  px/s; in the band most twinkle in place (median speed 0), a fifth stream outwards; below it they barely move. Ours
+  had them drift straight up, and the band's sliding sideways at 90 ... 200 px/s. Ours now streams the same way (and
+  those above the band live 0.3 ... 0.9 s, so their paths fan out as the reference's do).
+- **Flares:** the reference has ~2.9 tall ones at any time (median height 23 film px, the tallest tenth 42), barely
+  sliding; ours had 1.4 (19 / 26) sliding fast. Now 2.8 (27 / 40), drifting at most 35 px/s.
+- **Colours:** the saturated hues in 30-degree bins (red-orange, amber, yellow / cyan, azure, blue-violet, violet,
+  pink): reference .18 .19 .02 / .15 .13 .16 .03 .03 .09; ours were .25 .20 .01 / .22 .08 .09 .02 .01 .13, now
+  .22 .18 .01 / .15 .13 .17 .03 .01 .09; saturated share of the bright pixels .38 (ours .30, now .35), fewer whites.
+- **Brightness by row** (20th / 95th percentiles): above the band the reference has a faint violet haze and more
+  particles (ours now within a few levels from y 274 to 282: a violet haze added to the glow, round orbs among the
+  dots there); below the band it is denser (ours raised); the band itself matched.
+- **Glass:** the band is reflected in the lower rim (a line of its light under it, strongest towards the ends: there
+  three times ours); ours now adds it.
+- Cost at 200 %: 3.5 ms a frame.
 - **Knobs (both plug-ins):** double-click opens a field over the knob to type its value (Enter or a click elsewhere
   sets it, as one host gesture; Escape leaves it); Alt-click still resets to the default.

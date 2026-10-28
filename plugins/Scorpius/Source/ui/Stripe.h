@@ -7,10 +7,13 @@
 // as the reference shows while audio plays (filmed at 200 % with RefCapture, plugins/Scorpius/tools/fit_stripe.py).
 // Measured on the reference:
 //   - the light does not move with the music in detail: a fixed glow (a bell along the stripe, brightest a little right
-//     of its middle) and particles that twinkle in place: dots and short horizontal dashes in white, amber, orange,
-//     red, pink, violet, blue and cyan, dense in a band through the middle (three bright lanes about 2.5 px apart) and
-//     thinning out up, down and towards the ends; now and then a bright vertical flare that swells and shrinks within
-//     ~0.15 s while sliding sideways (~140 px/s);
+//     of its middle) and particles: dots, round blobs and short horizontal dashes in amber, orange-red, azure, blue-
+//     violet, cyan and white, dense in a band through the middle (three bright lanes about 2.5 px apart) where most
+//     twinkle in place, thinning out up, down and towards the ends; above the band they stream outwards from the
+//     middle as if coming at you (sideways at ~0.45 times their distance from it per second, rising 10 ... 40 px/s);
+//     ~3 tall flares at any time (bright capsules up to ~20 px high, white, violet, red, cyan, yellow) swelling and
+//     shrinking within ~0.15 s, barely sliding; and the band is reflected in the glass's lower rim (a line of
+//     its light, strongest towards the ends) (UI round 8: films of music, particle tracking);
 //   - its brightness follows a level the processor keeps (dsp/Light.h: the input's peak, taken when it jumps and when
 //     the sound stops, falling at 50 dB/s): dark below -72 dBFS, full from -40 dBFS up, ((dB + 72) / 32)^1.25 between
 //     (measured with tones from -65 to -40 dBFS: 0.16, 0.29, 0.44, 0.61, 0.81, 1), and eased over ~30 ms on screen;
@@ -96,6 +99,7 @@ private:
     {
         Kind kind;
         float x, y, vx, vy, w, h, r, g, b, level, born, life, flicker, rate;
+        float expand;                // how fast it streams outwards from the middle (per second; 0: it does not)
     };
     void advance (double now);
     void spawn (Particle&, double now, bool anyAge);
