@@ -49,6 +49,7 @@ Each module alone (the others off with the reference's own power buttons), on th
 | sub | -65 … -72 |
 | harmonics (learned), amount 1 / 0.8 / 0.6 / 0.3 | -50 … -65 / -55 … -71 / -59 … -67 / -66 … -67 |
 | compression, mode b / a | -47.5 … -58 / -40 … -50 |
+| compression with the learned colour (off by default: about twice the CPU), mode b / a | -48.5 … -57.3 / -40.0 … -49.7 |
 | loud, level 1 | -31 … -39 |
 | lift (learned) | -43.5 … -51.5 |
 | drive colour a, hi-pass on (learned, the default) | -22 … -34 |

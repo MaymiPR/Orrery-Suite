@@ -84,6 +84,8 @@ CASES['harm50'] = dict(params={**o.ONLY('harm'), 'Harm Amount': 1.0, 'Harm Freq'
 for f_ in (80, 50):                  # (harmonics at partial amounts: the amount-conditioned model)
     for a_ in (0.25, 0.5, 0.75):
         CASES[f'harm{f_}_a{int(a_ * 100):03d}'] = dict(params={**o.ONLY('harm'), 'Harm Amount': a_, 'Harm Freq': f_})
+for m_ in 'ab':                      # (compression's wet path, amount 1: prep_comp.py puts our gain in front)
+    CASES[f'comp_{m_}'] = dict(params={**o.ONLY('comp'), 'Comp Amount': 1}, hidden={'ids.compression.mode': f'Mode {m_.upper()}'})
 CASES['grit'] = dict(params={**o.NONE, 'Par Grit On/Off': 1, 'Par Grit Level': 1.0}, left=True)
 
 if __name__ == '__main__':

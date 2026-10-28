@@ -30,6 +30,8 @@ CASES = {
     'eq 3k 6': dict(params=EQ(**{'3kHz': 6})),
     'eq 10k 6': dict(params=EQ(**{'10kHz': 6})),
     'eq all 4': dict(params=EQ(**{'40Hz': 4, '100Hz': 4, '1kHz': 4, '3kHz': 4, '10kHz': 4})),
+    'comp a': dict(params={**o.ONLY('comp'), 'Comp Amount': 1}, hidden={'ids.compression.mode': 'Mode A'}),
+    'comp b': dict(params={**o.ONLY('comp'), 'Comp Amount': 1}, hidden={'ids.compression.mode': 'Mode B'}),
 }
 
 

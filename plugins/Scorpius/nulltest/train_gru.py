@@ -18,6 +18,10 @@ torch.backends.cudnn.allow_tf32 = torch.backends.cuda.matmul.allow_tf32 = False 
 torch.backends.cudnn.enabled = os.environ.get("CUDNN", "1") == "1"   # (CUDNN=0: PyTorch's own kernels, e.g. for sequences cuDNN rejects)
 CELL = os.environ.get("CELL", "gru")       # gru or lstm (the NAM models in the reference are LSTMs)
 RNN_LAYERS = int(os.environ.get("LAYERS", 1))   # stacked layers (the reference names an 'LSTM_3_LAYER' drive model)
+# STATEWARM: samples the network runs without gradients before its graded warm-up, so each window starts from the state
+# a long stretch of the material leaves (a capture's network runs continuously; from a zero state 512 samples before
+# the window it learns another regime: REA notes 2026-10-28, an inference)
+STATEWARM = int(os.environ.get("STATEWARM", 0))
 
 
 class Model(torch.nn.Module):
@@ -30,8 +34,20 @@ class Model(torch.nn.Module):
         self.out = torch.nn.Linear(hidden, 1)
         with torch.no_grad(): self.out.weight.zero_(); self.out.bias.zero_()
 
-    def core(self, u):                      # (batch, n) -> (batch, n)
+    def run(self, x, state=None):           # (batch, n, 1) in chunks, the state carried (cuDNN rejects long sequences)
+        hs = []
+        for k in range(0, x.shape[1], 8192):
+            hk, state = self.gru(x[:, k:k + 8192].contiguous(), state); hs.append(hk)
+        return torch.cat(hs, 1), state
+
+    def core(self, u, nograd=0):            # (batch, n) -> (batch, n); the first nograd samples without gradients
         x = u.contiguous().unsqueeze(-1)
+        if nograd:
+            with torch.no_grad():
+                h0, state = self.run(x[:, :nograd])
+                v0 = u[:, :nograd] + self.out(h0).squeeze(-1)
+            h1, _ = self.run(x[:, nograd:], tuple(t.detach() for t in state) if isinstance(state, tuple) else state.detach())
+            return torch.cat([v0, u[:, nograd:] + self.out(h1).squeeze(-1)], 1)
         if x.shape[1] <= 16384:
             h, _ = self.gru(x)
         else:                               # long pieces in chunks, the state carried (cuDNN rejects long sequences)
@@ -41,10 +57,10 @@ class Model(torch.nn.Module):
             h = torch.cat(hs, 1)
         return u + self.out(h).squeeze(-1)
 
-    def forward(self, x, gru_from=0):
+    def forward(self, x, gru_from=0, nograd=0):
         u = fftconv(x, self.pre)
         if gru_from:
-            v = torch.cat([u[:, :gru_from], self.core(u[:, gru_from:])], 1)
+            v = torch.cat([u[:, :gru_from], self.core(u[:, gru_from:], nograd)], 1)
         else:
             v = self.core(u)
         return fftconv(v, self.post)
@@ -63,7 +79,7 @@ def train(case, steps, hidden):
                             {'params': list(model.gru.parameters()) + list(model.out.parameters()), 'lr': 3e-3}])
     sched = torch.optim.lr_scheduler.OneCycleLR(opt, max_lr=[1e-4, 5e-3], total_steps=steps)
     rng = np.random.default_rng(2)
-    warm = max(KPRE + KPOST, GWARM)
+    warm = max(KPRE + KPOST, GWARM + STATEWARM)
     t0 = time.time()
     for step in range(steps):
         xb, yb, wb = [], [], []
@@ -75,7 +91,7 @@ def train(case, steps, hidden):
             wb.append(1.0 / max(1e-6, float(np.mean(y[start:start + SEG] ** 2))))
         xb = torch.tensor(np.array(xb), device=DEV); yb = torch.tensor(np.array(yb), device=DEV)
         wb = torch.tensor(wb, dtype=torch.float32, device=DEV)
-        out = model(xb, gru_from=warm - GWARM)[:, warm:]
+        out = model(xb, gru_from=warm - GWARM - STATEWARM, nograd=STATEWARM)[:, warm:]
         loss = (((out - yb) ** 2).mean(1) * wb).mean()
         opt.zero_grad(); loss.backward(); torch.nn.utils.clip_grad_norm_(model.parameters(), 1.0); opt.step(); sched.step()
         if step % 500 == 0 or step == steps - 1:

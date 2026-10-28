@@ -24,6 +24,9 @@ FEAT = [float(v) for v in os.environ.get("FEAT", "").split(",") if v]
 COND = [(c.split(':')[0], float(c.split(':')[1])) for c in os.environ.get("COND", "").split(",") if c]
 EQUIV = float(os.environ.get("EQUIV", 0))   # a capture at amount EQUIV: target its fully wet equivalent (no extra input)
 BYPASS = os.environ.get("BYPASS") == "1"
+# XCOND: the capture's dry input ('xraw', prep_comp.py) as an extra input beside the model's own (compression: the
+# network hears the signal before our gain too, so it can correct the gain's timing as well as learn the colour)
+XCOND = os.environ.get("XCOND") == "1"
 # the layer's shape (NAM's WaveNets: kernel 3, the input mixed into every layer, tanh without a gate)
 KERNEL = int(os.environ.get("KERNEL", 2)); MIXIN = os.environ.get("MIXIN") == "1"; GATED = os.environ.get("GATED", "1") == "1"
 LOSSP = float(os.environ.get("LOSSP", 1.0))   # each slice's loss / its output power ^ LOSSP (below 1: loud slices count more)   # y = Post(u) + WaveNet(u) instead of Post(u + WaveNet(u))
@@ -90,7 +93,7 @@ class Model(torch.nn.Module):
         pre = torch.zeros(KPRE); pre[0] = 1.0
         self.pre = torch.nn.Parameter(pre)
         self.post = torch.nn.Parameter(torch.tensor(post_init[:KPOST], dtype=torch.float32))
-        self.wn = WaveNet(ch, layers, 1 if COND else len(FEAT))
+        self.wn = WaveNet(ch, layers, 1 if (COND or XCOND) else len(FEAT))
 
     def forward(self, x, f=None):
         u = fftconv(x, self.pre)
@@ -123,6 +126,7 @@ def train(case, steps, irname, ch, layers):
     warm = KPRE + KPOST + model.wn.rf
     train_idx = [i for i in train_idx if len(xs[i]) > warm + SEG]   # (long memories need long pieces)
     F = [np.full((1, len(x)), c, np.float32) for x, c in zip(xs, conds)] if COND else ([features(x) for x in xs] if FEAT else None)
+    if XCOND: F = [np.asarray(v, np.float32)[None] for v in np.load(os.path.join(NN, case + '.npz'), allow_pickle=True)['xraw']]
     t0 = time.time()
     for step in range(steps):
         xb, yb, wb, fb = [], [], [], []
@@ -158,6 +162,7 @@ def evaluate(model, xs, ys, valid, keep, all_=False, F=None):
 def irname_of(case):
     if case == 'lift': return 'lift_1.0'
     if case == 'grit' or case.startswith('harm'): return None
+    if case.startswith('comp'): return case[:6]          # (prep_comp.py's linear estimate)
     return f'drive_{case[6]}_hp{1 if case.endswith("_hp") else 0}'
 
 
@@ -167,4 +172,4 @@ if __name__ == '__main__':
     model, xs, ys, valid, keep, F = train(case, steps, irname_of(case), ch, layers)
     n = evaluate(model, xs, ys, valid, keep, F=F)
     print(case, f'ch {ch} layers {layers}', 'validation nulls', ' '.join('%d:%.1f' % v for v in n), 'mean %.1f' % np.mean([v for _, v in n]))
-    torch.save(dict(state={k: v.cpu() for k, v in model.state_dict().items()}, ch=ch, layers=layers, dil=model.wn.dil, feat=FEAT, bypass=BYPASS, cond=bool(COND)), os.path.join(NN, case + '_wn' + os.environ.get('TAG', '') + '.pt'))
+    torch.save(dict(state={k: v.cpu() for k, v in model.state_dict().items()}, ch=ch, layers=layers, dil=model.wn.dil, feat=FEAT, bypass=BYPASS, cond=bool(COND or XCOND)), os.path.join(NN, case + '_wn' + os.environ.get('TAG', '') + '.pt'))
