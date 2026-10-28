@@ -264,7 +264,15 @@ down more of how it is built:
   Wiener estimate of the linear part, −36.6 / −42.2, made the network look 7 … 12 dB better: the estimate was poor,
   not the IIR.) Mode a's one bad held-out piece (a quiet excerpt, −28 dB with any model) is a start-up effect:
   −19 … −22 dB over the first 1.2 s, then −38 … −45 like the rest; only quiet input after the plug-in is created
-  shows it (perhaps a recurrent model settling from its initial state: unverified).
+  shows it (perhaps a recurrent model settling from its initial state: unverified). **The gain's dynamics learned
+  instead** (`train_gain.py`): the wet path as IIR(x g 10^(c/20)), our gain g and the plug-in's own IIR fixed, the
+  correction c (dB) from a small WaveNet (4 channels, 10 layers of 3 taps, ~0.13 s of memory) that hears the
+  detector's signal and our gain; trained on the same material through a 65536-tap copy of the IIR. Held out: mode a
+  −43.2 → −45.9 dB (the track excerpts −47 → −51.5; the start-up piece unchanged), b −53.8 → −59.3. In the plug-in
+  (mono, the detector's signal; about 0.6 s of a core per minute) drums −39.8 → −41.4 / −47.8 → −52.3 (a / b),
+  drums −12 −49.0 → −51.1 / −57.5 → −59.5, the track −46.2 → −48.7 / −48.3 → −52.3, the track −10 −49.5 → −53.1 /
+  −51.0 → −57.5; the default preset with the drive off −46.8 → −48.2 (drums), −44.1 → −44.6 (track). What the
+  correction does in the reference's terms (a detector shape, a program-dependent release) is not pinned down.
 - **Low** (`fit_low2.py`): a subharmonic synthesizer, an octave below the bass: an **octave divider times an
   envelope**. On a steady tone its contribution is a square wave at half the frequency whose height follows the
   tone's level (at 25 Hz: −0.9 x the tone's amplitude for one cycle, +0.9 for the next), not the input times ±1 (the
@@ -352,8 +360,8 @@ down more of how it is built:
 
 - The drive on loud, dense material (all of the default preset's error), compression mode a on drums (−40 against
   b's −48), which crossings the low path's flip-flop counts on music, its soft limit on loud bass, grit after the
-  compressor on stereo material, mode a's start-up on quiet input, compression's gain dynamics (what is left of
-  its error).
+  compressor on stereo material, mode a's start-up on quiet input, what compression's learned gain correction
+  stands for.
 - Tried and dropped (2026-10-28): an LSTM drive (3 layers of 24, as the binary's model names suggest) trained from
   the state half a second of material leaves instead of a zero state 512 samples before each window
   (`train_gru.py STATEWARM=24000`): −20.9 dB held out against −21.0 without it, both well behind the WaveNet's

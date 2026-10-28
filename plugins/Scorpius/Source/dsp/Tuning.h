@@ -43,6 +43,7 @@ struct Tuning
     double compAttackMs[2] { 1.027, 1.022 }, compReleaseMs[2] { 19.330, 19.263 }, compRms[2] { 0.0536, 0.050 };   // (timing: fit_comp_hold.py on music)
     double compGainAttackMs[2] { 0.0, 0.0 }, compGainReleaseMs[2] { 0.0, 0.0 };
     double compGainFirst = 1;                // 1: the gain before the wet filters (the reference), 0: after
+    double compGainNet = 1;                  // 1: the gain corrected by a learned model (nulltest/train_gain.py), 0: not
 
     // parallels (Parallels.h): each path's weight (its power times its fader's taper) moves linearly over this time
     double parRampMs = 2.0;
@@ -68,7 +69,7 @@ struct Tuning
                                                          { "loudAttackMs", &loudAttackMs }, { "loudReleaseMs", &loudReleaseMs }, { "loudRms", &loudRms },
                                                          { "lowDetHz", &lowDetHz }, { "lowDetOrder", &lowDetOrder }, { "lowHysteresis", &lowHysteresis },
                                                          { "lowAttackMs", &lowAttackMs }, { "lowReleaseMs", &lowReleaseMs }, { "lowGain", &lowGain },
-                                                         { "compGainFirst", &compGainFirst }, { "lowOutHz", &lowOutHz }, { "lowOutOrder", &lowOutOrder }, { "lowSquare", &lowSquare }, { "lowCeiling", &lowCeiling } };
+                                                         { "compGainFirst", &compGainFirst }, { "compGainNet", &compGainNet }, { "lowOutHz", &lowOutHz }, { "lowOutOrder", &lowOutOrder }, { "lowSquare", &lowSquare }, { "lowCeiling", &lowCeiling } };
         static const char* loudKeys[15] { "loud0", "loud1", "loud2", "loud3", "loud4", "loud5", "loud6", "loud7", "loud8", "loud9", "loud10",
                                           "loud11", "loud12", "loud13", "loud14" };
         for (int k = 0; k < 15; ++k) e.push_back ({ loudKeys[k], &loudCurve[k] });

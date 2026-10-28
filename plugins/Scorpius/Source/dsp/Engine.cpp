@@ -14,7 +14,7 @@ void Engine::prepare (double sampleRate, int maxBlock)
     low.prepare (fs);
     grit.prepare (maxBlock);
     harm.prepare (maxBlock);
-    comp.prepare (fs);
+    comp.prepare (fs, maxBlock);
     drive.prepare();
     lift.prepare (maxBlock);
     expander.prepare (fs);

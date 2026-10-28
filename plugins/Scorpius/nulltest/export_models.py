@@ -12,7 +12,9 @@ NN = os.path.join(o.ROOT, 'measurements', 'scorpius', 'nn')
 
 def trimmed(h, floor_db=-80.0, minimum=64):
     """the long post filter without its tail below floor_db re its energy (the convolver's cost grows with its length)"""
-    h = np.asarray(h, np.float64).ravel(); tail = np.cumsum((h ** 2)[::-1])[::-1] / np.sum(h ** 2)
+    h = np.asarray(h, np.float64).ravel()
+    if not np.any(h): return h[:minimum]            # (a zero filter: train_gain.py's models)
+    tail = np.cumsum((h ** 2)[::-1])[::-1] / np.sum(h ** 2)
     keep = np.nonzero(tail > 10 ** (floor_db / 10))[0]
     n = max(minimum, int(keep[-1]) + 1 if len(keep) else minimum)
     return h[:min(len(h), (n + 63) // 64 * 64)]

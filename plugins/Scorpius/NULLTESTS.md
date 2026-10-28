@@ -27,7 +27,7 @@ local (git-ignored).
 | parallel me in | -26.8 | -34.5 | -22.3 | -31.2 |
 | top of the morning | -32.9 | -36.6 | -33.4 | -35.1 |
 | all off, 48 kHz | exact | exact | exact | exact |
-| start me up with the drive off (the rest of the chain) | -46.8 | -50.7 | -44.1 | -48.0 |
+| start me up with the drive off (the rest of the chain) | -48.2 | -51.0 | -44.6 | -49.2 |
 | all off, 44.1 kHz | -51.5 | -51.5 | -63.7 | -63.7 |
 | all off, 88.2 kHz | -109.2 | -109.2 | -109.7 | -109.7 |
 | all off, 96 kHz | -89.7 | -89.7 | -92.2 | -92.2 |
@@ -48,7 +48,7 @@ Each module alone (the others off with the reference's own power buttons), on th
 | EQ, all bands at +4 dB | -46 … -48 |
 | sub | -65 … -72 |
 | harmonics (learned), amount 1 / 0.8 / 0.6 / 0.3 | -50 … -65 / -55 … -71 / -59 … -67 / -66 … -67 |
-| compression, mode b / a | -47.5 … -58 / -40 … -50 |
+| compression, mode b / a (the gain corrected by a learned model) | -52.3 … -59.5 / -41.4 … -53.1 |
 | loud, level 1 | -31 … -39 |
 | lift (learned) | -43.5 … -51.5 |
 | drive colour a, hi-pass on (learned, the default) | -22 … -34 |

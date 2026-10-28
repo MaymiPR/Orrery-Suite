@@ -404,6 +404,11 @@ static void bench()
         ParallelFilter dry; dry.set (fits::liftDry);
         time ("lift dry filter", [&] (double* p, int m) { for (int i = 0; i < m; ++i) p[i] = dry.process (p[i]); });
     }
+    {
+        LearnedWaveNet wn; wn.prepare (models::compGainB);       // (mono: the detector's signal; timed twice here)
+        std::vector<double> cond ((size_t) B, -0.3), out ((size_t) B);
+        time ("comp gain correction", [&] (double* p, int m) { wn.process (p, out.data(), m, cond.data()); });
+    }
 }
 
 // double-clicking a knob opens a field over it: a typed value (in the parameter's own text) is set as one gesture,
