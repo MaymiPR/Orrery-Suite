@@ -203,12 +203,14 @@ words ("amount", "Sidechain", "high", "Preset") with the reference: closest widt
 
 ## Ours: the visualiser at the project's tempo, and the god particle as neon round a black hole
 
-- **Tempo (both styles):** the animation's clock runs at its pace times the project's beats per second (tempo / 60: 2
-  times at 120 BPM; 1 ... 3.5 times; 2 times when the host gives no tempo), easing to a new tempo over ~0.5 s, drawn
+- **Tempo (both styles):** the animation's clock runs at its pace times tempo / 120 (1 time at 120 BPM; 0.5 ... 1.75
+  times; 1 time when the host gives no tempo; first tempo / 60, which the user found too fast here), easing to a new tempo over ~0.5 s, drawn
   at 60 frames/s by the visualiser's own timer (the reference's sprite is a fixed 1 s loop at 30 frames/s). The light
   still follows the input's level in real time. Scorpius does the same (its RESEARCH.md, UI round 10).
-- **Neon (god particle):** each spark a core a little whiter than its colour, in a glow of the pure colour (a tight
-  halo and a wide faint bloom, 5 + 3.5 × its size px across) and glowing up and dying away smoothly (sin^0.6 over its
+- **Neon (god particle):** each spark a core a little whiter than its colour, in a halo of the pure colour and a wide
+  faint bloom (Gaussians of 0.3 + 0.4 × its size, 1.1 + 0.9 × it and 3.5 + 1.5 × it px), their light added up in a
+  buffer as light is (burning whiter where they crowd; past white it spills into the other channels) and laid over the
+  glass as opaque as it is bright (drawn as solid glows they had covered each other and the glass), glowing up and dying away smoothly (sin^0.6 over its
   life) instead of the reference's crisp points that pop. Lives 0.1 ... 0.9 s (the reference's mostly under 0.2 s),
   over a 4 s loop of 4400 sparks, so about as many show at once.
 - **The black hole (god particle):** the amount pill. Each spark's path is worked out when the loop is made (every

@@ -90,18 +90,6 @@ Visualizer::Visualizer()
         }
         s.count = (int) tracks.size() - s.first;
     }
-    // the neon glow: a tight halo and a wide faint bloom
-    glowSprite = Image (Image::SingleChannel, 64, 64, true);
-    {
-        Image::BitmapData bd (glowSprite, Image::BitmapData::writeOnly);
-        for (int j = 0; j < 64; ++j)
-            for (int i = 0; i < 64; ++i)
-            {
-                const float r = std::hypot ((float) i - 31.5f, (float) j - 31.5f) / 32.0f;
-                const float v = r >= 1.0f ? 0.0f : (std::exp (-r * r / 0.05f) + 0.35f * std::exp (-r * r / 0.3f)) * (1.0f - r * r);
-                bd.setPixelColour (i, j, Colours::white.withAlpha (jmin (1.0f, v / 1.3f)));     // (one channel: its alpha)
-            }
-    }
 
     // antiparticle: a 3 s loop of pair creations and annihilations, and the counter-flow of specks
     Random arng (1932);                                     // the year the positron was found
@@ -155,7 +143,7 @@ Visualizer::Visualizer()
 
 void Visualizer::setTempo (float bpm)
 {
-    paceTarget = bpm > 0.0f ? jlimit (1.0f, 3.5f, bpm / 60.0f) : 2.0f;
+    paceTarget = bpm > 0.0f ? jlimit (0.5f, 1.75f, bpm / 120.0f) : 1.0f;
 }
 
 // (ours) the animation's clock: 60 frames/s, at the tempo's pace, easing to a new one over ~0.5 s
@@ -508,14 +496,40 @@ void Visualizer::paintGodly (Graphics& g)
         ring.setUsingNonZeroWinding (false);
         ring.addPath (stadiumAround (cx, cy, halfLength, pillRadius + 1.0f));
         g.reduceClipRegion (ring);
+        // (ours) the sparks' light added up as light is (where they crowd it burns whiter), then laid over the glass:
+        // each a core a little whiter than its colour, a halo of the pure colour and a wide faint bloom
+        const float scale = theme::pixelScale (g, *this);
+        const int w = jmax (1, roundToInt (b.getWidth() * scale)), h = jmax (1, roundToInt (b.getHeight() * scale));
+        lightBuf.assign ((size_t) (w * h * 3), 0.0f);
+        float gx[256], gy[256];
+        auto addGlow = [&] (Point<float> at, float sigma, float k, Colour c)
+        {
+            const float px = (at.x - b.getX()) * scale, py = (at.y - b.getY()) * scale;
+            const float sg = jlimit (0.35f, 48.0f, sigma * scale), R = 2.5f * sg;
+            const int i0 = jmax (0, (int) (px - R)), i1 = jmin (w - 1, (int) (px + R));
+            const int j0 = jmax (0, (int) (py - R)), j1 = jmin (h - 1, (int) (py + R));
+            if (i0 > i1 || j0 > j1) return;
+            for (int i = i0; i <= i1; ++i) { const float q = ((float) i + 0.5f - px) / sg; gx[i - i0] = std::exp (-0.5f * q * q); }
+            for (int j = j0; j <= j1; ++j) { const float q = ((float) j + 0.5f - py) / sg; gy[j - j0] = k * std::exp (-0.5f * q * q); }
+            const float cr = c.getFloatRed(), cg = c.getFloatGreen(), cb = c.getFloatBlue();
+            for (int j = j0; j <= j1; ++j)
+            {
+                float* px3 = lightBuf.data() + (size_t) ((j * w + i0) * 3);
+                const float wy = gy[j - j0];
+                for (int i = i0; i <= i1; ++i, px3 += 3)
+                {
+                    const float wgt = wy * gx[i - i0];
+                    px3[0] += wgt * cr; px3[1] += wgt * cg; px3[2] += wgt * cb;
+                }
+            }
+        };
         const float t = (float) std::fmod (clock, (double) godLoop);
         for (auto& sp : sparks)
         {
             float age = t - sp.birth;
             if (age < 0.0f) age += godLoop;
-            if (age > sp.life) continue;
+            if (age > sp.life || sp.count < 2) continue;
             // where it is on its path, and how fast it goes
-            if (sp.count < 2) continue;
             const float f = age / trackStep;
             const int k = jlimit (0, sp.count - 2, (int) f);
             const auto& p0 = tracks[(size_t) (sp.first + k)];
@@ -529,23 +543,38 @@ void Visualizer::paintGodly (Graphics& g)
             const auto hue = Colours::white.interpolatedWith (palette[sp.hue], colourMix);
             const float d = tp.r - pillRadius, thin = jlimit (0.35f, 1.0f, 0.3f + d / 25.0f);   // (thinner near the hole)
             const float a = level * env * sp.bright, sz = sp.size * thin;
-            // the glow in its pure colour
-            const float gr = (5.0f + 3.5f * sp.size) * (0.6f + 0.4f * thin);
-            g.setColour (hue.withAlpha (jmin (1.0f, 1.1f * a)));
-            g.drawImage (glowSprite, Rectangle<float> (2.0f * gr, 2.0f * gr).withCentre (pos), RectanglePlacement::stretchToFit, true);
-            // the core, a little whiter, drawn out along its way (1/120 s exposure; longer as the hole speeds it up)
+            addGlow (pos, 3.5f + 1.5f * sp.size * thin, 0.1f * a, hue);                        // (the bloom)
+            addGlow (pos, (1.1f + 0.9f * sp.size) * thin, 0.45f * a, hue);                       // (the halo)
+            // the core, drawn out along its way (1/120 s exposure; longer as the hole speeds it up)
             const Point<float> half = vel * (1.0f / 240.0f);
-            Path dash;
-            dash.startNewSubPath (pos - half);
-            dash.lineTo (pos + half);
-            g.setColour (hue.interpolatedWith (Colours::white, 0.25f).withAlpha (a));
-            g.strokePath (dash, PathStrokeType (sz * 1.2f, PathStrokeType::curved, PathStrokeType::rounded));
-            if (sz > 0.9f)                                                 // the bigger ones burn white in the middle
+            const int n = 1 + jmin (12, (int) (2.0f * half.getDistanceFromOrigin() / 0.6f));
+            const auto core = hue.interpolatedWith (Colours::white, sz > 0.9f ? 0.35f : 0.15f);
+            for (int q = 0; q < n; ++q)
+                addGlow (n == 1 ? pos : pos - half + half * (2.0f * (float) q / (float) (n - 1)), 0.3f + 0.4f * sz,
+                         1.1f * a / std::sqrt ((float) n), core);
+        }
+        // as an image over the glass: the light itself (past white it spills into the other channels), as opaque as
+        // it is bright
+        if (lightImg.getWidth() != w || lightImg.getHeight() != h) lightImg = Image (Image::ARGB, w, h, true, SoftwareImageType());
+        {
+            Image::BitmapData bd (lightImg, Image::BitmapData::writeOnly);
+            for (int j = 0; j < h; ++j)
             {
-                g.setColour (Colours::white.withAlpha (0.8f * a));
-                g.fillEllipse (Rectangle<float> (sz * 0.6f, sz * 0.6f).withCentre (pos));
+                const float* l = lightBuf.data() + (size_t) (j * w * 3);
+                for (int i = 0; i < w; ++i, l += 3)
+                {
+                    float r = l[0], gg = l[1], bb = l[2];
+                    const float m = jmax (r, gg, bb);
+                    if (m > 1.0f) { const float spill = (m - 1.0f) * 0.5f; r += spill; gg += spill; bb += spill; }
+                    r = jmin (1.0f, r); gg = jmin (1.0f, gg); bb = jmin (1.0f, bb);
+                    const float al = jmax (r, gg, bb);
+                    reinterpret_cast<PixelARGB*> (bd.getPixelPointer (i, j))->setARGB ((uint8) (255.0f * al), (uint8) (255.0f * r),
+                                                                                       (uint8) (255.0f * gg), (uint8) (255.0f * bb));
+                }
             }
         }
+        g.setOpacity (1.0f);                                        // (drawImage takes the current colour's alpha)
+        g.drawImage (lightImg, b);
     }
 
     // (ours) the black hole's edge: a soft glow of the light falling in, and a thin ring of bent light hugging the pill,
