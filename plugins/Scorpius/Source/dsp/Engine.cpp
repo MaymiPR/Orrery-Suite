@@ -48,11 +48,10 @@ void Engine::reset()
     first = true;
 }
 
-// runs a module on the buffer, crossfading between its input and its output while its power changes (switchMs > 0)
-// or switching at the block's start, as the reference does (Cradle's framework: with host blocks under a control chunk
-// the switch waits until a whole chunk has gathered, 128 - n rounded up to whole blocks; MEASUREMENTS.md 12)
-void Engine::runModule (Power& power, bool on, int n, const std::function<void (double*, double*, int)>& fn,
-                        const std::function<void()>& restart)
+// a module's power for this block: switching at the block's start, as the reference does (Cradle's framework: with
+// host blocks under a control chunk the switch waits until a whole chunk has gathered, 128 - n rounded up to whole
+// blocks; MEASUREMENTS.md 12), or crossfading (switchMs > 0); switched on, it restarts from silence
+void Engine::switchModule (Power& power, bool on, int n, const std::function<void()>& restart)
 {
     const auto& t = tuning();
     power.bit = &power == &drivePower ? 1 : &power == &harmPower ? 2 : &power == &compPower ? 4 : &power == &liftPower ? 8 : 16;
@@ -69,8 +68,12 @@ void Engine::runModule (Power& power, bool on, int n, const std::function<void (
         power.on = power.target;
         if (power.on && ((int) t.restartOnEnable & power.bit) != 0 && restart) restart();
     }
-    on = power.on;
-    if (first || t.switchMs <= 0) power.mix.jump (on ? 1.0 : 0.0); else power.mix.set (on ? 1.0 : 0.0);
+    if (first || t.switchMs <= 0) power.mix.jump (power.on ? 1.0 : 0.0); else power.mix.set (power.on ? 1.0 : 0.0);
+}
+
+// runs a module on the buffer, crossfading between its input and its output while its power changes
+void Engine::runModule (Power& power, int n, const std::function<void (double*, double*, int)>& fn)
+{
     if (! power.active()) return;
     if (! power.mix.moving() && power.mix.value >= 1.0)
     {
@@ -99,28 +102,32 @@ void Engine::process (float* l, float* r, int n, const Params& p, const float* k
     if (keyL != nullptr)
         for (int i = 0; i < n; ++i) { keyBufL[(size_t) i] = keyL[i]; keyBufR[(size_t) i] = keyR[i]; }
     for (int i = 0; i < n; ++i) { bufL[(size_t) i] = l[i]; bufR[(size_t) i] = r[i]; }
-    // the expander of the drive / harmonics / compression / lift group, at its input
-    if (p.driveOn || p.harmOn || p.compOn || p.liftOn || harmPower.active() || compPower.active() || drivePower.active() || liftPower.active())
+    switchModule (drivePower, p.driveOn, n, [this] { drive.reset(); });
+    harm.setMode (p.harmFreq);
+    switchModule (harmPower, p.harmOn, n, [this] { harm.reset(); });
+    switchModule (compPower, p.compOn, n, [this] { comp.reset(); });
+    switchModule (liftPower, p.liftOn, n, [this] { lift.reset(); });
+    switchModule (eqPower, p.eqOn, n, [this] { eq.reset(); });
+    // the expander of the drive / harmonics / compression / lift group, at its input, while one of them runs (not
+    // while one waits to be switched on: the reference's expander starts closed with the module)
+    if (harmPower.active() || compPower.active() || drivePower.active() || liftPower.active())
     {
         expander.gains (bufL.data(), bufR.data(), expGain.data(), n);
         for (int i = 0; i < n; ++i) { bufL[(size_t) i] *= expGain[(size_t) i]; bufR[(size_t) i] *= expGain[(size_t) i]; }
     }
     else expander.reset();
     const int colour = p.driveColor; const bool hiPass = p.hiPass;
-    runModule (drivePower, p.driveOn, n, [this, colour, hiPass] (double* a, double* b, int m) { drive.process (a, b, m, colour, hiPass); },
-               [this] { drive.reset(); });
-    harm.setMode (p.harmFreq);
-    runModule (harmPower, p.harmOn, n, [this] (double* a, double* b, int m) { harm.process (a, b, m, harmAmount); }, [this] { harm.reset(); });
+    runModule (drivePower, n, [this, colour, hiPass] (double* a, double* b, int m) { drive.process (a, b, m, colour, hiPass); });
+    runModule (harmPower, n, [this] (double* a, double* b, int m) { harm.process (a, b, m, harmAmount); });
     const int compMode = p.compMode;
     const bool ext = keyL != nullptr;
     compReduction = 0;
-    runModule (compPower, p.compOn, n, [this, compMode, ext] (double* a, double* b, int m)
-               { compReduction = comp.process (a, b, m, compMode, compAmount, ext ? keyBufL.data() : nullptr, ext ? keyBufR.data() : nullptr); },
-               [this] { comp.reset(); });
-    runModule (liftPower, p.liftOn, n, [this] (double* a, double* b, int m) { lift.process (a, b, m, liftAmount); }, [this] { lift.reset(); });
+    runModule (compPower, n, [this, compMode, ext] (double* a, double* b, int m)
+               { compReduction = comp.process (a, b, m, compMode, compAmount, ext ? keyBufL.data() : nullptr, ext ? keyBufR.data() : nullptr); });
+    runModule (liftPower, n, [this] (double* a, double* b, int m) { lift.process (a, b, m, liftAmount); });
     eq.setGains (p.eq, first);
     eq.beginBlock (n);
-    runModule (eqPower, p.eqOn, n, [this] (double* a, double* b, int m) { eq.process (a, b, m); }, [this] { eq.reset(); });
+    runModule (eqPower, n, [this] (double* a, double* b, int m) { eq.process (a, b, m); });
 
     // the parallels: each adds its weighted contribution, all listening to the chain's output
     for (int k = 0; k < 4; ++k)

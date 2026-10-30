@@ -64,19 +64,20 @@ colour a -29.7 (-21.8) / -28.3 (-20.5) dB (hi-pass on / off), colour b -32.1 (-2
 
 A parameter jumps at 1 s and back at 2 s on the drums at −12 dB, one module on (`python nulltest/autom_probe.py`):
 the null in the 0.15 s around each jump, at host blocks of 512 / 64 samples, before → since Cradle's control rate
-(chunked amount smoothing, switches at the block start, modules starting afresh; MEASUREMENTS.md 12). For comparison
-the same setting held still nulls at the "steady" value.
+(chunked amount smoothing, switches at the block start; MEASUREMENTS.md 12) and modules switched on starting from
+silence with the expander closed (2026-10-29; MEASUREMENTS.md 3, 12). For comparison the same setting held still
+nulls at the "steady" value.
 
 | Change | Around the jumps, block 512 (dB) | Block 64 (dB) | Steady |
 |---|---|---|---|
 | compression amount 0.2 ↔ 0.9 | -41.7 / -40.1 → -60.4 / -60.5 | -46.6 / -42.1 → -60.5 / -59.3 | -61.4 |
 | lift amount 0.2 ↔ 0.9 | -43.3 / -37.4 → -49.9 / -57.0 | -44.8 / -41.5 → -49.9 / -54.8 | -50.6 |
 | harmonics amount 0.2 ↔ 0.9 | -23.5 / -19.7 → -33.6 / -31.5 | -22.9 / -25.4 → -29.4 / -28.9 | -68.5 |
-| compression off / on | -28.6 / -22.2 → -70.4 / -29.4 | -28.5 / -28.7 → -70.0 / -28.0 | |
-| lift off / on | -28.7 / -19.8 → -59.8 / -27.3 | -29.3 / -26.0 → -59.8 / -24.2 | |
-| harmonics off / on | -22.8 / -27.4 → -78.4 / -28.5 | -25.5 / -29.3 → -78.2 / -23.5 | |
+| compression off / on | -28.6 / -22.2 → -70.4 / -41.9 | -28.5 / -28.7 → -70.0 / -41.4 | |
+| lift off / on | -28.7 / -19.8 → -59.8 / -40.9 | -29.3 / -26.0 → -59.8 / -39.6 | |
+| harmonics off / on | -22.8 / -27.4 → -78.4 / -40.0 | -25.5 / -29.3 → -78.2 / -40.8 | |
 | EQ off / on | -23.6 / -29.6 → -54.0 / -53.7 | -27.3 / -25.7 → -54.0 / -54.6 | |
-| drive off / on | -18.6 / -8.3 → -41.5 / -8.5 | -16.1 / -8.2 → -40.6 / -9.2 | |
+| drive off / on | -18.6 / -8.3 → -41.5 / -27.6 | -16.1 / -8.2 → -40.6 / -29.8 | |
 | EQ 1 kHz 0.6 ↔ 4.8 dB | -43.8 / -43.1 (unchanged) | -42.9 / -49.9 | -52.7 |
 
 ## What the numbers say

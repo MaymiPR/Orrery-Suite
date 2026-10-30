@@ -41,8 +41,8 @@ private:
         int bit = 0;                                       // its bit in Tuning::restartOnEnable
         bool active() const { return mix.value > 0.0 || mix.moving(); }
     };
-    void runModule (Power&, bool on, int n, const std::function<void (double*, double*, int)>& fn,
-                    const std::function<void()>& restart = {});
+    void switchModule (Power&, bool on, int n, const std::function<void()>& restart);
+    void runModule (Power&, int n, const std::function<void (double*, double*, int)>& fn);
 
     double fs = 48000.0;
     std::vector<double> bufL, bufR, wetL, wetR;

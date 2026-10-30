@@ -30,7 +30,7 @@ struct Tuning
     double amountRampMs = 10.0;            // harmonics, compression and lift amounts move linearly over this time
     // Cradle's control rate (Filters.h Ramp::setChunked; 0 = off): chunk (samples), the parameter's ramp (ms, read
     // per chunk), the glide to each reading (ms); and modules starting afresh when switched on
-    double ctlChunk = 128, paramRampMs = 5.0, glideMs = 5.0, chunkEq = 0, chunkPar = 0, restartOnEnable = 23;   // per module (bits: drive 1, harmonics 2, compression 4, lift 8, EQ 16): restart on enable, else pause while off
+    double ctlChunk = 128, paramRampMs = 5.0, glideMs = 5.0, chunkEq = 0, chunkPar = 0, restartOnEnable = 31;   // per module (bits: drive 1, harmonics 2, compression 4, lift 8, EQ 16): restart on enable (from silence), else pause while off
     // the rate converters' cutoffs (into and out of 48 kHz, shares of the lower rate's Nyquist), for hosts below and
     // above 48 kHz (fitted by nulls with every module off: 44.1 kHz -42 dB; above 48 kHz still to fit)
     double resampleCutoffIn = 1.0, resampleCutoffOut = 1.1, resampleCutoffInHigh = 1.228, resampleCutoffOutHigh = 0.834;   // (high: nulltest/fit_resample_high.py)
@@ -39,6 +39,7 @@ struct Tuning
 
     // the expander (Expander.h): threshold (dBFS peak), gain slope below it, hold window, release time constant
     double expThresholdDb = -58.098, expSlope = 2.028, expHoldMs = 1133.8, expReleaseMs = 207.8;   // (nulltest/fit_exp.py)
+    double expFloorDb = -44.49, expAttackMs = 1.0;     // its lowest gain, and how fast it opens (MEASUREMENTS.md 3)
 
     // compression (Compressor.h), [0] mode a, [1] mode b: threshold (dBFS of the detector's level), ratio, knee width
     // (dB), detector attack / release (ms), RMS share of the detector (0 = peak follower), gain smoothing (ms, 0 = none)
@@ -68,7 +69,7 @@ struct Tuning
                                                          { "resampleHalfInHigh", &resampleHalfInHigh }, { "resampleHalfOutHigh", &resampleHalfOutHigh }, { "resampleBetaHigh", &resampleBetaHigh }, { "eqHpAfter", &eqHpAfter },
                                                          { "parRampMs", &parRampMs }, { "subGain", &subGain }, { "subLowPassHz", &subLowPassHz },
                                                          { "subHighPassHz", &subHighPassHz }, { "expThresholdDb", &expThresholdDb },
-                                                         { "expSlope", &expSlope }, { "expHoldMs", &expHoldMs }, { "expReleaseMs", &expReleaseMs },
+                                                         { "expSlope", &expSlope }, { "expHoldMs", &expHoldMs }, { "expReleaseMs", &expReleaseMs }, { "expFloorDb", &expFloorDb }, { "expAttackMs", &expAttackMs },
                                                          { "loudAttackMs", &loudAttackMs }, { "loudReleaseMs", &loudReleaseMs }, { "loudRms", &loudRms },
                                                          { "lowDetHz", &lowDetHz }, { "lowDetOrder", &lowDetOrder }, { "lowHysteresis", &lowHysteresis },
                                                          { "lowAttackMs", &lowAttackMs }, { "lowReleaseMs", &lowReleaseMs }, { "lowGain", &lowGain },

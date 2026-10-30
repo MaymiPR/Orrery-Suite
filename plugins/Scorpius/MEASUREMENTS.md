@@ -81,8 +81,13 @@ four off there is none):
 - Static: a 1 kHz tone passes unchanged down to about **−56 dBFS peak**; below, the output falls **3 dB per dB**
   (−59 dBFS: −1.6 dB; −65: −13.8; −71: −26.0; −80: −44.4).
 - It reads the peak, not the RMS: white noise at −62 dBFS RMS (peaks −50) passes unchanged.
-- It opens at once (within one block) and **holds for about 1.2 s** after the level drops, then closes over about
-  0.6 s; the same from −20 or −40 dBFS.
+- It opens quickly and **holds for about 1.2 s** after the level drops, then closes over about 0.6 s; the same from
+  −20 or −40 dBFS.
+- **It closes no further than −44.5 dB** (−44.49 for any tone at −85 dBFS or below; measured 2026-10-29).
+- **Opening**, measured on drums starting after silence with only the compression on at amount 0 (its output is then
+  the expander's alone): the gain at the sound's n-th sample is 1 − 0.994 e^(−(n + 1) / 48), at −12 and −30
+  dB alike and at any time in the render, a fit exact to −141 dB: a one-pole on the linear gain with a 1 ms time
+  constant, from the −44.5 dB floor. Switched on, the modules' expander starts there too, closed as after silence.
 
 ## 4. Small-signal responses (`linear.py`)
 
@@ -226,16 +231,26 @@ MEASUREMENTS.md 5; both run on the same Cradle framework, reference/rea notes):
 - **A module's power switches** at the block's start, no crossfade (the 5 ms above was the module restarting). With
   blocks under 128 samples a change waits until a whole chunk has gathered: 128 − n, rounded up to whole blocks
   (+64 at 64, +96 at 32), as on The God Particle.
-- **Switched back on**, drive, harmonics, compression and the EQ start afresh (EQ on: −21 → −54 dB around the switch
-  that way); the lift carries on from where it paused (restarting it: −11 dB). The drive's capture settles for
-  ~100 ms after being switched on (its output unlike either steady state for the first ~10 ms): a neural capture
-  starting cold, which ours (a WaveNet) does not reproduce: −8 dB around the switch.
+- **Switched back on, every module starts as if from silence** (2026-10-29, `nulltest/switch_on.py`): its output
+  after the switch equals the module's output on the same input with silence before it, to −44 … −57 dB from the
+  first sample (harmonics, compression, lift) and −43 … −60 dB from 10 ms on (the drive, whose first milliseconds
+  differ), and not its output carrying on from where it stopped (−4 … −30 dB in the first 20 ms). The drive's ~100 ms of settling is just that, a neural model hearing sound after silence;
+  the EQ restarts too (−21 → −54 dB around the switch). Two things made ours differ: a learned model reset to all
+  zeros is not one that has heard silence (its layers' biases leave non-zero values in its history), so ours now
+  keeps the state after silence from when it is prepared and returns to it; and the expander in front starts closed
+  (section 3), also while a switch waits for its chunk with small blocks. With both, the lift restarts as well (it
+  had seemed to pause only because restarting from zeros was worse, −11 dB).
 - The EQ gains keep a plain 5 ms ramp (the chunked one nulls worse, −39 vs −44 dB); the parallels' levels are
   limited by the parallels themselves.
 - Our harmonics (models learned per amount, interpolated) had a model coming in start from silence when the amount
   crossed a node: now it first hears the input it missed, its whole memory (−23.5 → −33.6 dB around an amount jump).
   What is left there: the reference's own output swings well away from both steady states during the ramp
-  (−15 dB, while they differ by −36), and ours swings differently.
+  (−15 dB, while they differ by −36), and ours swings differently. Looked at closely (2026-10-29,
+  `nulltest/harm_ramp.py`): at every held amount 0.2 … 0.9 ours nulls at −65 … −71 dB, so the amounts themselves
+  are right; during and after the change the reference's output is not that of any held amount, and the difference
+  lies below 200 Hz and dies away over ~30 ms, after the ramp has ended. Not yet explained: restarting its model
+  from silence ~128 samples after the change fits the tail of a rise (−45 … −56 dB from 10 ms) but not of a fall
+  (−8 dB), and a high-pass after the amount (17 … 20 Hz, as the one after its boost) explains only 10 dB of it.
 
 ## 13. CPU
 

@@ -1,5 +1,16 @@
 # Changelog
 
+## Unreleased
+
+In **Scorpius**:
+
+- **Switching a module on now sounds like the original's:** the drive, harmonics, compression and lift start from
+  silence, as Orion's do (ours started from a state the models never saw in training, and the lift carried on from
+  where it stopped). Around the switch, against the original: drive −8 → −28 dB, the others −24 … −30 → −40 … −42 dB,
+  at every host block size.
+- **The low-level expander** in front of those modules opens over about 5 ms, as the original's does, instead of at
+  once, and never closes beyond −44.5 dB (it used to keep falling on very quiet input).
+
 ## 1.1.0
 
 **Scorpius**, the suite's second plug-in: a recreation of Cradle's Orion (v1.2.1), the drum-bus processor, null-tested

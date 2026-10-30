@@ -167,7 +167,17 @@ public:
         {
             convS.push_back (splat (w.convW[l])); resS.push_back (splat (w.resW[l])); skipS.push_back (splat (w.skipW[l]));
         }
-        reset();
+        // the state after silence, which reset() returns to: a network that has heard nothing holds its biases'
+        // response in every layer, not zeros, and the reference's models restart as if from silence
+        // (MEASUREMENTS.md 12; zeros are a state the network never saw in training)
+        std::fill (pre.begin(), pre.end(), 0.0f);
+        for (auto& r : hist) std::fill (r.begin(), r.end(), 0.0f);
+        post.reset();
+        prePos = 0;
+        std::vector<double> quiet ((size_t) maxBlock, 0.0), heard ((size_t) maxBlock);
+        for (int done = 0; done < memory(); done += maxBlock) block (quiet.data(), heard.data(), maxBlock, w.conds > 0 ? quiet.data() : nullptr);
+        savedPre = pre; savedHist = hist; savedPrePos = prePos;
+        post.save();
     }
     // how many past input samples the output depends on (the network has no other state)
     int memory() const
@@ -176,12 +186,13 @@ public:
         for (int d : weights->dilations) m += (weights->kernel - 1) * d;
         return m;
     }
+    // back to the state after silence (prepare)
     void reset()
     {
-        std::fill (pre.begin(), pre.end(), 0.0f);
-        for (auto& r : hist) std::fill (r.begin(), r.end(), 0.0f);
-        post.reset();
-        prePos = 0;
+        std::copy (savedPre.begin(), savedPre.end(), pre.begin());
+        for (size_t l = 0; l < hist.size(); ++l) std::copy (savedHist[l].begin(), savedHist[l].end(), hist[l].begin());
+        post.restore();
+        prePos = savedPrePos;
     }
     // in place allowed
     // cond: the control's value per sample, for a model with conds = 1
@@ -324,5 +335,8 @@ private:
     std::vector<float> pre, u, y, h, skip, z, g;
     std::vector<std::vector<float>> hist, convS, resS, skipS;
     int prePos = 0;
+    std::vector<float> savedPre;
+    std::vector<std::vector<float>> savedHist;
+    int savedPrePos = 0;
 };
 }

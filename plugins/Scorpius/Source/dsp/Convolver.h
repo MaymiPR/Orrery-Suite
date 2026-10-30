@@ -45,6 +45,16 @@ public:
         for (auto& s : inputSpectra) std::fill (s.begin(), s.end(), std::complex<float> {});
         pos = 0; newest = 0; hpos = 0;
     }
+    // keeps the current state (prepare time), and goes back to it without allocating (the audio thread)
+    void save() { saved = { hist, block, tail, inputSpectra, pos, newest, hpos }; }
+    void restore()
+    {
+        std::copy (saved.hist.begin(), saved.hist.end(), hist.begin());
+        std::copy (saved.block.begin(), saved.block.end(), block.begin());
+        std::copy (saved.tail.begin(), saved.tail.end(), tail.begin());
+        for (size_t p = 0; p < inputSpectra.size(); ++p) std::copy (saved.spectra[p].begin(), saved.spectra[p].end(), inputSpectra[p].begin());
+        pos = saved.pos; newest = saved.newest; hpos = saved.hpos;
+    }
     float process (float x)
     {
         // direct head
@@ -100,5 +110,11 @@ private:
     std::vector<std::complex<float>> acc;
     std::vector<std::vector<std::complex<float>>> spectra, inputSpectra;
     int parts = 0, pos = 0, newest = 0, hpos = 0;
+    struct State
+    {
+        std::vector<float> hist, block, tail;
+        std::vector<std::vector<std::complex<float>>> spectra;
+        int pos = 0, newest = 0, hpos = 0;
+    } saved;
 };
 }
