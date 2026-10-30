@@ -5,7 +5,7 @@
 using namespace juce;
 namespace theme = ap::theme;
 #ifndef SUITE_REPOSITORY
- #define SUITE_REPOSITORY "https://github.com/MaymiPR/OrrerySuite"
+ #define SUITE_REPOSITORY "https://github.com/MaymiPR/Orrery-Suite"
 #endif
 static const juce::String repository = SUITE_REPOSITORY;     // the Orrery Suite repository (CMakeLists.txt)
 

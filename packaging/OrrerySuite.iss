@@ -22,8 +22,8 @@
 AppName=Orrery Suite
 AppVersion={#AppVersion}
 AppPublisher=Orrery Suite
-AppPublisherURL=https://github.com/MaymiPR/OrrerySuite
-AppSupportURL=https://github.com/MaymiPR/OrrerySuite/issues
+AppPublisherURL=https://github.com/MaymiPR/Orrery-Suite
+AppSupportURL=https://github.com/MaymiPR/Orrery-Suite/issues
 DefaultDirName={#AppDir}
 DefaultGroupName=Orrery Suite
 DisableProgramGroupPage=yes

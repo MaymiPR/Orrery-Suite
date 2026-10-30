@@ -9,4 +9,4 @@ public issue. Include the file or steps that trigger it and the plug-in's versio
 Fixes go into the next release; only the latest release is supported.
 
 Release downloads are unsigned. Check them against the `SHA256SUMS.txt` that comes with each
-[release](https://github.com/MaymiPR/OrrerySuite/releases).
+[release](https://github.com/MaymiPR/Orrery-Suite/releases).

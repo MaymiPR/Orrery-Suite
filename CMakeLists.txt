@@ -43,7 +43,7 @@ endif()
 option(AP_TOOLS "Build the measurement tools" ON)
 
 set(SUITE_DEFS JUCE_WEB_BROWSER=0 JUCE_USE_CURL=0 JUCE_VST3_CAN_REPLACE_VST2=0)
-set(SUITE_REPOSITORY "https://github.com/MaymiPR/OrrerySuite")
+set(SUITE_REPOSITORY "https://github.com/MaymiPR/Orrery-Suite")
 enable_testing()
 
 # The plug-ins. Each is included (not added as a subdirectory), so its build output stays at

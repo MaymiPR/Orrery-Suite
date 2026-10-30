@@ -1,7 +1,7 @@
 # Working on Orrery Suite
 
 Bug reports and null-test findings are welcome as
-[issues](https://github.com/MaymiPR/OrrerySuite/issues/new/choose). This page is for changing the code: how it's
+[issues](https://github.com/MaymiPR/Orrery-Suite/issues/new/choose). This page is for changing the code: how it's
 built and tested, how a change is checked against the originals, and how a release is made.
 
 ## The one rule
