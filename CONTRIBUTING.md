@@ -59,7 +59,8 @@ Reference renders, measurement data and anything taken from the original plug-in
 ## Null tests
 
 Each plug-in's `nulltest/` folder renders the same signals through the original and through ours and reports the
-residual. It needs Windows, Python 3 with numpy and scipy, the original plug-in installed, and the tools built
+residual. It needs Windows, Python 3.12 or newer with the packages in `requirements.txt` (`requirements-train.txt`
+adds torch for the learned blocks), the original plug-in installed, and the tools built
 (`-DAP_TOOLS=ON`). The entry points are listed in each plug-in's README; the results are in its NULLTESTS.md.
 
 ## Versions

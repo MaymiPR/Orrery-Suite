@@ -56,8 +56,9 @@ Every case: [NULLTESTS.md](NULLTESTS.md).
 
 - `tests/ScorpiusTests.cpp`: unit tests of the DSP, the processor, the presets, A / B and the side-chain, plus a CPU
   bench (`ctest` after a build).
-- `nulltest/`: the null tests against an installed copy of the original (Windows, Python 3 with numpy and scipy; not
-  in CI). `nullchain.py` (the presets), `nullmod.py` (module by module) and `autom_probe.py` (automation) are the entry
+- `nulltest/`: the null tests against an installed copy of the original (Windows, Python 3.12 or newer with the root
+  `requirements.txt`; not in CI). `nullchain.py` (the presets), `nullmod.py` (module by module) and `autom_probe.py`
+  (automation) are the entry
   points; `orion.py` is the render harness; the trainers (`train_wn.py`, `train_gain.py`) need PyTorch. The other
   scripts are the measurements and fits that MEASUREMENTS.md cites. Reference renders, captures and measurement data
   stay local (git-ignored).

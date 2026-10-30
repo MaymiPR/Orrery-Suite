@@ -1,0 +1,4 @@
+# Training the learned blocks (plugins/Scorpius/nulltest/train_*.py, capture_nn.py). CPU torch from PyPI;
+# for CUDA follow https://pytorch.org/get-started/locally/ with the same version or newer.
+-r requirements.txt
+torch>=2.15.0

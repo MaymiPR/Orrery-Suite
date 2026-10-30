@@ -47,8 +47,9 @@ input: the main signal or the side-chain bus.
 
 - `tests/AntiparticleTests.cpp`: unit tests of the DSP and the processor, including filters, the FIR crossover, latency,
   bypass, limiter ceiling, state and extreme input (`ctest` after a build).
-- `nulltest/`: the null tests against an installed copy of the original (Windows, Python 3 with numpy and scipy; not in
-  CI). `nulltest.py` (the table in NULLTESTS.md), `stress.py` (163 cases) and `track.py` (a music file of your own) are
+- `nulltest/`: the null tests against an installed copy of the original (Windows, Python 3.12 or newer with the root
+  `requirements.txt`; not in CI). `nulltest.py` (the table in NULLTESTS.md), `stress.py` (163 cases) and `track.py`
+  (a music file of your own) are
   the entry points; `tgp.py` is the render harness. The other scripts are the measurements and fits that
   MEASUREMENTS.md cites. Reference renders and measurement data stay local (git-ignored).
 - `tools/`: ApRender (our processor offline, every DSP constant open to change), the editor snapshot, the band gain

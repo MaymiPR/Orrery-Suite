@@ -1,0 +1,8 @@
+# Python packages for the scripts (plugins/*/nulltest/, plugins/*/tools/). Not needed to build the plug-ins.
+# Python 3.12 or newer: numpy 2.5 and scipy 1.18 require it. Floors are the versions in use on 2026-10-30.
+#   pip install -r requirements.txt            (measurements, fits, null tests)
+#   pip install -r requirements-train.txt      (adds torch for the learned blocks)
+numpy>=2.5.4
+scipy>=1.18.1
+pillow>=13.0.0
+matplotlib>=3.11.2
