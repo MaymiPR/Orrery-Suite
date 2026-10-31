@@ -2,6 +2,7 @@
 #include <algorithm>
 #include <cmath>
 #include <vector>
+#include "Filters.h"
 
 // 2x / 4x / 8x oversampling with linear-phase FIR stages designed when prepared, as the reference's are: stage k runs
 // at 2^(k+1) times the host rate and is a Kaiser-windowed sinc cut at a quarter of that rate (so a half-band filter),
@@ -82,7 +83,7 @@ private:
         for (int i = 0; i < len; ++i)
         {
             const double v = ring[(size_t) k];
-            if (v != 0.0) acc += h[(size_t) i] * v;
+            if (! exactly (v, 0.0)) acc += h[(size_t) i] * v;
             k = k == 0 ? len - 1 : k - 1;
         }
         pos = pos + 1 == len ? 0 : pos + 1;

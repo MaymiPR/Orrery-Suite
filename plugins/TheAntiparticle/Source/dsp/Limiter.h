@@ -2,6 +2,7 @@
 #include <algorithm>
 #include <cmath>
 #include <vector>
+#include "Filters.h"
 #include "Tuning.h"
 
 // The master limiter (MEASUREMENTS.md 4), identified with probe signals (nulltest/lim_probe.py): a ceiling at 0 dBFS
@@ -119,7 +120,7 @@ public:
         const int out = wrap (pos - lookahead);
         const double now = level[(size_t) out];
         const double env = std::max (state, std::max (slow, now));
-        if (planLeft <= 0 && planSlope == 0.0) state = std::max (state, slow);        // idle: rest on the slow level
+        if (planLeft <= 0 && exactly (planSlope, 0.0)) state = std::max (state, slow);        // idle: rest on the slow level
         updatePlan (out);
         if (planLeft > 0)
         {

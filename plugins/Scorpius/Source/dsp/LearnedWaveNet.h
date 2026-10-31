@@ -455,7 +455,7 @@ struct WaveNetWeights
     bool bypass = false;                             // y = Post(u) + WaveNet(u) (the network beside the long filter)
     int conds = 0;                                   // a control's value as an extra input (0 or 1; train_wn.py COND)
     int kernel = 2;                                  // the dilated convolutions' kernel size (2 or 3; train_wn.py KERNEL)
-    std::vector<std::vector<float>> mixW;            // per layer 2C: the input mixed into it (train_wn.py MIXIN), or none
+    std::vector<std::vector<float>> mixW {};         // per layer 2C: the input mixed into it (train_wn.py MIXIN), or none
 };
 
 class LearnedWaveNet
