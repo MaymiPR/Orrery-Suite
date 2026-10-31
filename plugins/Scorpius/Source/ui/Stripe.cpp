@@ -717,18 +717,18 @@ void blurRgb (const std::vector<float>& src, std::vector<float>& dst, std::vecto
 // cyan-mint of its tips
 void Stripe::buildScorpion (float st, float t)
 {
-    strokes.clear(); dots.clear(); fills.clear();
+    strokes.clear(); glints.clear(); fills.clear();
     auto add = [this] (std::vector<Point<float>> pts, float w, float b, Part part, float tint)
     { strokes.push_back ({ std::move (pts), w, b, part, tint, {} }); };
     auto line = [] (Point<float> a, Point<float> b) { return std::vector<Point<float>> { a, b }; };
-    auto dot = [this] (Point<float> p, float r, float level, float tint) { dots.push_back ({ p, r, level, tint }); };
+    auto dot = [this] (Point<float> p, float r, float level, float tint) { glints.push_back ({ p, r, level, tint }); };
     auto fill = [this] (Point<float> p, float rx, float ry, float level) { fills.push_back ({ p, rx, ry, level }); };
     auto lerp = [] (float a, float b, float k) { return a + (b - a) * k; };
     auto dir = [] (float a) { return Point<float> { std::cos (a), std::sin (a) }; };
 
     for (int which = 0; which < 2; ++which)
     {
-        const size_t s0 = strokes.size(), d0 = dots.size(), f0 = fills.size();
+        const size_t s0 = strokes.size(), d0 = glints.size(), f0 = fills.size();
         const float t2 = t + 0.9f * (float) which;          // (the two out of step)
         // the body (mesosoma): seven plates along its back, each rising to a ridge, a soft belly, a dashed line along its side
         std::vector<Point<float>> back { { 45.0f, 21.2f } };
@@ -852,7 +852,7 @@ void Stripe::buildScorpion (float st, float t)
 
         // into the tube, this one's side of the middle
         for (size_t k = s0; k < strokes.size(); ++k) for (auto& p : strokes[k].pts) p = toDesign (p, which);
-        for (size_t k = d0; k < dots.size(); ++k) dots[k].p = toDesign (dots[k].p, which);
+        for (size_t k = d0; k < glints.size(); ++k) glints[k].p = toDesign (glints[k].p, which);
         for (size_t k = f0; k < fills.size(); ++k) fills[k].p = toDesign (fills[k].p, which);
         for (auto& p : spines[which]) p = toDesign (p, which);
         stingTips[which] = toDesign (stingTips[which], which);
@@ -1107,7 +1107,7 @@ void Stripe::renderScorpion (float s)
         const bool tip = k.part == Part::sting || k.part == Part::telson;
         strokeNeon (k, k.bright * lv * (tip ? 1.0f + 1.0f * flash + 1.2f * struck : 1.0f), s);
     }
-    for (auto& d : dots)
+    for (auto& d : glints)
     {
         const float rr = 0.45f * d.r * scorpionScale + 0.3f;
         const Rgb c { coreLight.r + (tipLight.r - coreLight.r) * d.tint, coreLight.g + (tipLight.g - coreLight.g) * d.tint, coreLight.b + (tipLight.b - coreLight.b) * d.tint };
@@ -1163,15 +1163,15 @@ void Stripe::renderScorpion (float s)
         }
     };
     const int hw = (rw + 1) / 2, hh = (bufH + 1) / 2;
-    half.assign ((size_t) (hw * hh * 3), 0.0f);
+    halfRes.assign ((size_t) (hw * hh * 3), 0.0f);
     for (int j = 0; j < bufH; ++j)
         for (int i = 0; i < rw; ++i)
-            for (int c = 0; c < 3; ++c) half[(size_t) (((j / 2) * hw + i / 2) * 3 + c)] += 0.25f * region[(size_t) ((j * rw + i) * 3 + c)];
+            for (int c = 0; c < 3; ++c) halfRes[(size_t) (((j / 2) * hw + i / 2) * 3 + c)] += 0.25f * region[(size_t) ((j * rw + i) * 3 + c)];
     // (the wide and the middle blur at half the resolution, added up there and brought back up once; the narrowest is
     // left to the lines' own soft edges)
-    blurRgb (half, blurred, blurTmp, hw, hh, 7.3f * s * 0.5f);
-    blurRgb (half, mid, blurTmp, hw, hh, 2.3f * s * 0.5f);
-    for (size_t k = 0; k < blurred.size(); ++k) blurred[k] = 0.5f * blurred[k] + 0.4f * mid[k];
+    blurRgb (halfRes, blurred, blurTmp, hw, hh, 7.3f * s * 0.5f);
+    blurRgb (halfRes, midBlur, blurTmp, hw, hh, 2.3f * s * 0.5f);
+    for (size_t k = 0; k < blurred.size(); ++k) blurred[k] = 0.5f * blurred[k] + 0.4f * midBlur[k];
     for (int j = 0; j < bufH; ++j)
     {
         const float fy = jlimit (0.0f, (float) (hh - 1), ((float) j + 0.5f) * 0.5f - 0.5f);

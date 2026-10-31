@@ -120,7 +120,7 @@ private:
     static constexpr int mapW = 290, mapH = 40;
     juce::Point<float> pointAlong (const Stroke&, float distance) const;
     std::vector<Stroke> strokes;
-    std::vector<Dot> dots;
+    std::vector<Dot> glints;
     std::vector<Fill> fills;
     std::vector<juce::Point<float>> spines[2];                               // the tails', from the body to the sting
     std::vector<Mote> motes;
@@ -133,7 +133,7 @@ private:
     float strike = 0.0f, struck = 0.0f, strikeFrom = 0.0f, flash = 0.0f, moteDue = 0.0f, bodyTime = 0.0f, presence = 0.0f;
     bool kicked = false, playing = true;
     // the scorpion's light before it blooms, and the blurs it blooms with
-    std::vector<float> layer, region, half, blurred, mid, blurTmp, nearest;
+    std::vector<float> layer, region, halfRes, blurred, midBlur, blurTmp, nearest;
 
     float* canvas = nullptr;
     juce::Random rng { 1234 };

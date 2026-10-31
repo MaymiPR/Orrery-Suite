@@ -474,7 +474,7 @@ public:
         jassert (w.kernel == 2 || w.kernel == 3);
         for (int d : w.dilations) hist.push_back (std::vector<float> ((size_t) C * (size_t) ((w.kernel - 1) * d + span), 0.0f));
         writeAt.assign (w.dilations.size(), 0);
-        u.assign ((size_t) maxBlock, 0.0f); y = u; v = u;
+        u.assign ((size_t) maxBlock, 0.0f); y = u; postIn = u;
         h.assign ((size_t) (C * maxBlock), 0.0f); skip = h; g = h;
         z.assign ((size_t) (2 * C * maxBlock), 0.0f);
         // the weights repeated four times (a register's worth), so a tile loads each instead of broadcasting it
@@ -535,7 +535,6 @@ private:
         const bool avx = wide == 1;
 #else
         constexpr int wide = 0;
-        constexpr bool avx = false;
 #endif
         // the tiles run past n to a multiple of their width (on stale, finite values; unused)
         const int n8 = wide == 3 ? (n + 31) & ~31 : wide > 0 ? (n + 15) & ~15 : (n + 7) & ~7;
@@ -674,7 +673,7 @@ private:
             const float a = w.outW[(size_t) c]; const float* sc = sk + c * N;
             for (int t = 0; t < n; ++t) yp[t] += a * std::max (0.0f, sc[t]);
         }
-        float* vp = v.data();
+        float* vp = postIn.data();
         if (w.bypass) std::copy (up, up + n, vp);
         else for (int t = 0; t < n; ++t) vp[t] = up[t] + yp[t];
         post.processBlock (vp, vp, n);
@@ -684,7 +683,7 @@ private:
 
     const WaveNetWeights* weights = nullptr;
     Convolver post;
-    std::vector<float> preLine, u, y, v, h, skip, z, g;
+    std::vector<float> preLine, u, y, postIn, h, skip, z, g;
     std::vector<std::vector<float>> hist, convS, resS, skipS;
     std::vector<float> savedPre;
     std::vector<std::vector<float>> savedHist;
