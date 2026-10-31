@@ -2,6 +2,7 @@
 #include <algorithm>
 #include <cmath>
 #include <complex>
+#include <cstddef>
 #include <vector>
 #include "BandFilters.h"
 #include "Filters.h"
@@ -136,21 +137,21 @@ public:
         for (int b = 0; b < kFilters; ++b)
         {
             const int nb = (int) ir[b].size();
-            specRe[b].assign ((size_t) parts * fftSize, 0.0);
-            specIm[b].assign ((size_t) parts * fftSize, 0.0);
+            specRe[b].assign ((size_t) (parts * fftSize), 0.0);
+            specIm[b].assign ((size_t) (parts * fftSize), 0.0);
             for (int p = 1; p < parts; ++p)
             {
-                double* re = specRe[b].data() + (size_t) p * fftSize; double* im = specIm[b].data() + (size_t) p * fftSize;
+                double* re = specRe[b].data() + (size_t) (p * fftSize); double* im = specIm[b].data() + (size_t) (p * fftSize);
                 for (int i = 0; i < block && p * block + i < nb; ++i) re[i] = ir[b][(size_t) (p * block + i)];
                 fftTables (re, im, false);
             }
         }
-        accRe.assign ((size_t) kFilters * fftSize, 0.0); accIm = accRe;
+        accRe.assign ((size_t) (kFilters * fftSize), 0.0); accIm = accRe;
         winRe.assign ((size_t) fftSize, 0.0); winIm = winRe;
         for (auto& c : ch)
         {
-            c.fdlRe.assign ((size_t) parts * fftSize, 0.0);
-            c.fdlIm.assign ((size_t) parts * fftSize, 0.0);
+            c.fdlRe.assign ((size_t) (parts * fftSize), 0.0);
+            c.fdlIm.assign ((size_t) (parts * fftSize), 0.0);
             c.lin.assign ((size_t) (2 * block), 0.0);
             for (auto& t : c.tail) t.assign ((size_t) block, 0.0);
         }
@@ -250,19 +251,19 @@ private:
         std::fill (wi, wi + fftSize, 0.0);
         fftTables (wr, wi, false);
         c.fdlHead = c.fdlHead == 0 ? parts - 1 : c.fdlHead - 1;
-        std::copy (wr, wr + fftSize, c.fdlRe.begin() + (size_t) c.fdlHead * fftSize);
-        std::copy (wi, wi + fftSize, c.fdlIm.begin() + (size_t) c.fdlHead * fftSize);
+        std::copy (wr, wr + fftSize, c.fdlRe.begin() + (std::ptrdiff_t) (c.fdlHead * fftSize));
+        std::copy (wi, wi + fftSize, c.fdlIm.begin() + (std::ptrdiff_t) (c.fdlHead * fftSize));
         std::copy (c.lin.begin() + block, c.lin.end(), c.lin.begin());
         // next block's tail: sum over p >= 1 of X[j + 1 - p] H[p], X[j] being the window just added (p = 1)
         for (int b = 0; b < kFilters; ++b)
         {
-            double* ar = accRe.data() + (size_t) b * fftSize; double* ai = accIm.data() + (size_t) b * fftSize;
+            double* ar = accRe.data() + (size_t) (b * fftSize); double* ai = accIm.data() + (size_t) (b * fftSize);
             std::fill (ar, ar + fftSize, 0.0); std::fill (ai, ai + fftSize, 0.0);
             for (int p = 1; p < parts; ++p)
             {
                 const int slot = (c.fdlHead + p - 1) % parts;
-                const double* xr = c.fdlRe.data() + (size_t) slot * fftSize; const double* xi = c.fdlIm.data() + (size_t) slot * fftSize;
-                const double* hr = specRe[b].data() + (size_t) p * fftSize; const double* hi = specIm[b].data() + (size_t) p * fftSize;
+                const double* xr = c.fdlRe.data() + (size_t) (slot * fftSize); const double* xi = c.fdlIm.data() + (size_t) (slot * fftSize);
+                const double* hr = specRe[b].data() + (size_t) (p * fftSize); const double* hi = specIm[b].data() + (size_t) (p * fftSize);
                 for (int i = 0; i < fftSize; ++i)
                 {
                     ar[i] += xr[i] * hr[i] - xi[i] * hi[i];
@@ -273,7 +274,7 @@ private:
         // two filters per inverse FFT: A + i B, whose inverse is a + i b (a and b real)
         for (int b = 0; b < kFilters; b += 2)
         {
-            const double* ar = accRe.data() + (size_t) b * fftSize; const double* ai = accIm.data() + (size_t) b * fftSize;
+            const double* ar = accRe.data() + (size_t) (b * fftSize); const double* ai = accIm.data() + (size_t) (b * fftSize);
             const double* br = ar + fftSize; const double* bi = ai + fftSize;
             for (int i = 0; i < fftSize; ++i) { wr[i] = ar[i] - bi[i]; wi[i] = ai[i] + br[i]; }
             fftTables (wr, wi, true);
