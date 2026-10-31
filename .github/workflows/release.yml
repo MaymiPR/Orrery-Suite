@@ -55,13 +55,21 @@ jobs:
           }
           if ($failed -ne 0) { exit 1 }
 
-      - name: Installer (Inno Setup, every plug-in)
+      - name: Installer (Inno Setup 7, every plug-in)
         shell: pwsh
         run: |
           $version = (Select-String -Path CMakeLists.txt -Pattern 'project\(OrrerySuite VERSION ([0-9.]+)\)').Matches[0].Groups[1].Value
           pwsh packaging/make_iss_include.ps1 build
-          $iscc = "${env:ProgramFiles(x86)}\Inno Setup 6\ISCC.exe"
-          if (-not (Test-Path $iscc)) { choco install innosetup -y --no-progress | Out-Null }
+          # Inno Setup 7.1.1 (the runner image ships 6.7.1 only): the signed x64 installer from the author's GitHub release,
+          # pinned by SHA-256 so a changed download fails the job instead of building with something else.
+          $innoUrl = "https://github.com/jrsoftware/issrc/releases/download/is-7_1_1/innosetup-7.1.1-x64.exe"
+          $innoSha = "8a5a6711c3766a6e5fb74f280ba0e3551e719ce94538d901fdbd1f8f9920b3f0"
+          Invoke-WebRequest $innoUrl -OutFile innosetup-7.1.1-x64.exe
+          $actual = (Get-FileHash innosetup-7.1.1-x64.exe -Algorithm SHA256).Hash.ToLower()
+          if ($actual -ne $innoSha) { throw "Inno Setup installer SHA-256 mismatch: $actual" }
+          Start-Process .\innosetup-7.1.1-x64.exe -ArgumentList "/VERYSILENT", "/SUPPRESSMSGBOXES", "/NORESTART", "/ALLUSERS" -Wait
+          $iscc = Get-ChildItem "${env:ProgramFiles}\Inno Setup 7\ISCC.exe", "${env:ProgramFiles(x86)}\Inno Setup 7\ISCC.exe" -ErrorAction SilentlyContinue | Select-Object -First 1 -ExpandProperty FullName
+          if (-not $iscc) { throw "Inno Setup 7 did not install" }
           & $iscc "/DAppVersion=$version" "packaging\OrrerySuite.iss"
           if ($LASTEXITCODE -ne 0) { exit 1 }
 
