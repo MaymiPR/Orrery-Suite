@@ -292,7 +292,7 @@ void Fades::show (Component& c, bool visible, bool animate)
 {
     const float target = visible ? 1.0f : 0.0f;
     auto it = std::find_if (fades.begin(), fades.end(), [&c] (const Fade& f) { return f.c == &c; });
-    if (it != fades.end() ? it->to == target : c.isVisible() == visible) return;        // already there or on its way
+    if (it != fades.end() ? exactlyEqual (it->to, target) : c.isVisible() == visible) return;        // already there or on its way
     const float now = c.isVisible() ? c.getAlpha() : 0.0f;                               // (a fade under way turns back)
     if (it != fades.end()) fades.erase (it);
     if (! animate)

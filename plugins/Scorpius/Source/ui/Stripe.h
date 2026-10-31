@@ -88,7 +88,7 @@ private:
     void splat (const Particle&, float level, float pxPerDesign);
     void splatStar (const Particle&, float level, float pxPerDesign);
     void heavenly (const Particle&, float level, float age, float pxPerDesign);
-    void splatLine (float x0, float y0, float x1, float y1, float width, float level, float r, float g, float b, float pxPerDesign);
+    void splatLine (float x0, float y0, float x1, float y1, float thickness, float level, float r, float g, float b, float pxPerDesign);
     void splatGlow (float x, float y, float rx, float ry, float level, float r, float g, float b, float pxPerDesign);
 
     // ours: the scorpion, as strokes of light (design coordinates), rebuilt each frame from its pose

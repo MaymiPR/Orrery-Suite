@@ -5,6 +5,18 @@
 // Small building blocks of the DSP: a biquad (transposed direct form II, double precision) and a linear ramp.
 namespace sc::dsp
 {
+inline constexpr double pi = 3.14159265358979323846;
+
+// a == b without the compiler's warning about comparing floating point exactly (where that is what is meant)
+#if defined (__clang__) || defined (__GNUC__)
+ #pragma GCC diagnostic push
+ #pragma GCC diagnostic ignored "-Wfloat-equal"
+#endif
+constexpr bool exactly (double a, double b) noexcept { return a == b; }
+#if defined (__clang__) || defined (__GNUC__)
+ #pragma GCC diagnostic pop
+#endif
+
 struct Biquad
 {
     double b0 = 1, b1 = 0, b2 = 0, a1 = 0, a2 = 0, z1 = 0, z2 = 0;
@@ -34,7 +46,7 @@ struct Ramp
     {
         if (chunk > 0)
         {
-            if (t != goal) { goal = t; pLeft = paramLen; pStep = (goal - pValue) / paramLen; }
+            if (! exactly (t, goal)) { goal = t; pLeft = paramLen; pStep = (goal - pValue) / paramLen; }
             return;
         }
         glideTo (t);
@@ -57,7 +69,7 @@ struct Ramp
 private:
     void glideTo (double t)
     {
-        if (t == target) return;
+        if (exactly (t, target)) return;
         target = t; left = length; step = (target - value) / length;
     }
     int chunk = 0, paramLen = 1, pos = 0, blockLen = 0, pLeft = 0;

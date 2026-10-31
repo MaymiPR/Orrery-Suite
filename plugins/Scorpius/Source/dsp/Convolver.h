@@ -77,7 +77,7 @@ public:
 
     void prepare (const std::vector<float>& taps)
     {
-        head.assign (taps.begin(), taps.begin() + std::min<size_t> ((size_t) B, taps.size()));
+        head.assign (taps.begin(), taps.begin() + (std::ptrdiff_t) std::min<size_t> ((size_t) B, taps.size()));
         head.resize ((size_t) B, 0.0f);
         const int rest = (int) taps.size() - B;
         parts = std::max (0, (rest + B - 1) / B);

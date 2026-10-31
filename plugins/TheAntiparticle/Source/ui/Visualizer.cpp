@@ -432,7 +432,7 @@ void Visualizer::paintAntiparticle (Graphics& g)
             const float w = q == 0 ? pr.omega : -pr.omega;
             const C k (-1.0f / pr.tau, w);
             const C start = std::polar (pr.speed, pr.dir + (q == 0 ? 0.25f : -0.25f));
-            auto pos = [&] (float s) { const C z = z0 + start * (std::exp (k * s) - C (1.0f, 0.0f)) / k; return Point<float> (z.real(), z.imag()); };
+            auto pos = [&] (float u) { const C z = z0 + start * (std::exp (k * u) - C (1.0f, 0.0f)) / k; return Point<float> (z.real(), z.imag()); };
             const auto col = q == 0 ? matter : antimatter;
             const float fade = level * jlimit (0.0f, 1.0f, (pr.life - age) / 0.4f);
             // the track: the last 0.7 s of the path, fading towards its old end

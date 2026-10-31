@@ -2,6 +2,7 @@
 #include <algorithm>
 #include <cmath>
 #include <vector>
+#include "Filters.h"
 
 // Streaming sample-rate conversion by a fixed ratio (Kaiser-windowed sinc, a table of phases interpolated linearly),
 // for running the DSP at 48 kHz whatever the host's rate, as the reference does (MEASUREMENTS.md 2: its own
@@ -22,8 +23,7 @@ public:
         half = std::max (2, halfLength);
         step = inRate / outRate;
         const double fc = cutoff * std::min (1.0, outRate / inRate);       // in input-rate Nyquist units
-        table.assign ((size_t) (phases + 1) * 2 * half, 0.0);
-        const double pi = 3.14159265358979323846;
+        table.assign ((size_t) ((phases + 1) * 2 * half), 0.0);
         auto bessel0 = [] (double x) { double s = 1, t = 1; for (int k = 1; k < 30; ++k) { t *= (x / (2 * k)) * (x / (2 * k)); s += t; } return s; };
         for (int p = 0; p <= phases; ++p)
         {
@@ -35,10 +35,10 @@ public:
                 const double sinc = std::abs (d) < 1e-12 ? 1.0 : std::sin (x) / x;
                 const double r = d / half;
                 const double win = std::abs (r) >= 1 ? 0.0 : bessel0 (beta * std::sqrt (1 - r * r)) / bessel0 (beta);
-                table[(size_t) p * 2 * half + (size_t) k] = fc * sinc * win;
+                table[(size_t) (p * 2 * half + k)] = fc * sinc * win;
             }
         }
-        history.assign ((size_t) 4 * half, 0.0);
+        history.assign ((size_t) (4 * half), 0.0);
         reset();
     }
     // a rational ratio, the lower rate's samples p / q of the higher rate's apart (96 kHz: 2 / 1, 88.2 kHz: 147 / 80),
@@ -77,12 +77,12 @@ public:
             {
                 const int p = std::min (phases - 1, (int) (pos * phases));
                 const double u = pos * phases - p;
-                const double* a = table.data() + (size_t) p * h;
+                const double* a = table.data() + (size_t) (p * h);
                 const double* b = a + h;
                 const double* x = history.data() + (size_t) (filled % h);  // oldest .. newest
-                double acc = 0;
-                for (int k = 0; k < h; ++k) acc += x[h - 1 - k] * (a[k] + u * (b[k] - a[k]));
-                out.push_back ((float) acc);
+                double sum = 0;
+                for (int k = 0; k < h; ++k) sum += x[h - 1 - k] * (a[k] + u * (b[k] - a[k]));
+                out.push_back ((float) sum);
                 pos += step;
             }
             pos -= 1.0;

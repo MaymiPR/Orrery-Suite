@@ -12,8 +12,6 @@
 // becomes the filter's gain through the measured law (+7.12 dB at 6), scaled per band.
 namespace sc::dsp
 {
-inline constexpr double pi = 3.14159265358979323846;
-
 class HarmonicEq
 {
 public:
@@ -113,11 +111,11 @@ private:
         const double A = std::pow (10.0, gain[b].value / 40.0), w = 2 * pi * t.eqHz[b] / fs;
         const double al = std::sin (w) / (2 * t.eqQ[b]), c = std::cos (w);
         double b0, b1, b2, a0, a1, a2;
-        if (t.eqKind[b] == 0)
+        if (exactly (t.eqKind[b], 0))
         {
             b0 = 1 + al * A; b1 = -2 * c; b2 = 1 - al * A; a0 = 1 + al / A; a1 = -2 * c; a2 = 1 - al / A;
         }
-        else if (t.eqKind[b] == 1)
+        else if (exactly (t.eqKind[b], 1))
         {
             const double s = 2 * std::sqrt (A) * al;
             b0 = A * ((A + 1) + (A - 1) * c + s); b1 = -2 * A * ((A - 1) + (A + 1) * c); b2 = A * ((A + 1) + (A - 1) * c - s);

@@ -237,7 +237,7 @@ std::pair<double, int> ScorpiusProcessor::referenceDelay (double fs)
     if (std::abs (fs - 48000.0) < 0.5) return { 0.0, 0 };
     // (48 kHz itself has none: interpolate between its neighbours that convert)
     std::vector<std::pair<double, std::pair<double, double>>> pts;
-    for (int i = 0; i < 7; ++i) if (rate[i] != 48000) pts.push_back ({ rate[i], { delay[i], shown[i] } });
+    for (int i = 0; i < 7; ++i) if (! juce::exactlyEqual (rate[i], 48000.0)) pts.push_back ({ rate[i], { delay[i], shown[i] } });
     if (fs <= pts.front().first) return { pts.front().second.first * fs / pts.front().first, (int) std::lround (pts.front().second.second * fs / pts.front().first) };
     for (size_t i = 1; i < pts.size(); ++i)
         if (fs <= pts[i].first)

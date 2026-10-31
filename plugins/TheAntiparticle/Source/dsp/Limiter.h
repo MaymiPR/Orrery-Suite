@@ -58,9 +58,9 @@ public:
                 const double cx = t.limCut * x;
                 const double sinc = std::abs (cx) < 1e-12 ? 1.0 : std::sin (kPiL * cx) / (kPiL * cx);
                 const double r = x / (nTaps / 2.0);
-                const double w = t.limGauss > 0 ? std::exp (-0.5 * x * x / (t.limGauss * t.limGauss))
-                                                : std::abs (r) >= 1 ? 0.0 : besselI0 (beta * std::sqrt (1 - r * r)) / besselI0 (beta);
-                interp[ph][i] = sinc * w; sum += interp[ph][i];
+                const double win = t.limGauss > 0 ? std::exp (-0.5 * x * x / (t.limGauss * t.limGauss))
+                                                  : std::abs (r) >= 1 ? 0.0 : besselI0 (beta * std::sqrt (1 - r * r)) / besselI0 (beta);
+                interp[ph][i] = sinc * win; sum += interp[ph][i];
             }
             for (int i = 0; i < nTaps; ++i) interp[ph][i] *= t.limLevelScale / sum;
         }

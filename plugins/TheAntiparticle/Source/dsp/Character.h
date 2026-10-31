@@ -40,7 +40,7 @@ public:
     // amount 0 .. 1 (= 0 .. 200 %); interpolates the tabled band settings
     void setAmount (double amount)
     {
-        if (amount == lastAmount) return;
+        if (exactly (amount, lastAmount)) return;
         lastAmount = amount;
         atZero = amount <= 0.0 && tune->charZeroRest > 0.5;
         const double x = std::clamp (amount, 0.0, 1.0) * (kAmountNodes - 1);

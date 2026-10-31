@@ -35,7 +35,7 @@ inline std::vector<double> designOsStage (int k, double fs)
     for (int n = 0; n <= order; ++n)
     {
         const double t = n - order / 2, r = 2.0 * n / order - 1.0;
-        const double sinc = t == 0 ? 0.5 : std::sin (0.5 * 3.14159265358979323846 * t) / (3.14159265358979323846 * t);
+        const double sinc = n == order / 2 ? 0.5 : std::sin (0.5 * 3.14159265358979323846 * t) / (3.14159265358979323846 * t);
         h[(size_t) n] = sinc * i0 (beta * std::sqrt (std::max (0.0, 1.0 - r * r))) / i0 (beta);
         sum += h[(size_t) n];
     }

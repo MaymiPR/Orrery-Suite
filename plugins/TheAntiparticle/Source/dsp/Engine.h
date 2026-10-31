@@ -50,7 +50,7 @@ private:
         double value = 0, target = 0, step = 0, left = 0, length = 1;
         void setLength (double n) { length = std::max (1.0, n); }
         void jump (double v) { value = target = v; left = 0; }
-        void set (double v) { if (v != target) { target = v; step = (target - value) / length; left = length; } }
+        void set (double v) { if (! exactly (v, target)) { target = v; step = (target - value) / length; left = length; } }
         inline double next() { return advance (1); }
         double advance (int k)              // k samples at once
         {

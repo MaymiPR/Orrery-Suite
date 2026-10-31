@@ -36,7 +36,6 @@ public:
 
 private:
     const knobmodel::Model& model;
-    Kind kind;
     juce::Image body;            // cached at the current physical pixel size
     int bodyPx = 0;
     double defaultValue = 0.0;

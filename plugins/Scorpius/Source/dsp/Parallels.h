@@ -22,7 +22,6 @@ namespace sc::dsp
 inline std::vector<Biquad> butterworth (int order, double fc, double fs, bool highPass)
 {
     std::vector<Biquad> out;
-    const double pi = 3.14159265358979323846;
     for (int k = 0; k < order / 2; ++k)
     {
         const double q = 1.0 / (2.0 * std::sin ((2 * k + 1) * pi / (2.0 * order)));
@@ -110,7 +109,7 @@ public:
                 // the flip-flop: silent until the first falling zero crossing, then flipping at each one (it keeps its
                 // state through silence); the reference's first state is the negative one
                 if (d > h) armed[c] = true;
-                if (armed[c] && d < -h) { state[c] = state[c] == 0 ? -1.0 : -state[c]; armed[c] = false; }
+                if (armed[c] && d < -h) { state[c] = exactly (state[c], 0) ? -1.0 : -state[c]; armed[c] = false; }
                 const double a = std::abs (d);
                 env[c] = a > env[c] ? a + (env[c] - a) * ka : a + (env[c] - a) * kr;
                 double s = t.lowGain * state[c] * env[c];

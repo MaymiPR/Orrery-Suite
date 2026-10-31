@@ -35,8 +35,8 @@ public:
             std::vector<float> ih ((size_t) (4 * H * in)), hh ((size_t) (4 * H * H)), b ((size_t) (4 * H));
             for (int r = 0; r < 4 * H; ++r)
             {
-                for (int c = 0; c < in; ++c) ih[(size_t) (c * 4 * H + r)] = w.wih[(size_t) l][(size_t) (r * in + c)];
-                for (int c = 0; c < H; ++c) hh[(size_t) (c * 4 * H + r)] = w.whh[(size_t) l][(size_t) (r * H + c)];
+                for (int k = 0; k < in; ++k) ih[(size_t) (k * 4 * H + r)] = w.wih[(size_t) l][(size_t) (r * in + k)];
+                for (int k = 0; k < H; ++k) hh[(size_t) (k * 4 * H + r)] = w.whh[(size_t) l][(size_t) (r * H + k)];
                 b[(size_t) r] = w.bih[(size_t) l][(size_t) r] + w.bhh[(size_t) l][(size_t) r];
             }
             colIh.push_back (ih); colHh.push_back (hh); bias.push_back (b);

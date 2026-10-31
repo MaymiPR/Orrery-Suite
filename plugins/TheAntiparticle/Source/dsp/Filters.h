@@ -8,6 +8,16 @@ namespace ap::dsp
 {
 inline constexpr double kPi = 3.14159265358979323846;
 
+// a == b without the compiler's warning about comparing floating point exactly (where that is what is meant)
+#if defined (__clang__) || defined (__GNUC__)
+ #pragma GCC diagnostic push
+ #pragma GCC diagnostic ignored "-Wfloat-equal"
+#endif
+constexpr bool exactly (double a, double b) noexcept { return a == b; }
+#if defined (__clang__) || defined (__GNUC__)
+ #pragma GCC diagnostic pop
+#endif
+
 struct Biquad
 {
     double b0 = 1, b1 = 0, b2 = 0, a1 = 0, a2 = 0;
@@ -48,7 +58,7 @@ struct Biquad
     {
         b0 = nb0 / a0; b1 = nb1 / a0; b2 = nb2 / a0; a1 = na1 / a0; a2 = na2 / a0;
     }
-    bool isIdentity() const { return b0 == 1 && b1 == 0 && b2 == 0 && a1 == 0 && a2 == 0; }
+    bool isIdentity() const { return exactly (b0, 1) && exactly (b1, 0) && exactly (b2, 0) && exactly (a1, 0) && exactly (a2, 0); }
 
     enum class Type { lowShelf, peak, highShelf, lowPass, highPass, allPass };
     void design (Type t, double f0, double q, double gainDb, double fs)

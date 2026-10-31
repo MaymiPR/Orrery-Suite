@@ -36,7 +36,6 @@ constexpr float lanes[] { 289.1f, 291.6f, 294.25f, 302.5f };   // the rows the b
 // and across it in bins of 2 design px from y 272.5
 constexpr float alongBins[48] { 0, 0.5f, 1.6f, 4.1f, 7.7f, 10.5f, 13.7f, 18, 22.9f, 29.1f, 36, 37, 39, 42, 43, 40, 42, 42, 47, 48, 50, 45, 49, 47,
                                 55, 55, 45, 52, 46, 43, 47, 44, 42, 47, 43, 38, 38, 35, 29.1f, 22.9f, 17.2f, 12.9f, 10.5f, 7, 3.5f, 1, 0, 0 };
-constexpr float acrossBins[17] { 31, 16, 21, 23, 28, 31, 47, 103, 240, 241, 209, 161, 124, 100, 88, 45, 15 };
 // the same for the dots and blobs alone (the band's dashes are added on top of them)
 constexpr float dotBins[17] { 3, 4, 6, 8, 11, 15, 28, 55, 90, 90, 85, 140, 150, 120, 80, 25, 5 };   // (more below: UI round 8)
 
@@ -481,7 +480,7 @@ void Stripe::splatStar (const Particle& p, float level, float s)
 
 void Stripe::render (int w, int h, float s)
 {
-    if (w != bufW || h != bufH || s != glowScale)
+    if (w != bufW || h != bufH || ! exactlyEqual (s, glowScale))
     {
         bufW = w; bufH = h;
         renderGlow (w, h, s);
@@ -531,7 +530,7 @@ void Stripe::render (int w, int h, float s)
             const float x = ((float) i + 0.5f) / s, mx = jlimit (0.0f, 1.0f, jmin (x, width - x) / 40.0f), m = my * mx * mx;
             if (m >= 1.0f) continue;
             const size_t k = (size_t) ((j * w + i) * 3);
-            for (int c = 0; c < 3; ++c) light[k + c] = glow[k + c] * envelope + (light[k + c] - glow[k + c] * envelope) * m;
+            for (size_t c = 0; c < 3; ++c) light[k + c] = glow[k + c] * envelope + (light[k + c] - glow[k + c] * envelope) * m;
         }
     }
     // (the reference's) the band reflected in the glass's lower rim: a line of light under it, following the light of
@@ -618,15 +617,6 @@ void Stripe::addReflections (int w, int h, float s)
         addAt (282.25f, 0.5f, x, topLevel, 1.0f, 0.85f, 1.0f);
         addAt (304.0f, 0.5f, x, lowLevel, 1.0f, 0.93f, 0.98f);
     }
-    // (the end caps' three short violet lines: the black holes are there now)
-    if (false)
-    for (float y : { 289.0f, 291.0f, 293.0f })
-        for (float d = 0.0f; d < 8.0f; d += 0.5f / s)
-        {
-            const float level = (y == 291.0f ? 50.0f : 33.0f) * std::exp (-d / 2.5f) * e;
-            addAt (y, 0.25f, 10.5f + d, level, 0.71f, 0.63f, 1.0f);
-            addAt (y, 0.25f, 877.5f - d, level, 0.71f, 0.63f, 1.0f);
-        }
 }
 
 //==============================================================================
@@ -1193,13 +1183,13 @@ void Stripe::renderScorpion (float s)
 }
 
 // a soft line of light (a streak), brighter at its head (x1, y1)
-void Stripe::splatLine (float x0, float y0, float x1, float y1, float width, float level, float r, float g, float b, float s)
+void Stripe::splatLine (float x0, float y0, float x1, float y1, float thickness, float level, float r, float g, float b, float s)
 {
     // (long streaks keep only their last 70 px)
     const float len = std::hypot (x1 - x0, y1 - y0);
     if (len > 70.0f) { const float k = 70.0f / len; x0 = x1 + (x0 - x1) * k; y0 = y1 + (y0 - y1) * k; }
     const float ax = (x0 - left) * s, ay = (y0 - top) * s, bx = (x1 - left) * s, by = (y1 - top) * s;
-    const float hw = jmax (0.3f, width * 0.5f * s), edge = jmax (0.4f, 0.3f * s), reach = hw + 3.0f * edge;
+    const float hw = jmax (0.3f, thickness * 0.5f * s), edge = jmax (0.4f, 0.3f * s), reach = hw + 3.0f * edge;
     const int i0 = jmax (0, (int) std::floor (jmin (ax, bx) - reach)), i1 = jmin (bufW - 1, (int) std::ceil (jmax (ax, bx) + reach));
     const int j0 = jmax (0, (int) std::floor (jmin (ay, by) - reach)), j1 = jmin (bufH - 1, (int) std::ceil (jmax (ay, by) + reach));
     if (i0 > i1 || j0 > j1) return;
@@ -1248,7 +1238,7 @@ void Stripe::paint (Graphics& g)
     const int w = jmax (1, roundToInt (width * s)), h = jmax (1, roundToInt (height * s));
     // (dark: only what is under it; ours: the scorpion stays faintly lit while the animation is on)
     const bool dark = envelope <= 0.0f && ! (style == Style::scorpius && animated);      // (their glow fading included)
-    if (dark && background.isValid() && w == bufW && h == bufH && s == glowScale)
+    if (dark && background.isValid() && w == bufW && h == bufH && exactlyEqual (s, glowScale))
         g.drawImage (background, Rectangle<float> (0.0f, 0.0f, width, height));
     else
     {

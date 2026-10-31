@@ -10,7 +10,7 @@ static const knobmodel::Model& modelFor (MetalKnob::Kind k)
     return k == MetalKnob::Kind::small ? knobmodel::small : k == MetalKnob::Kind::large ? knobmodel::large : knobmodel::plate;
 }
 
-MetalKnob::MetalKnob (Kind k) : model (modelFor (k)), kind (k)
+MetalKnob::MetalKnob (Kind k) : model (modelFor (k))
 {
     setSliderStyle (RotaryVerticalDrag);
     setTextBoxStyle (NoTextBox, false, 0, 0);
