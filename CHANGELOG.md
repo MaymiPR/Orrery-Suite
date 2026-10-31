@@ -2,12 +2,25 @@
 
 ## Unreleased
 
+In both: **much lighter on the CPU, with the same sound.** Scorpius takes about a third of the processor time it did
+(its default settings: ~21 % of one core → ~7 % on a Ryzen 9800X3D), The Antiparticle about a third too (~9.5 % → ~3 %):
+the learned models' arithmetic uses AVX2 and AVX-512 where the processor has them, and the filters and the limiter
+work through blocks of samples instead of one at a time. The output differs from before by less than -130 dB.
+
 In **Scorpius**:
 
 - **Switching a module on now sounds like the original's:** the drive, harmonics, compression and lift start from
   silence, as Orion's do (ours started from a state the models never saw in training, and the lift carried on from
   where it stopped). Around the switch, against the original: drive −8 → −28 dB, the others −24 … −30 → −40 … −42 dB,
   at every host block size.
+- **A new "Scorpius" particle style** (ours, the default): two scorpions drawn in glowing green lines, back to back in
+  the middle of the stripe. They shed green motes that stream out into black holes past the ends, as the Orion style's
+  particles do; their tails strike on every kick and 808, back to back too (snares and hats leave them still). With no
+  sound they stay faintly lit. It
+  replaces the venom style. In both styles the streams now pinch into a line close to the ends.
+- **The stripe's light no longer flickers with sparse, decaying loops** (FL Studio's DL Clubbed at 60 BPM, say): a
+  moment of silence between hits used to drop it; it now stays lit through them and fades after the music stops, as
+  the original's does.
 - **The low-level expander** in front of those modules opens over about 5 ms, as the original's does, instead of at
   once, and never closes beyond −44.5 dB (it used to keep falling on very quiet input).
 

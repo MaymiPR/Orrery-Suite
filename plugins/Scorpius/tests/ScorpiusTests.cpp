@@ -1,6 +1,9 @@
 // Unit tests for Scorpius: parameters, presets, the A / B compare, state, the pass-through of Phase 2 and the
 // side-chain switch. Run:
-// ScorpiusTests (exit code 0 = all passed);  ScorpiusTests bench: the learned models' CPU, part by part.
+// ScorpiusTests (exit code 0 = all passed);  ScorpiusTests bench: the learned models' CPU, part by part;
+// ScorpiusTests benchplugin / benchmodules: the whole plug-in's share of a core (and with each module off);
+// ScorpiusTests benchkernel: the models' matrix kernel alone;  ScorpiusTests render out.f32 [id=value ...]: drums
+// through the plug-in, to compare builds sample for sample.
 #include <cmath>
 #include <cstdio>
 #include "PluginProcessor.h"
@@ -266,6 +269,58 @@ static void testLight()
     play (0.5, [] (double) { return Decibels::decibelsToGain (-20.0f); });
     play (0.2, [] (double) { return 0.0f; });
     CHECK_NEAR (light.levelDb(), -20.0 - 50.0 * 0.2, 1.0);
+    // a hit decaying to silence for 40 ms before the next (FL Studio's DL Clubbed loop at 60 BPM): the light does not
+    // drop at the gap, it carries on falling from the hit (the reference stays fully lit)
+    start = -1.0;
+    play (0.46, [&] (double t) { if (start < 0) start = t; return Decibels::decibelsToGain ((float) (-2.0 - 60.0 * (t - start))); });
+    play (0.04, [] (double) { return 0.0f; });
+    CHECK (light.levelDb() > -40.0f);
+}
+
+// The kicks the scorpions strike on (dsp/Kick.h): every one of fast kicks and of back-to-back 808s counts, a held 808
+// counts once, hats and snares never
+static void testKick()
+{
+    const double fs = 48000.0;
+    auto count = [fs] (double seconds, std::function<double (double)> wave)
+    {
+        sc::Kick kick;
+        kick.prepare (fs);
+        AudioBuffer<float> b (2, 256);
+        double t = 0.0;
+        for (int k = 0; k < (int) (seconds * fs / 256.0); ++k)
+        {
+            for (int i = 0; i < 256; ++i, t += 1.0 / fs) { const auto v = (float) wave (t); b.setSample (0, i, v); b.setSample (1, i, v); }
+            kick.process (b);
+        }
+        return kick.kickCount();
+    };
+    auto kickAt = [] (double u) { return u < 0.0 ? 0.0 : 0.8 * std::sin (MathConstants<double>::twoPi * (50.0 * u + 70.0 / 18.0 * (1.0 - std::exp (-18.0 * u)))) * std::exp (-u * 7.0); };
+    auto eightOhEight = [] (double u, double decay) { return u < 0.0 ? 0.0 : 0.7 * std::sin (MathConstants<double>::twoPi * (45.0 * u + 30.0 / 25.0 * (1.0 - std::exp (-25.0 * u)))) * std::exp (-u / decay); };
+    // sixteenth-note kicks at 140 BPM (0.107 s apart), 24 of them, each ringing into the next
+    CHECK (count (24 * 0.107 + 0.3, [&] (double t) { const int k = jmin (23, (int) (t / 0.107)); return kickAt (t - k * 0.107); }) == 24);
+    // the same 12 dB quieter
+    CHECK (count (24 * 0.107 + 0.3, [&] (double t) { const int k = jmin (23, (int) (t / 0.107)); return 0.25 * kickAt (t - k * 0.107); }) == 24);
+    // 808s every 0.25 s, each cut by the next (a mono 808), ringing 0.4 s: 16 of them
+    CHECK (count (16 * 0.25 + 0.3, [&] (double t) { const int k = jmin (15, (int) (t / 0.25)); return eightOhEight (t - k * 0.25, 0.4); }) == 16);
+    // kicks and 808s together, every 0.25 s, the 808 starting an eighth after each kick
+    CHECK (count (8 * 0.5 + 0.3, [&] (double t)
+    {
+        const int k = jmin (7, (int) (t / 0.5)), e = jmin (7, (int) ((t - 0.125) / 0.5));
+        return kickAt (t - k * 0.5) + (t >= 0.125 ? eightOhEight (t - 0.125 - e * 0.5, 0.3) : 0.0);
+    }) == 16);
+    // one long 808 held for 3 s: once
+    CHECK (count (3.0, [&] (double t) { return eightOhEight (t, 20.0); }) == 1);
+    // hats and snares only (noise above 1 kHz and a 190 Hz drum): never
+    Random r (5);
+    CHECK (count (2.0, [&] (double t)
+    {
+        static double hp = 0.0, last = 0.0;
+        const double n = r.nextDouble() * 2.0 - 1.0, hat = n - last;
+        last = n; hp = hat;
+        const double u = std::fmod (t, 0.125), v = std::fmod (t, 0.5);
+        return 0.4 * hp * std::exp (-u * 60.0) + 0.5 * std::sin (MathConstants<double>::twoPi * 190.0 * v) * std::exp (-v * 20.0);
+    }) == 0);
 }
 
 // the long-filter convolver (no latency) against plain convolution
@@ -372,6 +427,7 @@ static void testEngine()
 static void bench()
 {
     using namespace sc::dsp;
+    ScopedNoDenormals noDenormals;              // (as the processor runs: denormals flushed to zero)
     const int n = 60 * 48000, B = 512;
     std::vector<double> x ((size_t) n);
     Random rng (1);
@@ -447,9 +503,153 @@ static void testValueEntry()
     CHECK_NEAR (real (p, sc::id::eq100), knob.getMaximum(), 1e-6);
 }
 
+// the whole plug-in's CPU as a host drives it: its default settings, drum-like noise bursts, 20 s of stereo audio at
+// 48 and 44.1 kHz, in 512-sample blocks and in irregular blocks of 1 ... 512 (as FL Studio delivers them); prints the
+// share of one core it takes
+static void benchPlugin()
+{
+    for (double fs : { 48000.0, 44100.0 })
+        for (int irregular = 0; irregular < 2; ++irregular)
+        {
+            ScorpiusProcessor p;
+            p.setRateAndBufferSizeDetails (fs, 512);
+            p.prepareToPlay (fs, 512);
+            const int total = (int) (20.0 * fs);
+            AudioBuffer<float> b (2, 512);
+            MidiBuffer midi;
+            Random rng (7), sizes (3);
+            double t = 0.0, busy = 0.0;
+            for (int done = 0; done < total;)
+            {
+                const int n = irregular ? 1 + sizes.nextInt (512) : 512;
+                b.setSize (2, n, false, false, true);
+                for (int i = 0; i < n; ++i, t += 1.0 / fs)
+                {
+                    const double ph = std::fmod (t, 0.5);
+                    const float v = (float) (0.5 * std::exp (-ph * 12.0) * (std::sin (MathConstants<double>::twoPi * 55.0 * ph) + 0.3 * (rng.nextDouble() * 2 - 1)));
+                    b.setSample (0, i, v); b.setSample (1, i, v);
+                }
+                const auto t0 = Time::getHighResolutionTicks();
+                p.processBlock (b, midi);
+                busy += Time::highResolutionTicksToSeconds (Time::getHighResolutionTicks() - t0);
+                done += n;
+            }
+            std::printf ("whole plug-in, %.1f kHz, %s blocks: %.1f %% of a core\n", fs / 1000.0, irregular ? "irregular" : "512", 100.0 * busy / 20.0);
+        }
+}
+
+// renders the bench's drums through the plug-in (48 kHz, irregular blocks) into out (float32, interleaved stereo), with
+// parameters set by id=value: to compare builds sample for sample
+static void renderPlugin (const char* out, int argc, char** argv)
+{
+    ScorpiusProcessor p;
+    for (int i = 3; i < argc; ++i)
+    {
+        const String a (argv[i]);
+        setReal (p, a.upToFirstOccurrenceOf ("=", false, false).toRawUTF8(), a.fromFirstOccurrenceOf ("=", false, false).getFloatValue());
+    }
+    p.setRateAndBufferSizeDetails (48000.0, 512);
+    p.prepareToPlay (48000.0, 512);
+    AudioBuffer<float> b (2, 512);
+    MidiBuffer midi;
+    Random rng (7), sizes (3);
+    std::vector<float> y;
+    double t = 0.0;
+    for (int done = 0; done < 10 * 48000;)
+    {
+        const int n = 1 + sizes.nextInt (512);
+        b.setSize (2, n, false, false, true);
+        for (int i = 0; i < n; ++i, t += 1.0 / 48000.0)
+        {
+            const double ph = std::fmod (t, 0.5);
+            const float v = (float) (0.5 * std::exp (-ph * 12.0) * (std::sin (MathConstants<double>::twoPi * 55.0 * ph) + 0.3 * (rng.nextDouble() * 2 - 1)));
+            b.setSample (0, i, v); b.setSample (1, i, 0.8f * v);
+        }
+        p.processBlock (b, midi);
+        for (int i = 0; i < n; ++i) { y.push_back (b.getSample (0, i)); y.push_back (b.getSample (1, i)); }
+        done += n;
+    }
+    File (File::getCurrentWorkingDirectory().getChildFile (out)).replaceWithData (y.data(), y.size() * sizeof (float));
+}
+
+// the same at 48 kHz in 512-sample blocks with each module switched off in turn: what each costs
+static void benchModules()
+{
+    const char* offs[] { "", "driveOn", "harmOn", "compOn", "liftOn" };
+    for (auto* off : offs)
+    {
+        ScorpiusProcessor p;
+        if (*off) setReal (p, off, 0.0f);
+        p.setRateAndBufferSizeDetails (48000.0, 512);
+        p.prepareToPlay (48000.0, 512);
+        AudioBuffer<float> b (2, 512);
+        MidiBuffer midi;
+        Random rng (7);
+        double t = 0.0, busy = 0.0;
+        for (int done = 0; done < 20 * 48000; done += 512)
+        {
+            for (int i = 0; i < 512; ++i, t += 1.0 / 48000.0)
+            {
+                const double ph = std::fmod (t, 0.5);
+                const float v = (float) (0.5 * std::exp (-ph * 12.0) * (std::sin (MathConstants<double>::twoPi * 55.0 * ph) + 0.3 * (rng.nextDouble() * 2 - 1)));
+                b.setSample (0, i, v); b.setSample (1, i, v);
+            }
+            const auto t0 = Time::getHighResolutionTicks();
+            p.processBlock (b, midi);
+            busy += Time::highResolutionTicksToSeconds (Time::getHighResolutionTicks() - t0);
+        }
+        std::printf ("%-10s off: %.1f %% of a core\n", *off ? off : "(none)", 100.0 * busy / 20.0);
+    }
+}
+
+// the models' matrix kernel alone (12 channels, as the drive's): its multiply-adds per second
+static void benchKernel()
+{
+    using namespace sc::dsp;
+    const int C = 12, N = 256, d = 64, rowLen = d + N, reps = 200000;
+    std::vector<float> rows ((size_t) (C * rowLen), 0.1f), W ((size_t) (2 * C * C * 2), 0.01f), B ((size_t) (2 * C), 0.0f), z ((size_t) (2 * C * N));
+    const double macs = (double) reps * 2 * C * C * 2 * N;
+    auto run = [&] (const char* name, auto&& kernel)
+    {
+        const auto t0 = Time::getHighResolutionTicks();
+        for (int r = 0; r < reps; ++r) kernel();
+        const double s = Time::highResolutionTicksToSeconds (Time::getHighResolutionTicks() - t0);
+        std::printf ("%s: %.1f multiply-adds per ns (%g)\n", name, macs / s / 1e9, (double) z[5]);
+    };
+    run ("AVX-512", [&] { waveNetConv512 (rows.data(), rowLen, d, 2, W.data(), B.data(), z.data(), C, N, N); });
+    run ("AVX2+FMA", [&] { waveNetConvFma (rows.data(), rowLen, d, 2, W.data(), B.data(), z.data(), C, N, N); });
+    run ("AVX", [&] { waveNetConvAvx (rows.data(), rowLen, d, 2, W.data(), B.data(), z.data(), C, N, N); });
+    // the long dilations, as in the models (the two windows of a row 4 or 8 KB apart)
+    for (int dd : { 512, 1024, 2048 })
+        for (int pad : { 0, 16 })
+        {
+            const int len = dd + N + pad;
+            std::vector<float> rr ((size_t) (C * len), 0.1f);
+            const auto t0 = Time::getHighResolutionTicks();
+            for (int r = 0; r < reps; ++r) waveNetConv512 (rr.data(), len, dd, 2, W.data(), B.data(), z.data(), C, N, N);
+            const double s = Time::highResolutionTicksToSeconds (Time::getHighResolutionTicks() - t0);
+            std::printf ("AVX-512, dilation %d, row padded by %d: %.1f multiply-adds per ns\n", dd, pad, macs / s / 1e9);
+        }
+    // the drive's twelve layers in turn (dilations 1 ... 2048), each with its own history, as the model runs them
+    {
+        std::vector<std::vector<float>> layers;
+        for (int l = 0; l < 12; ++l) layers.emplace_back ((size_t) (C * ((1 << l) + N)), 0.1f);
+        const int reps2 = reps / 12;
+        const auto t0 = Time::getHighResolutionTicks();
+        for (int r = 0; r < reps2; ++r)
+            for (int l = 0; l < 12; ++l) waveNetConv512 (layers[(size_t) l].data(), (1 << l) + N, 1 << l, 2, W.data(), B.data(), z.data(), C, N, N);
+        const double s = Time::highResolutionTicksToSeconds (Time::getHighResolutionTicks() - t0);
+        std::printf ("AVX-512, twelve layers in turn: %.1f multiply-adds per ns\n", (double) reps2 * 12 * 2 * C * C * 2 * N / s / 1e9);
+    }
+}
+
 int main (int argc, char** argv)
 {
     ScopedJuceInitialiser_GUI init;
+    if (argc > 1 && String (argv[1]) == "benchplugin") { benchPlugin(); return 0; }
+    if (argc > 1 && String (argv[1]) == "benchmodules") { benchModules(); return 0; }
+    if (argc > 1 && String (argv[1]) == "benchkernel") { benchKernel(); return 0; }
+    if (argc > 2 && String (argv[1]) == "render") { renderPlugin (argv[2], argc, argv); return 0; }
     if (argc > 1 && String (argv[1]) == "bench") { bench(); return 0; }
     testParameters();
     testPresets();
@@ -459,6 +659,7 @@ int main (int argc, char** argv)
     testPassThrough();
     testSidechain();
     testLight();
+    testKick();
     testConvolver();
     testEngine();
     testValueEntry();

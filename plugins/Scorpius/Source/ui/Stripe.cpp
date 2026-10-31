@@ -26,20 +26,10 @@ constexpr Tint palette[] {
 constexpr Tint flareTints[] {
     { 1.00f, 0.97f, 0.90f, 0.25f }, { 1.00f, 0.75f, 0.25f, 0.25f }, { 0.30f, 0.80f, 1.00f, 0.15f },
     { 1.00f, 0.35f, 0.25f, 0.15f }, { 0.65f, 0.45f, 1.00f, 0.20f } };
-constexpr float heartX = 455.0f;                               // the middle of the band (where the flares gather)
-constexpr float glandY = 291.0f;                               // ours: the venom's source (at heartX), far away
-constexpr float focal = 240.0f;                                // (design px per unit across at distance 1)
-constexpr size_t maxDrops = 4200;
-// the venom's colour by depth (0 the lightest: acid lime, 0.5 the controls' mint, 1 deep teal)
-Colour venomColour (float depth, float white = 0.0f)
-{
-    depth = jlimit (0.0f, 1.0f, depth);
-    const auto c = Colour::fromHSV (0.24f + 0.26f * depth, 0.9f - 0.25f * std::abs (depth - 0.5f), 1.0f - 0.25f * depth * depth, 1.0f);
-    return c.interpolatedWith (Colours::white, white);
-}
 constexpr int numParticles = 560, numFlares = 9;
 // ORION style (ours): a black hole past each end of the tube, off screen, drawing in what comes near
-constexpr float holeX[2] { Stripe::left - 12.0f, Stripe::left + Stripe::width + 12.0f }, holeY = 291.0f, holeReach = 150.0f;
+// (reaching 80 px into the tube: the stream pinches into a line close to the ends)
+constexpr float holeX[2] { Stripe::left - 12.0f, Stripe::left + Stripe::width + 12.0f }, holeY = 291.0f, holeReach = 80.0f, holeFunnel = 90.0f;
 constexpr float lanes[] { 289.1f, 291.6f, 294.25f, 302.5f };   // the rows the band's dashes keep to (the last one less)
 // where the reference's particles are (local maxima per frame, measured): along the stripe in bins of 18.5 design px
 // from x 0 (thinned towards the ends, where ours stood out more: the reference has ~60 per frame in each end sixth),
@@ -188,12 +178,14 @@ void Stripe::spawn (Particle& p, double now, bool anyAge)
 void Stripe::setInput (float levelDb, bool jumpedUp, bool anim)
 {
     if (frozen) return;
+    if (anim != animated) repaint();         // (ours: the scorpion shows in silence only while the animation is on)
     animated = anim;
     levelIn = animated ? levelDb : -200.0f;
     beat = beat || (animated && jumpedUp);
     // (moved on by the editor's clock, so the whole editor repaints once per frame)
     const double now = clock();
-    if (envelope > 0.002f || brightness (levelIn) > 0.0f)
+    const bool shedding = style == Style::scorpius && animated && (presence > 0.002f || ! motes.empty());
+    if (envelope > 0.002f || brightness (levelIn) > 0.0f || shedding)
     {
         if (! moving) lastTime = now;
         moving = true;
@@ -204,6 +196,9 @@ void Stripe::setInput (float levelDb, bool jumpedUp, bool anim)
     {
         moving = false;
         envelope = 0.0f;
+        strike = flash = presence = 0.0f;     // (ours: the scorpions at rest)
+        motes.clear();
+        if (style == Style::scorpius) { struck = 0.0f; buildScorpion (0.0f, bodyTime); }
         repaint();
     }
 }
@@ -212,17 +207,14 @@ void Stripe::freeze (float b)
 {
     frozen = true;
     envelope = b;
-    heart = 0.4f;
-    // a moment well into the animation, so ages and flares are spread as while it runs (ours: two volleys in flight)
-    for (int i = 0; i < 60; ++i)
+    // a moment well into the animation, so ages and flares are spread as while it runs (ours: the scorpion's motes
+    // streaming out from end to end, its tail at rest)
+    const int frames = style == Style::scorpius ? 240 : 60;
+    for (int i = 0; i < frames; ++i)
     {
         elapsed += 1.0 / 60.0;
         for (auto& p : particles) if (elapsed - p.born > p.life) spawn (p, elapsed, false);
-        if (style == Style::scorpius)
-        {
-            if (i == 10 || i == 38 || i == 52) fire (true);
-            advanceVenom (1.0f / 60.0f);
-        }
+        if (style == Style::scorpius) advanceScorpion (1.0f / 60.0f, 0.75f * pace / 60.0f);
     }
     repaint();
 }
@@ -234,6 +226,16 @@ void Stripe::setBands (float lows, float mid)
     bass = level (lows); mids = level (mid);
 }
 
+void Stripe::kick()
+{
+    kicked = true;
+}
+
+void Stripe::setPlaying (bool p)
+{
+    playing = p;
+}
+
 void Stripe::setTempo (float bpm)
 {
     paceTarget = bpm > 0.0f ? jlimit (1.0f, 3.5f, bpm / 60.0f) : 2.0f;
@@ -243,7 +245,7 @@ void Stripe::setStyle (Style s)
 {
     if (s == style) return;
     style = s;
-    drops.clear();
+    motes.clear();
     for (auto& p : particles) spawn (p, elapsed, true);
     glowScale = 0.0f;                                       // (and its own glow)
     repaint();
@@ -253,18 +255,14 @@ void Stripe::advance (double now)
 {
     const double real = jlimit (0.0, 0.1, now - lastTime);
     lastTime = now;
-    // the particles' (and the venom's) time runs at the project's tempo (the venom at half the ORION style's pace)
+    // the particles' time runs at the project's tempo (ours: the scorpion's motes at three quarters of the ORION style's
+    // pace)
     pace += (paceTarget - pace) * (float) (1.0 - std::exp (-real / 0.5));
-    const double dt = real * (style == Style::orion ? pace : 0.5f * pace);
+    const double dt = real * pace;
     elapsed += dt;
-    // the light eases to the level's brightness; ours: the heart beats
+    // the light eases to the level's brightness
     envelope += (brightness (levelIn) - envelope) * (float) (1.0 - std::exp (-real / easing));
-    heart = beat ? 1.0f : heart * (float) std::exp (-real / 0.35);
-    if (style == Style::scorpius)
-    {
-        if (beat && envelope > 0.02f && elapsed - lastBurst > 0.2) { fire (true); lastBurst = elapsed; }
-        advanceVenom ((float) dt);
-    }
+    if (style == Style::scorpius) advanceScorpion ((float) real, (float) (0.75 * dt));
     beat = false;
     for (auto& p : particles)
     {
@@ -281,7 +279,7 @@ void Stripe::advance (double now)
             {
                 const float pull = 400000.0f / (d * d + 400.0f);           // (px/s^2)
                 p.vx += (dx > 0.0f ? 1.0f : -1.0f) * pull * (float) dt;
-                p.vy += (holeY - p.y) * (1.0f - d / holeReach) * 90.0f * (float) dt;
+                p.vy += (holeY - p.y) * (1.0f - d / holeReach) * holeFunnel * (float) dt;
                 p.vy *= (float) std::exp (-dt / 0.15);
                 p.expand = 0.0f;                                            // (the hole has it now)
             }
@@ -296,6 +294,7 @@ void Stripe::renderGlow (int w, int h, float s)
 {
     glow.assign ((size_t) (w * h * 3), 0.0f);
     glowScale = s;
+    if (style == Style::scorpius) return;           // (ours: no fixed glow; the scorpion has its own haze)
     namespace gl = stripeglow;
     for (int j = 0; j < h; ++j)
     {
@@ -316,41 +315,22 @@ void Stripe::renderGlow (int w, int h, float s)
             }
         }
     }
-    glowHeart.assign (glow.size(), 0.0f);
-    if (style != Style::scorpius)
-    {
-        // (the reference's, measured with music: UI round 8) a faint violet haze above the band, brightest in the middle;
-        // and (UI round 9) less steady glow in the band itself, whose light is more its particles' than ours was
-        for (int j = 0; j < h; ++j)
-        {
-            const float y = top + ((float) j + 0.5f) / s;
-            const float band = 1.0f - 0.2f * jlimit (0.0f, 1.0f, std::min (y - 285.0f, 298.0f - y) / 1.5f);
-            for (int i = 0; i < w * 3; ++i) glow[(size_t) (j * w * 3 + i)] *= band;
-            const float rows = jlimit (0.0f, 1.0f, (287.0f - y) / 3.0f) * jlimit (0.0f, 1.0f, (y - 272.5f) / 1.5f);
-            if (rows <= 0.0f) continue;
-            for (int i = 0; i < w; ++i)
-            {
-                const float x = left + ((float) i + 0.5f) / s, along = 0.45f + 0.55f * std::exp (-std::pow ((x - 460.0f) / 300.0f, 2.0f));
-                float* px = glow.data() + (size_t) ((j * w + i) * 3);
-                px[0] += 0.018f * rows * along; px[1] += 0.014f * rows * along; px[2] += 0.026f * rows * along;
-            }
-        }
-        return;
-    }
-    // ours: a dim haze of venom, lime in the middle to teal at the ends; a beat flares the middle, crimson at the heart
+    // (the reference's, measured with music: UI round 8) a faint violet haze above the band, brightest in the middle;
+    // and (UI round 9) less steady glow in the band itself, whose light is more its particles' than ours was
     for (int j = 0; j < h; ++j)
+    {
+        const float y = top + ((float) j + 0.5f) / s;
+        const float band = 1.0f - 0.2f * jlimit (0.0f, 1.0f, std::min (y - 285.0f, 298.0f - y) / 1.5f);
+        for (int i = 0; i < w * 3; ++i) glow[(size_t) (j * w * 3 + i)] *= band;
+        const float rows = jlimit (0.0f, 1.0f, (287.0f - y) / 3.0f) * jlimit (0.0f, 1.0f, (y - 272.5f) / 1.5f);
+        if (rows <= 0.0f) continue;
         for (int i = 0; i < w; ++i)
         {
-            const float x = left + ((float) i + 0.5f) / s, u = jlimit (0.0f, 1.0f, (x - left) / width);
+            const float x = left + ((float) i + 0.5f) / s, along = 0.45f + 0.55f * std::exp (-std::pow ((x - 460.0f) / 300.0f, 2.0f));
             float* px = glow.data() + (size_t) ((j * w + i) * 3);
-            const float lum = 0.5f * (px[0] + px[1] + px[2]) / 3.0f;
-            const auto c = venomColour (0.25f + 0.75f * std::abs (2.0f * u - 1.0f));
-            px[0] = lum * c.getFloatRed(); px[1] = lum * c.getFloatGreen(); px[2] = lum * c.getFloatBlue();
-            const float beatShare = 1.4f * lum * std::exp (-std::pow ((x - heartX) / 170.0f, 2.0f));
-            float* hp = glowHeart.data() + (size_t) ((j * w + i) * 3);
-            const float core = std::exp (-std::pow ((x - heartX) / 40.0f, 2.0f));
-            hp[0] = beatShare * (0.4f + 0.6f * core); hp[1] = beatShare * (1.0f - 0.8f * core); hp[2] = beatShare * (0.5f - 0.4f * core);
+            px[0] += 0.018f * rows * along; px[1] += 0.014f * rows * along; px[2] += 0.026f * rows * along;
         }
+    }
 }
 
 // adds one particle's light: a soft-edged box (its core) and a wider halo
@@ -525,15 +505,9 @@ void Stripe::render (int w, int h, float s)
     }
     light.resize (glow.size());
     canvas = light.data();
-    const float beatGlow = style == Style::scorpius ? 0.7f * heart * envelope : 0.0f;
-    for (size_t k = 0; k < glow.size(); ++k) light[k] = glow[k] * envelope + glowHeart[k] * beatGlow;
-    const bool glass = style == Style::scorpius;
-    if (glass)
-    {
-        renderGland (s);
-        renderVenom (s);
-        canvas = light.data();
-    }
+    for (size_t k = 0; k < glow.size(); ++k) light[k] = glow[k] * envelope;
+    if (style == Style::scorpius)
+        renderScorpion (s);
     else
         for (auto& p : particles)
         {
@@ -547,23 +521,22 @@ void Stripe::render (int w, int h, float s)
             if (level <= 0.005f) continue;
             heavenly (p, level, u, s);
         }
-    // (ORION) the particles' light stays inside the tube (none on its rims) and dies away into the black holes past its
-    // ends: what is over the glow fades out above y 275 and below 304, and over the last ~40 px at each end
-    if (! glass)
-        for (int j = 0; j < h; ++j)
+    // the particles' light stays inside the tube (none on its rims) and dies away into the black holes past its ends:
+    // what is over the glow fades out above y 275 and below 304, and over the last ~40 px at each end
+    for (int j = 0; j < h; ++j)
+    {
+        const float y = top + ((float) j + 0.5f) / s, my = jlimit (0.0f, 1.0f, (y - 273.5f) / 2.0f) * jlimit (0.0f, 1.0f, (305.5f - y) / 2.0f);
+        for (int i = 0; i < w; ++i)
         {
-            const float y = top + ((float) j + 0.5f) / s, my = jlimit (0.0f, 1.0f, (y - 273.5f) / 2.0f) * jlimit (0.0f, 1.0f, (305.5f - y) / 2.0f);
-            for (int i = 0; i < w; ++i)
-            {
-                const float x = ((float) i + 0.5f) / s, mx = jlimit (0.0f, 1.0f, jmin (x, width - x) / 40.0f), m = my * mx * mx;
-                if (m >= 1.0f) continue;
-                const size_t k = (size_t) ((j * w + i) * 3);
-                for (int c = 0; c < 3; ++c) light[k + c] = glow[k + c] * envelope + (light[k + c] - glow[k + c] * envelope) * m;
-            }
+            const float x = ((float) i + 0.5f) / s, mx = jlimit (0.0f, 1.0f, jmin (x, width - x) / 40.0f), m = my * mx * mx;
+            if (m >= 1.0f) continue;
+            const size_t k = (size_t) ((j * w + i) * 3);
+            for (int c = 0; c < 3; ++c) light[k + c] = glow[k + c] * envelope + (light[k + c] - glow[k + c] * envelope) * m;
         }
+    }
     // (the reference's) the band reflected in the glass's lower rim: a line of light under it, following the light of
-    // the lower band above it column by column, strongest towards the ends (measured: at the ends three times ours was)
-    if (! glass)
+    // the lower band above it column by column, strongest towards the ends (measured: at the ends three times ours was);
+    // ours: the scorpion's light too
     {
         const int r0 = jlimit (0, h - 1, (int) ((296.0f - top) * s)), r1 = jlimit (0, h - 1, (int) ((303.0f - top) * s));
         const int m0 = jlimit (0, h - 1, (int) ((305.7f - top) * s)), m1 = jlimit (0, h - 1, (int) ((306.6f - top) * s));
@@ -578,7 +551,7 @@ void Stripe::render (int w, int h, float s)
                 for (int c = 0; c < 3; ++c) light[(size_t) ((j * w + i) * 3 + c)] += gain * shape * acc[c];
             }
         }
-        addReflections (w, h, s);
+        if (style == Style::orion) addReflections (w, h, s);
     }
     // the scene: the light added to what is under it (light past white spills into the other channels: bright cores
     // turn white)
@@ -590,34 +563,13 @@ void Stripe::render (int w, int h, float s)
         if (m > 1.0f) { const float spill = (m - 1.0f) * 0.6f; r += spill; g += spill; b += spill; }
         scene[k] = jmin (1.0f, r + under[k]); scene[k + 1] = jmin (1.0f, g + under[k + 1]); scene[k + 2] = jmin (1.0f, b + under[k + 2]);
     }
-    // ours: the glass in front of it, and what is on it
-    if (glass)
-    {
-        if (w != glassW || h != glassH) prepareGlass (w, h, s);
-        cover.assign ((size_t) (w * h), 0.0f);
-        front.assign (light.size(), 0.0f);
-        gloss.assign (light.size(), 0.0f);
-        renderGlass (s);
-    }
     Image::BitmapData bd (image, Image::BitmapData::writeOnly);
     for (int j = 0; j < h; ++j)
         for (int i = 0; i < w; ++i)
         {
-            const size_t k = (size_t) (j * w + i), k3 = k * 3;
-            float r = scene[k3], g = scene[k3 + 1], b = scene[k3 + 2];
-            if (glass)
-            {
-                // the drops show what they bend in place of what is behind them; the glass's edges are darker; its
-                // dust and scratches catch the light behind them; glints and reflections on top
-                const float c = jmin (1.0f, cover[k]), lum = 0.3f * r + 0.55f * g + 0.15f * b;
-                const float shine = dust[k] * (0.04f + 0.9f * lum) * envelope;
-                r = (r * (1.0f - c) + front[k3]) * vignette[k] + gloss[k3] + shine;
-                g = (g * (1.0f - c) + front[k3 + 1]) * vignette[k] + gloss[k3 + 1] + shine;
-                b = (b * (1.0f - c) + front[k3 + 2]) * vignette[k] + gloss[k3 + 2] + shine;
-                r = jmin (1.0f, r); g = jmin (1.0f, g); b = jmin (1.0f, b);
-            }
+            const size_t k3 = (size_t) (j * w + i) * 3;
             auto* px = reinterpret_cast<PixelRGB*> (bd.getPixelPointer (i, j));
-            px->setARGB (255, (uint8) (r * 255.0f + 0.5f), (uint8) (g * 255.0f + 0.5f), (uint8) (b * 255.0f + 0.5f));
+            px->setARGB (255, (uint8) (scene[k3] * 255.0f + 0.5f), (uint8) (scene[k3 + 1] * 255.0f + 0.5f), (uint8) (scene[k3 + 2] * 255.0f + 0.5f));
         }
 }
 
@@ -678,220 +630,566 @@ void Stripe::addReflections (int w, int h, float s)
 }
 
 //==============================================================================
-// ours: the venom, shot at you
-void Stripe::addDrop (const Drop& d)
+// ours (SCORPIUS style): the scorpion in light
+namespace
 {
-    if (drops.size() < maxDrops) drops.push_back (d);
+// two scorpions back to back, their tails arched towards each other either side of the middle: each drawn in its own
+// units (about 145 across, 35 high, side on, facing right, the back of its arched tail at x 24), scaled into the tube's
+// height; the first to the right of the middle, the second mirrored to the left
+constexpr float scorpionScale = 0.84f, scorpionX = 444.0f, scorpionY = 290.0f, scorpionBack = 24.0f, scorpionGap = 3.0f;
+Point<float> toDesign (Point<float> p, int which)
+{
+    const float x = scorpionGap + (p.x - scorpionBack) * scorpionScale;
+    return { which == 0 ? scorpionX + x : scorpionX - x, scorpionY + (p.y - 18.0f) * scorpionScale };
 }
 
-// a drop leaving the gland: outwards at a random angle (flattened, so that most fly along the stripe), towards the
-// viewer; angle >= 0 sets the direction (a ring); depth: its colour (0 lime ... 1 deep teal)
-void Stripe::emit (Drop::Type type, float depth, float speed, float size, float level, float angle)
-{
-    Drop d {};
-    d.type = type;
-    const float a = angle >= 0.0f ? angle : MathConstants<float>::twoPi * rng.nextFloat();
-    // (globs, and the spray that lands, keep within the stripe's height, so that they hit the glass somewhere along it)
-    d.wet = type == Drop::Type::glob || (type == Drop::Type::spray && angle < 0.0f && rng.nextFloat() < 0.4f);
-    const float lateral = (angle >= 0.0f ? 0.42f : d.wet ? uniform (rng, 0.04f, 0.36f) : uniform (rng, 0.06f, 0.6f)) * speed;
-    d.X = 0.012f * gauss (rng); d.Y = 0.003f * gauss (rng); d.Z = angle >= 0.0f ? 1.0f : uniform (rng, 0.85f, 1.15f);
-    d.vX = lateral * (d.wet ? (rng.nextBool() ? 1.0f : -1.0f) : std::cos (a)); d.vY = (d.wet ? 0.014f * gauss (rng) : 0.16f * lateral * std::sin (a));
-    d.vZ = -(angle >= 0.0f ? 1.0f : uniform (rng, 0.5f, 1.3f)) * speed;
-    d.size = size; d.level = level; d.seed = rng.nextFloat();
-    const auto c = venomColour (depth, type == Drop::Type::mist ? 0.3f : 0.0f);
-    d.r = c.getFloatRed(); d.g = c.getFloatGreen(); d.b = c.getFloatBlue();
-    d.born = (float) elapsed; d.life = 6.0f;
-    d.sx = d.px = heartX + focal * d.X / d.Z; d.sy = d.py = glandY + focal * d.Y / d.Z;
-    addDrop (d);
-}
+struct Rgb { float r, g, b; };
+constexpr Rgb coreLight { 0.78f, 1.00f, 0.88f }, mintLight { 0.55f, 1.00f, 0.84f }, greenLight { 0.20f, 0.88f, 0.47f },
+              tealLight { 0.08f, 0.67f, 0.59f }, deepLight { 0.04f, 0.43f, 0.27f }, aquaLight { 0.15f, 0.95f, 0.85f },
+              tipLight { 0.70f, 1.00f, 1.00f };
 
-// a strike (a beat): the heart squeezes and fires a burst, a ring and globs (bigger and deeper green with the bass);
-// or (no strike) a single glob spat between beats
-void Stripe::fire (bool strike)
+// a smooth curve through the points (Catmull-Rom), n points per span
+std::vector<Point<float>> curve (const std::vector<Point<float>>& in, int n)
 {
-    const float deep = 0.25f + 0.6f * bass;
-    if (! strike)
+    std::vector<Point<float>> out;
+    for (size_t i = 0; i + 1 < in.size(); ++i)
     {
-        emit (Drop::Type::glob, deep + 0.15f * gauss (rng), uniform (rng, 0.8f, 1.1f), uniform (rng, 0.10f, 0.14f) * (0.8f + 0.5f * bass), 1.1f);
-        return;
-    }
-    for (int k = 0; k < 110; ++k)
-        emit (Drop::Type::spray, uniform (rng, 0.0f, 1.0f), uniform (rng, 1.0f, 1.5f), uniform (rng, 0.04f, 0.08f), uniform (rng, 0.7f, 1.2f));
-    const float turn = MathConstants<float>::twoPi * rng.nextFloat();
-    for (int k = 0; k < 36; ++k)
-        emit (Drop::Type::spray, 0.1f, 1.0f, 0.05f, 1.1f, std::fmod (turn + MathConstants<float>::twoPi * (float) k / 36.0f, MathConstants<float>::twoPi));
-    for (int k = rng.nextInt (3) + 2; --k >= 0;)
-        emit (Drop::Type::glob, deep + 0.12f * gauss (rng), uniform (rng, 0.9f, 1.25f), uniform (rng, 0.12f, 0.17f) * (0.8f + 0.6f * bass), 1.3f);
-    squeeze = 1.0f; charge = 1.0f;
-    lastHeartbeat = elapsed;
-    Drop w {};
-    w.type = Drop::Type::wave; w.sx = heartX; w.sy = glandY; w.level = 0.55f; w.born = (float) elapsed; w.life = 0.7f;
-    addDrop (w);
-}
-
-// something left on the glass where a drop struck it
-Stripe::Drop Stripe::onGlass (const Drop& from, Drop::Type type, float x, float y, float size, float life, float delay)
-{
-    Drop e = from;
-    e.type = type; e.sx = e.px = x; e.sy = e.py = y; e.size = size;
-    e.born = (float) elapsed + delay; e.life = life; e.vX = e.vY = 0.0f; e.seed = rng.nextFloat();
-    e.slideAt = 0.0f; e.travel = 0.0f; e.spread = 0.0f;
-    return e;
-}
-
-// a spray drop hits the glass, as water does: it flattens into a film and pulls back into a bead, a faint splash ring
-// spreads, now and then a droplet is flung off
-void Stripe::land (const Drop& g)
-{
-    const float size = uniform (rng, 0.6f, 1.6f) * g.size / 0.05f;
-    auto r = onGlass (g, Drop::Type::ring, g.sx, g.sy, 1.5f + 2.0f * size, 0.15f, 0.0f);
-    r.level = 0.35f;
-    addDrop (r);
-    auto b = onGlass (g, Drop::Type::bead, g.sx, g.sy, size, uniform (rng, 4.0f, 9.0f), 0.0f);
-    b.spread = 1.0f;
-    addDrop (b);
-    for (int k = rng.nextInt (3); --k >= 0;)
-    {
-        const float a = MathConstants<float>::twoPi * rng.nextFloat(), v = uniform (rng, 25.0f, 80.0f) * (0.5f + 0.25f * size);
-        auto f = onGlass (g, Drop::Type::bead, g.sx, g.sy, uniform (rng, 0.4f, 0.8f), uniform (rng, 1.5f, 3.5f), 0.0f);
-        f.vX = v * std::cos (a); f.vY = 0.65f * v * std::sin (a);
-        addDrop (f);
-    }
-}
-
-// a glob hits the glass: a big flattened splash (a wide ring, droplets flung far) that pulls back into a heavy bead,
-// which soon runs
-void Stripe::hitGlass (const Drop& g)
-{
-    const float size = uniform (rng, 3.6f, 5.2f) * g.size / 0.14f;
-    auto r = onGlass (g, Drop::Type::ring, g.sx, g.sy, 2.6f * size, 0.22f, 0.0f);
-    r.level = 0.6f;
-    addDrop (r);
-    auto pool = onGlass (g, Drop::Type::bead, g.sx, g.sy, size, uniform (rng, 4.0f, 7.0f), 0.0f);
-    pool.spread = 1.0f;
-    addDrop (pool);
-    for (int k = 0; k < 10; ++k)
-    {
-        const float a = MathConstants<float>::twoPi * rng.nextFloat(), v = uniform (rng, 50.0f, 170.0f) * (0.6f + 0.06f * size);
-        auto f = onGlass (g, Drop::Type::bead, g.sx, g.sy, uniform (rng, 0.5f, 1.5f), uniform (rng, 2.5f, 5.0f), 0.0f);
-        f.vX = v * std::cos (a); f.vY = 0.6f * v * std::sin (a); f.spread = 0.5f;
-        addDrop (f);
-    }
-    auto f = onGlass (g, Drop::Type::flash, g.sx, g.sy, size * 1.3f, 0.09f, 0.0f);
-    f.level = 0.6f;
-    addDrop (f);
-}
-
-void Stripe::advanceVenom (float dt)
-{
-    charge *= std::exp (-dt / 0.25f);
-    squeeze *= std::exp (-dt / 0.06f);
-    // quiet: a slow drip; louder: a steady spray, globs spat now and then; the mids thicken the mist
-    if (envelope > 0.02f)
-    {
-        sprayDue += dt * (8.0f + 520.0f * envelope * envelope);
-        for (; sprayDue >= 1.0f; sprayDue -= 1.0f)
-            emit (Drop::Type::spray, uniform (rng, 0.0f, 1.0f), uniform (rng, 0.6f, 1.2f), uniform (rng, 0.03f, 0.065f), uniform (rng, 0.5f, 1.0f));
-        globDue += dt * (0.3f + 2.0f * envelope);
-        for (; globDue >= 1.0f; globDue -= 1.0f) fire (false);
-        mistDue += dt * (15.0f + 220.0f * mids * envelope);
-        for (; mistDue >= 1.0f; mistDue -= 1.0f)
-            emit (Drop::Type::mist, uniform (rng, 0.0f, 0.4f), uniform (rng, 0.9f, 1.6f), 0.02f, uniform (rng, 0.25f, 0.5f));
-    }
-    const float x0 = left - 30.0f, x1 = left + width + 30.0f, y0 = top - 20.0f, y1 = top + height + 20.0f;
-    constexpr float heavy = 3.0f;                     // (a bead this wide or wider runs down)
-    const size_t live = drops.size();
-    for (size_t i = 0; i < live; ++i)
-    {
-        Drop d = drops[i];
-        const float age = (float) elapsed - d.born;
-        if (age > d.life || age < 0.0f) continue;
-        d.px = d.sx; d.py = d.sy;
-        switch (d.type)
+        const auto p0 = in[i == 0 ? 0 : i - 1], p1 = in[i], p2 = in[i + 1], p3 = in[jmin (in.size() - 1, i + 2)];
+        for (int k = 0; k < n; ++k)
         {
-            case Drop::Type::spray: case Drop::Type::glob: case Drop::Type::mist:
-            {
-                d.X += d.vX * dt; d.Y += d.vY * dt; d.Z += d.vZ * dt;
-                if (d.Z > 0.03f) { d.sx = heartX + focal * d.X / d.Z; d.sy = glandY + focal * d.Y / d.Z; }
-                const bool onGlass = d.sx > left + 4.0f && d.sx < left + width - 4.0f && d.sy > top + 3.0f && d.sy < top + height - 4.0f;
-                if (d.type == Drop::Type::glob && d.Z < 0.17f && onGlass) { hitGlass (d); d.life = 0.0f; }
-                else if (d.wet && d.Z < 0.13f && onGlass) { land (d); d.life = 0.0f; }
-                else if (d.Z < 0.03f || d.sx < x0 || d.sx > x1 || d.sy < y0 || d.sy > y1) d.life = 0.0f;   // (past you)
-                break;
-            }
-            case Drop::Type::bead:
-            {
-                // it pulls back from its splash into a bead; flung droplets skid to a stop
-                d.spread *= std::exp (-dt / 0.09f);
-                const float k = std::exp (-dt / 0.035f);
-                d.sx += d.vX * (1.0f - k) * 0.035f; d.sy += d.vY * (1.0f - k) * 0.035f; d.vX *= k; d.vY *= k;
-                // heavy enough, it runs down in fits and starts (sticking and slipping), faster the bigger it is,
-                // leaving a wet track and now and then a speck behind, and losing a little as it goes
-                if (d.size >= heavy && d.slideAt <= 0.0f) d.slideAt = (float) elapsed + uniform (rng, 0.05f, 0.4f);
-                if (d.slideAt > 0.0f && (float) elapsed > d.slideAt && d.sy < top + height - 0.5f * d.size - 1.0f)
-                {
-                    const float v = jmin (45.0f, 6.0f + 10.0f * (d.size - 1.6f)) * (rng.nextFloat() < 0.12f ? 0.0f : uniform (rng, 0.5f, 1.5f));
-                    d.sy += v * dt; d.sx += 1.5f * gauss (rng) * dt; d.travel += v * dt;
-                    for (; d.travel > 1.2f; d.travel -= 1.2f)
-                    {
-                        addDrop (onGlass (d, Drop::Type::track, d.sx, d.sy - 0.4f * d.size, 0.55f * d.size, uniform (rng, 1.2f, 2.2f), 0.0f));
-                        if (rng.nextFloat() < 0.1f)
-                            addDrop (onGlass (d, Drop::Type::bead, d.sx + 0.25f * d.size * gauss (rng), d.sy - 0.6f * d.size,
-                                              uniform (rng, 0.35f, 0.7f), uniform (rng, 1.0f, 2.5f), 0.0f));
-                        d.size *= 0.994f;
-                    }
-                    d.life = jmax (d.life, age + 1.5f);       // (it lasts while it runs)
-                }
-                break;
-            }
-            case Drop::Type::track: case Drop::Type::ring: case Drop::Type::flash: case Drop::Type::wave: break;
+            const float t = (float) k / (float) n, t2 = t * t, t3 = t2 * t;
+            auto at = [&] (float a0, float a1, float a2, float a3)
+            { return 0.5f * (2.0f * a1 + (-a0 + a2) * t + (2.0f * a0 - 5.0f * a1 + 4.0f * a2 - a3) * t2 + (-a0 + 3.0f * a1 - 3.0f * a2 + a3) * t3); };
+            out.push_back ({ at (p0.x, p1.x, p2.x, p3.x), at (p0.y, p1.y, p2.y, p3.y) });
         }
-        drops[i] = d;
     }
-    drops.erase (std::remove_if (drops.begin(), drops.end(), [this] (const Drop& d) { return (float) elapsed - d.born > d.life; }), drops.end());
-    coalesce();
+    out.push_back (in.back());
+    return out;
 }
 
-// beads that touch merge (their volumes add up, the bigger one keeps its place more), so a running bead sweeps up those
-// in its way and grows; found through a grid of 6 design px cells
-void Stripe::coalesce()
+// part of an ellipse (radii rx, ry, turned by rot) from angle a0 to a1
+std::vector<Point<float>> ellipseArc (Point<float> c, float rx, float ry, float a0, float a1, float rot, int n)
 {
-    constexpr float cell = 6.0f;
-    const int nx = (int) (width / cell) + 2, ny = (int) (height / cell) + 2;
-    gridHead.assign ((size_t) (nx * ny), -1);
-    gridNext.assign (drops.size(), -1);
-    auto cellOf = [&] (const Drop& d) { return jlimit (0, ny - 1, (int) ((d.sy - top) / cell)) * nx + jlimit (0, nx - 1, (int) ((d.sx - left) / cell)); };
-    for (int i = 0; i < (int) drops.size(); ++i)
+    std::vector<Point<float>> out;
+    for (int k = 0; k <= n; ++k)
     {
-        const auto& d = drops[(size_t) i];
-        if (d.type != Drop::Type::bead || (float) elapsed < d.born) continue;
-        const int c = cellOf (d);
-        gridNext[(size_t) i] = gridHead[(size_t) c]; gridHead[(size_t) c] = i;
+        const float t = a0 + (a1 - a0) * (float) k / (float) n, x = std::cos (t) * rx, y = std::sin (t) * ry;
+        out.push_back ({ c.x + x * std::cos (rot) - y * std::sin (rot), c.y + x * std::sin (rot) + y * std::cos (rot) });
     }
-    for (int i = 0; i < (int) drops.size(); ++i)
+    return out;
+}
+
+// a gaussian blur of an RGB buffer: three box blurs across and three down (zero past the edges)
+void blurRgb (const std::vector<float>& src, std::vector<float>& dst, std::vector<float>& tmp, int w, int h, float sigma)
+{
+    dst = src;
+    const int r = (int) std::round ((std::sqrt (4.0f * sigma * sigma + 1.0f) - 1.0f) * 0.5f);
+    if (r < 1) return;
+    tmp.resize (src.size());
+    const float inv = 1.0f / (float) (2 * r + 1);
+    auto pass = [&] (const float* in, float* out, int count, int stride, int lines, int lineStride)
     {
-        auto& a = drops[(size_t) i];
-        if (a.type != Drop::Type::bead || a.life <= 0.0f || (float) elapsed < a.born) continue;
-        const int cx = jlimit (0, nx - 1, (int) ((a.sx - left) / cell)), cy = jlimit (0, ny - 1, (int) ((a.sy - top) / cell));
-        for (int gy = jmax (0, cy - 1); gy <= jmin (ny - 1, cy + 1); ++gy)
-            for (int gx = jmax (0, cx - 1); gx <= jmin (nx - 1, cx + 1); ++gx)
-                for (int j = gridHead[(size_t) (gy * nx + gx)]; j >= 0; j = gridNext[(size_t) j])
+        for (int l = 0; l < lines; ++l)
+            for (int c = 0; c < 3; ++c)
+            {
+                const float* a = in + (size_t) (l * lineStride + c);
+                float* o = out + (size_t) (l * lineStride + c);
+                float sum = 0.0f;
+                for (int i = 0; i <= jmin (r, count - 1); ++i) sum += a[(size_t) (i * stride)];
+                for (int i = 0; i < count; ++i)
                 {
-                    if (j == i) continue;
-                    auto& b = drops[(size_t) j];
-                    if (b.life <= 0.0f || a.life <= 0.0f) continue;
-                    if (std::hypot (a.sx - b.sx, a.sy - b.sy) >= 0.42f * (a.size + b.size)) continue;
-                    auto& big = a.size >= b.size ? a : b;
-                    auto& small = a.size >= b.size ? b : a;
-                    const float va = big.size * big.size * big.size, vb = small.size * small.size * small.size, w = vb / (va + vb);
-                    big.sx += (small.sx - big.sx) * w; big.sy += (small.sy - big.sy) * w;
-                    big.size = std::cbrt (va + vb);
-                    const float end = jmax (big.born + big.life, small.born + small.life);
-                    big.life = end - big.born;
-                    big.spread = jmax (big.spread, 0.3f * small.spread);
-                    small.life = -1.0f;                         // (gone: the bigger has it)
+                    o[(size_t) (i * stride)] = sum * inv;
+                    if (i + r + 1 < count) sum += a[(size_t) ((i + r + 1) * stride)];
+                    if (i - r >= 0) sum -= a[(size_t) ((i - r) * stride)];
                 }
+            }
+    };
+    for (int k = 0; k < 3; ++k)
+    {
+        pass (dst.data(), tmp.data(), w, 3, h, w * 3);      // across
+        pass (tmp.data(), dst.data(), h, w * 3, w, 3);      // down
     }
+}
+}
+
+// the scorpions' strokes for a pose: strike 0 (the tails arched) ... 1 (struck forwards over the heads). Each in its
+// own units: side on, facing right, about 145 across and 35 high; tint 0 its green ... 1 the
+// cyan-mint of its tips
+void Stripe::buildScorpion (float st, float t)
+{
+    strokes.clear(); dots.clear(); fills.clear();
+    auto add = [this] (std::vector<Point<float>> pts, float w, float b, Part part, float tint)
+    { strokes.push_back ({ std::move (pts), w, b, part, tint, {} }); };
+    auto line = [] (Point<float> a, Point<float> b) { return std::vector<Point<float>> { a, b }; };
+    auto dot = [this] (Point<float> p, float r, float level, float tint) { dots.push_back ({ p, r, level, tint }); };
+    auto fill = [this] (Point<float> p, float rx, float ry, float level) { fills.push_back ({ p, rx, ry, level }); };
+    auto lerp = [] (float a, float b, float k) { return a + (b - a) * k; };
+    auto dir = [] (float a) { return Point<float> { std::cos (a), std::sin (a) }; };
+
+    for (int which = 0; which < 2; ++which)
+    {
+        const size_t s0 = strokes.size(), d0 = dots.size(), f0 = fills.size();
+        const float t2 = t + 0.9f * (float) which;          // (the two out of step)
+        // the body (mesosoma): seven plates along its back, each rising to a ridge, a soft belly, a dashed line along its side
+        std::vector<Point<float>> back { { 45.0f, 21.2f } };
+        for (int i = 0; i < 7; ++i)
+        {
+            const float e = 46.0f + 6.0f * (float) i;
+            back.insert (back.end(), { { e + 0.3f, 20.7f }, { e + 1.6f, 19.4f }, { e + 5.7f, 19.0f } });
+        }
+        back.push_back ({ 88.0f, 19.3f });
+        add (back, 1.0f, 1.0f, Part::body, 0.0f);
+        add (curve ({ { 45, 26.8f }, { 52, 28.2f }, { 66, 28.8f }, { 80, 28.6f }, { 88, 28.4f } }, 4), 1.0f, 1.0f, Part::body, 0.0f);
+        add (curve ({ { 45, 21.2f }, { 43.6f, 24 }, { 45, 26.8f } }, 3), 1.0f, 1.0f, Part::body, 0.0f);
+        for (int i = 1; i < 7; ++i) { const float x = 46.0f + 6.0f * (float) i; add (line ({ x, 19.4f }, { x - 0.4f, 22.6f }), 0.45f, 0.6f, Part::detail, 0.0f); }
+        for (float x = 47.0f; x < 86.0f; x += 3.2f) add (line ({ x, 24.6f }, { x + 1.7f, 24.7f }), 0.35f, 0.45f, Part::detail, 0.2f);
+        for (float x = 50.0f; x < 87.0f; x += 7.0f) fill ({ x, 24.0f }, 4.5f, 3.6f, 1.0f);
+        // the head (carapace): a groove, the eyes on their mound and at the front, the small jaws
+        add (curve ({ { 88, 19.3f }, { 92, 18.5f }, { 99, 18.9f }, { 104, 21 }, { 106.3f, 23.6f }, { 104.8f, 26.4f }, { 98, 27.9f }, { 88, 28.4f } }, 4), 1.0f, 1.0f, Part::body, 0.1f);
+        add ({ { 91, 19.6f }, { 93, 23 }, { 100, 23.5f } }, 0.4f, 0.5f, Part::detail, 0.1f);
+        add (ellipseArc ({ 95.6f, 18.7f }, 1.7f, 1.0f, MathConstants<float>::pi, MathConstants<float>::twoPi, 0.0f, 8), 0.6f, 0.9f, Part::detail, 0.4f);
+        for (auto p : { Point<float> { 95.0f, 18.4f }, { 96.3f, 18.4f }, { 103.2f, 20.9f }, { 103.9f, 21.6f } }) dot (p, 0.45f, 0.9f, 1.0f);
+        add (curve ({ { 105.8f, 23 }, { 108.6f, 22.6f }, { 109.6f, 23.8f }, { 108.3f, 24.6f } }, 3), 0.6f, 0.9f, Part::detail, 0.5f);
+        fill ({ 97.0f, 23.5f }, 6.0f, 3.8f, 1.0f);
+
+        // the tail (metasoma): its spine, arched over the back at rest, the sting thrown forwards over the head when struck;
+        // it sways a little
+        static const Point<float> rest[] { { 46, 21.5f }, { 36, 19.2f }, { 28.8f, 14 }, { 27.6f, 8.2f }, { 33, 4.3f }, { 44, 3 }, { 56.5f, 4.2f }, { 65.5f, 8 } };
+        static const Point<float> thrown[] { { 46, 21.5f }, { 38, 17 }, { 35.5f, 10.2f }, { 40.5f, 5.2f }, { 52, 3.3f }, { 66, 4 }, { 80, 7.6f }, { 90, 12.5f } };
+        std::vector<Point<float>> bones;
+        for (int i = 0; i < 8; ++i)
+        {
+            const float k = (float) i / 7.0f;
+            bones.push_back ({ lerp (rest[i].x, thrown[i].x, st) + 0.36f * k * std::sin (t2 * 1.3f),
+                               lerp (rest[i].y, thrown[i].y, st) + 0.4f * k * std::sin (t2 * 1.3f + 0.5f) });
+        }
+        const auto sp = curve (bones, 10);
+        const int n = (int) sp.size();
+        spines[which] = sp;
+        // five segments, each a capsule wider than the last, with a keel along its back and two grains
+        static constexpr float cuts[] { 0.0f, 0.17f, 0.34f, 0.52f, 0.71f, 0.93f };
+        for (int c = 0; c < 5; ++c)
+        {
+            const int a = (int) (cuts[c] * (float) (n - 1)), b = (int) (cuts[c + 1] * (float) (n - 1));
+            const float wa = 2.5f + 0.32f * (float) c, tint = 0.1f + 0.1f * (float) c;
+            std::vector<Point<float>> one, other, keel;
+            for (int i = a; i <= b; ++i)
+            {
+                const auto p = sp[(size_t) i], q = sp[(size_t) jmin (n - 1, i + 1)], r = sp[(size_t) jmax (0, i - 1)];
+                const float dx = q.x - r.x, dy = q.y - r.y, l = jmax (1.0e-4f, std::hypot (dx, dy));
+                const float f = (float) (i - a) / (float) jmax (1, b - a), w = wa * (0.84f + 0.16f * std::sin (f * MathConstants<float>::pi));
+                one.push_back ({ p.x - dy / l * w, p.y + dx / l * w });
+                other.push_back ({ p.x + dy / l * w, p.y - dx / l * w });
+                if (i > a + 1 && i < b - 1) keel.push_back ({ p.x + dy / l * w * 0.45f, p.y - dx / l * w * 0.45f });
+            }
+            const auto joint = std::vector<Point<float>> { one.back(), other.back() };
+            const auto mid = sp[(size_t) ((a + b) / 2)];
+            add (std::move (one), 0.95f, 1.0f, Part::tail, tint);
+            add (std::move (other), 0.95f, 1.0f, Part::tail, tint);
+            add (joint, 0.65f, 0.85f, Part::detail, tint);
+            if (keel.size() > 1) add (std::move (keel), 0.35f, 0.5f, Part::detail, tint);
+            dot (sp[(size_t) (a + (b - a) / 3)], 0.4f, 0.6f, tint + 0.2f);
+            dot (sp[(size_t) (a + 2 * (b - a) / 3)], 0.4f, 0.6f, tint + 0.2f);
+            fill (mid, wa * 1.1f, wa * 1.1f, 0.9f);
+        }
+        // the sting: a swollen bulb and a long, curved blade
+        const auto end = sp[(size_t) (0.93f * (float) (n - 1))], before = sp[(size_t) (n - 4)];
+        const float ang = std::atan2 (sp.back().y - before.y, sp.back().x - before.x);
+        const auto bulb = end + dir (ang) * 3.4f;
+        add (ellipseArc (bulb, 4.5f, 3.1f, 0.0f, MathConstants<float>::twoPi, ang, 24), 1.0f, 1.2f, Part::telson, 0.7f);
+        add (ellipseArc (bulb, 2.4f, 1.4f, -2.5f, 0.5f, ang, 8), 0.4f, 0.7f, Part::detail, 0.8f);
+        fill (bulb, 4.0f, 3.0f, 1.2f);
+        const auto root = bulb + dir (ang) * 4.3f;
+        const auto barb = root + dir (ang + 1.25f) * 8.0f;
+        stingTips[which] = barb;
+        add (curve ({ root, root + dir (ang + 0.35f) * 4.6f, barb }, 6), 0.95f, 1.5f, Part::sting, 1.0f);
+        add (curve ({ root + dir (ang + 1.57f) * 1.1f, root + dir (ang + 0.55f) * 4.2f, barb }, 6), 0.55f, 1.2f, Part::sting, 1.0f);
+
+        // the claws (the far one behind, dimmer), resting on the ground: arm, wrist, a heavy pincer with ridges, a fixed
+        // finger and a moving one a little open, both toothed
+        for (int far = 1; far >= 0; --far)
+        {
+            const Point<float> o { far != 0 ? -3.2f : 0.0f, far != 0 ? -2.6f : 0.0f };
+            const float b = far != 0 ? 0.4f : 1.0f;
+            add (curve ({ Point<float> { 100.5f, 24.6f } + o, Point<float> { 104.5f, 26.4f } + o, Point<float> { 108.5f, 28.4f } + o }, 3), 1.0f, b, Part::arm, 0.3f);
+            add (curve ({ Point<float> { 108.5f, 28.4f } + o, Point<float> { 112, 29.4f } + o, Point<float> { 115.5f, 30.6f } + o }, 3), 1.05f, b, Part::arm, 0.4f);
+            dot (Point<float> { 108.5f, 28.4f } + o, 0.6f, 0.8f * b, 0.6f);
+            const auto palm = Point<float> { 121.8f, 31.0f } + o;
+            add (ellipseArc (palm, 6.4f, 3.3f, 0.0f, MathConstants<float>::twoPi, -0.05f, 28), 1.05f, b, Part::claw, 0.55f);
+            add (curve ({ Point<float> { 117, 30 } + o, Point<float> { 122, 29.1f } + o, Point<float> { 127, 29.4f } + o }, 3), 0.4f, 0.6f * b, Part::detail, 0.6f);
+            add (curve ({ Point<float> { 117.5f, 32.4f } + o, Point<float> { 123, 33.2f } + o, Point<float> { 127.5f, 32.8f } + o }, 3), 0.4f, 0.6f * b, Part::detail, 0.6f);
+            fill (palm, 5.8f, 3.0f, b);
+            const Point<float> fixedTip = Point<float> { 141, 31.4f } + o;
+            add (curve ({ Point<float> { 127.6f, 28.7f } + o, Point<float> { 133, 28.7f } + o, Point<float> { 138, 29.8f } + o, fixedTip }, 4), 0.95f, 1.15f * b, Part::finger, 0.9f);
+            add (curve ({ Point<float> { 128, 30.5f } + o, Point<float> { 133, 30.6f } + o, Point<float> { 138, 30.9f } + o, fixedTip }, 3), 0.6f, b, Part::finger, 0.9f);
+            for (int k = 0; k < 4; ++k) { const float x = 130.0f + 2.6f * (float) k; add (line (Point<float> { x, 30.6f } + o, Point<float> { x + 0.6f, 31.4f } + o), 0.35f, 0.6f * b, Part::detail, 0.9f); }
+            // (the moving finger along the ground, a little open)
+            const auto pivot = Point<float> { 128, 32.6f } + o;
+            const float a = 0.13f, len = 13.0f;
+            const auto tip = pivot + dir (a) * len, inner = pivot + dir (a - 0.12f) * (0.55f * len) + Point<float> { 0.0f, -0.4f };
+            add (curve ({ pivot + Point<float> { 0.0f, 0.8f }, pivot + dir (a + 0.08f) * (0.55f * len) + Point<float> { 0.0f, 0.9f }, tip }, 5), 0.95f, 1.15f * b, Part::finger, 0.9f);
+            add (curve ({ pivot + Point<float> { 0.0f, -0.6f }, inner, tip }, 4), 0.6f, b, Part::finger, 0.9f);
+            for (int k = 1; k < 4; ++k)
+            {
+                const auto p = pivot + dir (a - 0.1f) * (len * (0.25f + 0.2f * (float) k)) + Point<float> { 0.0f, -0.3f };
+                add (line (p, p + dir (a - 1.6f) * 0.9f), 0.35f, 0.6f * b, Part::detail, 0.9f);
+            }
+            if (far == 0) { pincers[2 * which] = fixedTip; pincers[2 * which + 1] = tip; }
+        }
+
+        // four legs a side, jointed, the front ones reaching forwards and the back ones backwards, stepping a little
+        for (int i = 0; i < 4; ++i)
+            for (int far = 1; far >= 0; --far)
+            {
+                const float x = 85.0f - 7.0f * (float) i + (far != 0 ? 1.5f : 0.0f), y = far != 0 ? -0.9f : 0.0f;
+                const float d = 1.0f - 0.667f * (float) i, step = 0.8f * std::sin (t2 * 7.0f + 1.7f * (float) i + (far != 0 ? 1.5f : 0.0f));
+                const Point<float> hip { x, 28.4f + y }, knee { x + 2.2f * d + 0.6f, 31.2f + y }, ankle { x + 4.6f * d + 0.5f * step, 33.6f + y }, foot { x + 6.6f * d + step, 35.0f + y };
+                const float b = far != 0 ? 0.35f : 0.85f;
+                add ({ hip, knee, ankle, foot }, 0.7f, b, Part::leg, 0.1f);
+                add (line (foot, foot + Point<float> { d >= 0.0f ? 1.0f : -1.0f, -0.4f }), 0.4f, b, Part::detail, 0.3f);
+                if (far == 0) dot (knee, 0.45f, 0.7f, 0.3f);
+            }
+
+        // into the tube, this one's side of the middle
+        for (size_t k = s0; k < strokes.size(); ++k) for (auto& p : strokes[k].pts) p = toDesign (p, which);
+        for (size_t k = d0; k < dots.size(); ++k) dots[k].p = toDesign (dots[k].p, which);
+        for (size_t k = f0; k < fills.size(); ++k) fills[k].p = toDesign (fills[k].p, which);
+        for (auto& p : spines[which]) p = toDesign (p, which);
+        stingTips[which] = toDesign (stingTips[which], which);
+        for (int k = 0; k < 2; ++k) pincers[2 * which + k] = toDesign (pincers[2 * which + k], which);
+    }
+
+    // the distance along each stroke, for what runs along it
+    for (auto& k : strokes)
+    {
+        k.along.assign (k.pts.size(), 0.0f);
+        for (size_t i = 1; i < k.pts.size(); ++i) k.along[i] = k.along[i - 1] + k.pts[i].getDistanceFrom (k.pts[i - 1]);
+    }
+}
+
+Point<float> Stripe::pointAlong (const Stroke& k, float d) const
+{
+    d = jlimit (0.0f, k.along.back(), d);
+    size_t i = 1;
+    while (i + 1 < k.pts.size() && k.along[i] < d) ++i;
+    const float span = jmax (1.0e-6f, k.along[i] - k.along[i - 1]), f = (d - k.along[i - 1]) / span;
+    return k.pts[i - 1] + (k.pts[i] - k.pts[i - 1]) * f;
+}
+
+// a frame of the scorpion's life: its strike (on a kick: the low band jumping up), its claws, the sparks running along
+// it and the motes it sheds (real: seconds; paced: the motes' time, at the tempo)
+void Stripe::advanceScorpion (float real, float paced)
+{
+    bodyTime += real * 0.5f * pace;
+    presence = envelope >= presence || ! playing ? envelope : presence * std::exp (-real / 1.5f);
+    if (presence < 0.03f && envelope <= 0.002f) presence = 0.0f;           // (and out, once faint)
+    // a kick (dsp/Kick.h) strikes, from wherever the tails are in their swing
+    if (kicked && envelope > 0.02f)
+    {
+        strikeFrom = struck;
+        strike = 1.0f;
+    }
+    kicked = false;
+    // any beat (the light jumping up) brightens it
+    if (beat && envelope > 0.02f) flash = jmax (flash, 0.6f * envelope);
+    strike = jmax (0.0f, strike - real * 3.2f);
+    flash *= std::exp (-real * 5.0f);
+    // the tails snap forwards in the first fifth of a strike and settle back over the rest
+    const float phase = 1.0f - strike;
+    struck = strike <= 0.0f ? 0.0f : phase < 0.18f ? strikeFrom + (1.0f - strikeFrom) * std::pow (phase / 0.18f, 0.6f)
+                                                   : std::pow (1.0f - (phase - 0.18f) / 0.82f, 2.0f);
+    buildScorpion (struck, bodyTime);
+    mapScorpions();
+    if (runners.empty())
+        for (int i = 0; i < 180; ++i)
+            runners.push_back ({ (size_t) rng.nextInt (1 << 16), rng.nextFloat(), (0.15f + 0.35f * rng.nextFloat()) * (rng.nextBool() ? 1.0f : -1.0f), rng.nextFloat() });
+    for (auto& r : runners)
+    {
+        r.at += r.speed * real * (1.0f + 2.0f * flash + 3.0f * struck);
+        r.at -= std::floor (r.at);
+    }
+    // shedding: ~800 motes a second at full brightness, more on a beat, fewer as it fades; none in silence; from the
+    // outlines (not the details inside), each born just clear of the scorpion. Each mote keeps the brightness it was born
+    // with (it does not dim and brighten with every hit)
+    moteDue += real * 800.0f * presence * (0.8f + 0.6f * flash);
+    for (; moteDue >= 1.0f; moteDue -= 1.0f)
+    {
+        const Stroke* pick = nullptr;
+        for (int tries = 0; tries < 16 && pick == nullptr; ++tries)
+            if (const auto& k = strokes[(size_t) rng.nextInt ((int) strokes.size())]; k.part != Part::detail) pick = &k;
+        if (pick == nullptr) continue;
+        const auto& k = *pick;
+        auto p = pointAlong (k, rng.nextFloat() * k.along.back());
+        for (int step = 0; step < 8 && onScorpion (p.x, p.y) > 0.05f; ++step) p += awayFromScorpion (p.x, p.y) * 0.8f;
+        const float a = MathConstants<float>::twoPi * rng.nextFloat(), j = uniform (rng, 3.0f, 11.0f), c = rng.nextFloat();
+        const Rgb col = c < 0.42f ? greenLight : c < 0.66f ? tealLight : c < 0.86f ? mintLight : c < 0.94f ? aquaLight : coreLight;
+        Mote m { p.x, p.y, j * std::cos (a), 0.8f * j * std::sin (a), 0.0f, uniform (rng, 0.15f, 0.6f),
+                 uniform (rng, 0.3f, 0.46f) * (1.0f + 0.5f * flash), uniform (rng, 1.2f, 3.0f), uniform (rng, 0.0f, 6.3f), col.r, col.g, col.b,
+                 jmax (presence, envelope), p.x + uniform (rng, -30.0f, 30.0f) < scorpionX ? -1.0f : 1.0f };
+        if (motes.size() < 16000) motes.push_back (m);
+    }
+    // the motes: drifting off it, then streaming outwards (the ORION style's streamers' law); near an end the black
+    // hole past it draws them in, faster the closer, funnelled to its height (the ORION style's pull); off the end gone
+    for (auto& m : motes)
+    {
+        m.age += paced;
+        if (m.age < m.rise)
+        {
+            m.vx *= std::exp (-paced * 3.0f);
+            m.vy *= std::exp (-paced * 3.0f);
+        }
+        else
+        {
+            if (m.expand > 0.0f)
+            {
+                m.vx = m.side * (18.0f + m.expand * std::abs (m.x - scorpionX));
+                m.vy = (m.vy + 4.0f * std::sin (m.twinkle + bodyTime * 1.4f) * paced) * std::exp (-paced * 2.0f);
+            }
+            const float hx = m.side < 0.0f ? holeX[0] : holeX[1], dx = hx - m.x, d = std::abs (dx);
+            if (d < holeReach)
+            {
+                const float pull = 400000.0f / (d * d + 400.0f);
+                m.vx += (dx > 0.0f ? 1.0f : -1.0f) * pull * paced;
+                m.vy += (holeY - m.y) * (1.0f - d / holeReach) * holeFunnel * paced;
+                m.vy *= std::exp (-paced / 0.15f);
+                m.expand = 0.0f;
+            }
+        }
+        // (round the scorpions, not across them: pushed off their lines and bodies, harder the closer)
+        if (const float on = onScorpion (m.x, m.y); on > 0.0f)
+        {
+            const auto away = awayFromScorpion (m.x, m.y);
+            m.vx += away.x * 900.0f * on * paced;
+            m.vy += away.y * 900.0f * on * paced;
+            m.x += away.x * 6.0f * on * paced;
+            m.y += away.y * 6.0f * on * paced;
+        }
+        m.x += m.vx * paced;
+        m.y += m.vy * paced;
+    }
+    motes.erase (std::remove_if (motes.begin(), motes.end(), [] (const Mote& m)
+                                 { return m.x < left || m.x > left + width || m.y < top - 2.0f || m.y > top + height + 2.0f; }),
+                 motes.end());
+}
+
+// where the scorpions are, on a grid of design pixels: 1 on their lines and inside their bodies (the glow that fills
+// them), falling to 0 ~2.5 px out
+void Stripe::mapScorpions()
+{
+    scorpionMap.assign ((size_t) (mapW * mapH), 0.0f);
+    auto mark = [this] (float x, float y, float radius)
+    {
+        const int i0 = jmax (0, (int) (x - radius - mapLeft)), i1 = jmin (mapW - 1, (int) (x + radius - mapLeft) + 1);
+        const int j0 = jmax (0, (int) (y - radius - mapTop)), j1 = jmin (mapH - 1, (int) (y + radius - mapTop) + 1);
+        for (int j = j0; j <= j1; ++j)
+            for (int i = i0; i <= i1; ++i)
+            {
+                const float dx = (float) i + 0.5f + mapLeft - x, dy = (float) j + 0.5f + mapTop - y;
+                const float v = 1.0f - std::sqrt (dx * dx + dy * dy) / radius;
+                float& c = scorpionMap[(size_t) (j * mapW + i)];
+                c = jmax (c, jmin (1.0f, 1.6f * v));
+            }
+    };
+    for (auto& k : strokes)
+        for (size_t i = 0; i < k.pts.size(); ++i)
+        {
+            mark (k.pts[i].x, k.pts[i].y, 2.5f);
+            if (i > 0 && k.pts[i].getDistanceFrom (k.pts[i - 1]) > 1.5f) mark ((k.pts[i].x + k.pts[i - 1].x) * 0.5f, (k.pts[i].y + k.pts[i - 1].y) * 0.5f, 2.5f);
+        }
+    for (auto& f : fills) mark (f.p.x, f.p.y, 0.8f * jmin (f.rx, f.ry) * scorpionScale + 1.5f);
+}
+
+float Stripe::onScorpion (float x, float y) const
+{
+    const int i = (int) (x - mapLeft), j = (int) (y - mapTop);
+    if (scorpionMap.empty() || i < 0 || i >= mapW || j < 0 || j >= mapH) return 0.0f;
+    return scorpionMap[(size_t) (j * mapW + i)];
+}
+
+// the way off the scorpion from (x, y): down its slope (unit length; outwards from the middle where it is flat)
+Point<float> Stripe::awayFromScorpion (float x, float y) const
+{
+    const float gx = onScorpion (x - 1.0f, y) - onScorpion (x + 1.0f, y), gy = onScorpion (x, y - 1.0f) - onScorpion (x, y + 1.0f);
+    const float l = std::hypot (gx, gy);
+    if (l < 1.0e-4f) return { x < scorpionX ? -1.0f : 1.0f, y < scorpionY ? -0.3f : 0.3f };
+    return { gx / l, gy / l };
+}
+
+// one stroke as neon: the distance from each pixel to it, lit in three layers (a wide halo, a glow, a thin core; green
+// on the body, cyan-mint towards the tips), the outline trembling a little like live current
+void Stripe::strokeNeon (const Stroke& k, float level, float s)
+{
+    if (k.pts.size() < 2 || level <= 0.002f) return;
+    const float w = k.width * scorpionScale, wobble = k.part == Part::detail ? 0.08f * scorpionScale : 0.16f * scorpionScale;
+    std::vector<Point<float>> px (k.pts.size());
+    float x0 = 1.0e9f, x1 = -1.0e9f, y0 = 1.0e9f, y1 = -1.0e9f;
+    for (size_t i = 0; i < k.pts.size(); ++i)
+    {
+        const float jig = wobble * std::sin (bodyTime * 46.0f + 1.9f * (float) i + k.along.back());
+        px[i] = { (k.pts[i].x + jig - left) * s, (k.pts[i].y - jig - top) * s };
+        x0 = jmin (x0, px[i].x); x1 = jmax (x1, px[i].x); y0 = jmin (y0, px[i].y); y1 = jmax (y1, px[i].y);
+    }
+    const float halo = 1.3f * w * s, glowW = 0.55f * w * s, core = jmax (0.25f, 0.19f * w * s), edge = jmax (0.4f, 0.3f * s);
+    const float reach = halo + 3.0f * edge;
+    const int i0 = jmax (0, (int) (x0 - reach)), i1 = jmin (bufW - 1, (int) (x1 + reach) + 1);
+    const int j0 = jmax (0, (int) (y0 - reach)), j1 = jmin (bufH - 1, (int) (y1 + reach) + 1);
+    auto mix = [] (const Rgb& a, const Rgb& b, float f) { return Rgb { a.r + (b.r - a.r) * f, a.g + (b.g - a.g) * f, a.b + (b.b - a.b) * f }; };
+    const Rgb haloC = mix (tealLight, aquaLight, 0.6f * k.tint), glowC = mix (greenLight, aquaLight, k.tint), coreC = mix (coreLight, tipLight, k.tint);
+    auto lit = [edge] (float d, float half) { return d <= half ? 1.0f : std::exp (-(d - half) / edge); };
+    // (the squared distance to the nearest of its segments, each segment visiting only the pixels near it)
+    const int bw = i1 - i0 + 1, bh = j1 - j0 + 1;
+    if (bw <= 0 || bh <= 0) return;
+    nearest.assign ((size_t) (bw * bh), reach * reach);
+    for (size_t n = 1; n < px.size(); ++n)
+    {
+        const float ax = px[n - 1].x, ay = px[n - 1].y, dx = px[n].x - ax, dy = px[n].y - ay, l2 = dx * dx + dy * dy;
+        const int si0 = jmax (i0, (int) (jmin (ax, px[n].x) - reach)), si1 = jmin (i1, (int) (jmax (ax, px[n].x) + reach) + 1);
+        const int sj0 = jmax (j0, (int) (jmin (ay, px[n].y) - reach)), sj1 = jmin (j1, (int) (jmax (ay, px[n].y) + reach) + 1);
+        for (int j = sj0; j <= sj1; ++j)
+        {
+            float* row = nearest.data() + (size_t) ((j - j0) * bw + (si0 - i0));
+            const float py = (float) j + 0.5f;
+            for (int i = si0; i <= si1; ++i, ++row)
+            {
+                const float qx = (float) i + 0.5f;
+                const float t = l2 > 1.0e-6f ? jlimit (0.0f, 1.0f, ((qx - ax) * dx + (py - ay) * dy) / l2) : 0.0f;
+                const float ex = ax + t * dx - qx, ey = ay + t * dy - py;
+                *row = jmin (*row, ex * ex + ey * ey);
+            }
+        }
+    }
+    for (int j = j0; j <= j1; ++j)
+    {
+        float* row = canvas + (size_t) (j * bufW + i0) * 3;
+        const float* closest = nearest.data() + (size_t) ((j - j0) * bw);
+        for (int i = 0; i < bw; ++i, row += 3)
+        {
+            const float d2 = closest[i];
+            if (d2 >= reach * reach) continue;
+            const float d = std::sqrt (d2);
+            const float a = 0.12f * level * lit (d, halo), b = 0.4f * level * lit (d, glowW), c = jmin (1.0f, 0.7f * level) * lit (d, core);
+            row[0] += a * haloC.r + b * glowC.r + c * coreC.r;
+            row[1] += a * haloC.g + b * glowC.g + c * coreC.g;
+            row[2] += a * haloC.b + b * glowC.b + c * coreC.b;
+        }
+    }
+}
+
+// the scorpion's light: a haze around it, its motes, a faint glow filling its body, its outline, sparks and glints, all
+// in a layer that blooms (three widths of blur added under it, as neon in a photograph), then added to the light
+void Stripe::renderScorpion (float s)
+{
+    if (strokes.empty()) buildScorpion (0.0f, bodyTime);
+    const float e = presence;
+    // (faintly lit in silence; full with the music, fading over ~1.5 s after it; a beat brightens them, a strike more)
+    const float lv = 0.22f + 0.45f * e + 0.3f * flash + 0.25f * struck * e;
+    splatGlow (scorpionX, scorpionY, 90.0f, 14.0f, (0.06f + 0.12f * e) * (0.9f + 0.1f * std::sin (bodyTime * 1.6f)), deepLight.r, deepLight.g, deepLight.b, s);
+    // the motes: thinner and drawn out near the black holes (the ORION style's); each as bright as the music was when
+    // it was born (stopped, no brighter than the light, so they fade with it), fading where they cross a scorpion
+    for (auto& m : motes)
+    {
+        const float k = jmax (0.0f, 1.0f - jmin (m.x - holeX[0], holeX[1] - m.x) / holeReach), thin = 1.0f - 0.55f * k;
+        const float a = jmin (1.0f, m.age * 4.0f) * 0.62f * (0.75f + 0.25f * std::sin (m.twinkle + bodyTime * 10.0f))
+                        * (playing ? m.level : jmin (m.level, envelope)) * (1.0f - 0.9f * onScorpion (m.x, m.y));
+        if (a < 0.01f) continue;
+        // one glow each, drawn out behind it along its way (its trail); a long trail as a line
+        const float trail = m.age >= m.rise ? 0.04f + 0.08f * k : 0.0f, tx = m.vx * trail, ty = m.vy * trail, len = std::hypot (tx, ty);
+        if (len > 4.0f) splatLine (m.x - tx, m.y - ty, m.x, m.y, 0.7f * m.size * thin, 0.8f * a, m.r, m.g, m.b, s);
+        else splatGlow (m.x - 0.4f * tx, m.y - 0.4f * ty, 0.45f * m.size + 0.4f * len, 0.45f * m.size * thin, a, m.r, m.g, m.b, s);
+    }
+    // the scorpion itself in a layer of its own, to bloom
+    layer.assign (light.size(), 0.0f);
+    canvas = layer.data();
+    for (auto& f : fills)
+        splatGlow (f.p.x, f.p.y, 0.6f * f.rx * scorpionScale, 0.6f * f.ry * scorpionScale, 0.07f * f.level * lv, tealLight.r, tealLight.g, tealLight.b, s);
+    for (auto& k : strokes)
+    {
+        const bool tip = k.part == Part::sting || k.part == Part::telson;
+        strokeNeon (k, k.bright * lv * (tip ? 1.0f + 1.0f * flash + 1.2f * struck : 1.0f), s);
+    }
+    for (auto& d : dots)
+    {
+        const float rr = 0.45f * d.r * scorpionScale + 0.3f;
+        const Rgb c { coreLight.r + (tipLight.r - coreLight.r) * d.tint, coreLight.g + (tipLight.g - coreLight.g) * d.tint, coreLight.b + (tipLight.b - coreLight.b) * d.tint };
+        splatGlow (d.p.x, d.p.y, rr, rr, d.level * lv, c.r, c.g, c.b, s);
+    }
+    // the claws' tips glow; the stings' barbs flare on a strike
+    for (auto& p : pincers)
+    {
+        const float rr = 0.35f * scorpionScale * 4.5f;
+        splatGlow (p.x, p.y, rr, rr, 0.4f * lv, aquaLight.r, aquaLight.g, aquaLight.b, s);
+    }
+    for (int which = 0; which < 2; ++which)
+    {
+        const float rr = 0.35f * (3.0f + 9.0f * jmax (flash, struck));
+        splatGlow (stingTips[which].x, stingTips[which].y, rr, rr, 0.55f + 0.4f * jmax (flash, struck), tipLight.r, tipLight.g, tipLight.b, s);
+        // on a strike, a pulse of light runs up the tail from the body to the sting
+        const auto& sp = spines[which];
+        if (struck > 0.02f && ! sp.empty())
+        {
+            const float u = jlimit (0.0f, 1.0f, (1.0f - strike) / 0.35f);
+            const auto p = sp[(size_t) (u * (float) (sp.size() - 1))];
+            splatGlow (p.x, p.y, 2.2f, 2.2f, 0.8f * (1.0f - u) * lv, aquaLight.r, aquaLight.g, aquaLight.b, s);
+        }
+    }
+    // sparks running along the outline (not its details)
+    std::vector<size_t> outline;
+    for (size_t i = 0; i < strokes.size(); ++i) if (strokes[i].part != Part::detail) outline.push_back (i);
+    for (auto& r : runners)
+    {
+        const auto& k = strokes[outline[r.stroke % outline.size()]];
+        const auto p = pointAlong (k, r.at * k.along.back());
+        const float rr = 0.3f * scorpionScale * (0.9f + 1.1f * r.bright);
+        const Rgb& c = r.bright > 0.75f ? coreLight : k.tint > 0.5f ? aquaLight : mintLight;
+        splatGlow (p.x, p.y, rr, rr, (0.35f + 0.5f * r.bright) * lv * k.bright, c.r, c.g, c.b, s);
+    }
+    canvas = light.data();
+    // the bloom, over the scorpion and the reach of its widest blur only: the layer no brighter than white (as neon
+    // photographed), blurred at two widths and added under it
+    float lo = 1.0e9f, hi = -1.0e9f;
+    for (auto& k : strokes) for (auto& p : k.pts) { lo = jmin (lo, p.x); hi = jmax (hi, p.x); }
+    const int x0 = jmax (0, (int) ((lo - 30.0f - left) * s)), x1 = jmin (bufW, (int) ((hi + 30.0f - left) * s) + 1), rw = x1 - x0;
+    if (rw <= 0) return;
+    region.resize ((size_t) (rw * bufH * 3));
+    for (int j = 0; j < bufH; ++j)
+        for (int i = 0; i < rw * 3; ++i) region[(size_t) (j * rw * 3 + i)] = jmin (1.0f, layer[(size_t) ((j * bufW + x0) * 3 + i)]);
+    auto addBack = [&] (const std::vector<float>& from, float share)
+    {
+        for (int j = 0; j < bufH; ++j)
+        {
+            float* o = light.data() + (size_t) ((j * bufW + x0) * 3);
+            const float* f = from.data() + (size_t) (j * rw * 3);
+            for (int i = 0; i < rw * 3; ++i) o[i] += share * f[i];
+        }
+    };
+    const int hw = (rw + 1) / 2, hh = (bufH + 1) / 2;
+    half.assign ((size_t) (hw * hh * 3), 0.0f);
+    for (int j = 0; j < bufH; ++j)
+        for (int i = 0; i < rw; ++i)
+            for (int c = 0; c < 3; ++c) half[(size_t) (((j / 2) * hw + i / 2) * 3 + c)] += 0.25f * region[(size_t) ((j * rw + i) * 3 + c)];
+    // (the wide and the middle blur at half the resolution, added up there and brought back up once; the narrowest is
+    // left to the lines' own soft edges)
+    blurRgb (half, blurred, blurTmp, hw, hh, 7.3f * s * 0.5f);
+    blurRgb (half, mid, blurTmp, hw, hh, 2.3f * s * 0.5f);
+    for (size_t k = 0; k < blurred.size(); ++k) blurred[k] = 0.5f * blurred[k] + 0.4f * mid[k];
+    for (int j = 0; j < bufH; ++j)
+    {
+        const float fy = jlimit (0.0f, (float) (hh - 1), ((float) j + 0.5f) * 0.5f - 0.5f);
+        const int ya = (int) fy, yb = jmin (hh - 1, ya + 1);
+        const float wy = fy - (float) ya;
+        float* o = light.data() + (size_t) ((j * bufW + x0) * 3);
+        for (int i = 0; i < rw; ++i, o += 3)
+        {
+            const float fx = jlimit (0.0f, (float) (hw - 1), ((float) i + 0.5f) * 0.5f - 0.5f);
+            const int xa = (int) fx, xb = jmin (hw - 1, xa + 1);
+            const float wx = fx - (float) xa;
+            const float* p00 = blurred.data() + (size_t) ((ya * hw + xa) * 3), *p10 = blurred.data() + (size_t) ((ya * hw + xb) * 3);
+            const float* p01 = blurred.data() + (size_t) ((yb * hw + xa) * 3), *p11 = blurred.data() + (size_t) ((yb * hw + xb) * 3);
+            for (int c = 0; c < 3; ++c)
+                o[c] += (p00[c] * (1.0f - wx) + p10[c] * wx) * (1.0f - wy) + (p01[c] * (1.0f - wx) + p11[c] * wx) * wy;
+        }
+    }
+    addBack (region, 1.0f);
 }
 
 // a soft line of light (a streak), brighter at its head (x1, y1)
@@ -944,276 +1242,14 @@ void Stripe::splatGlow (float x, float y, float rx, float ry, float level, float
     }
 }
 
-// a disc of light, flat with a slightly brighter rim and a soft edge: an out-of-focus drop
-void Stripe::splatDisc (float x, float y, float radius, float level, float r, float g, float b, float s)
-{
-    const float cx = (x - left) * s, cy = (y - top) * s, R = jmax (0.6f, radius * s);
-    const int i0 = jmax (0, (int) (cx - R - 2.0f)), i1 = jmin (bufW - 1, (int) (cx + R + 2.0f));
-    const int j0 = jmax (0, (int) (cy - R - 2.0f)), j1 = jmin (bufH - 1, (int) (cy + R + 2.0f));
-    for (int j = j0; j <= j1; ++j)
-    {
-        float* row = canvas + (size_t) (j * bufW + i0) * 3;
-        for (int i = i0; i <= i1; ++i, row += 3)
-        {
-            const float dx = (float) i + 0.5f - cx, dy = (float) j + 0.5f - cy, rho = std::sqrt (dx * dx + dy * dy) / R;
-            if (rho > 1.0f + 2.0f / R) continue;
-            const float r4 = rho * rho * rho * rho;
-            const float v = level * (rho <= 1.0f ? 0.8f + 0.35f * r4 : 1.15f * std::exp (-(rho - 1.0f) * R / 0.7f));
-            row[0] += v * r; row[1] += v * g; row[2] += v * b;
-        }
-    }
-}
-
-// a liquid drop: a round body stretched into a teardrop along its motion (dx, dy: where it came from), and a glossy
-// highlight up and to the left of its middle
-void Stripe::droplet (float x, float y, float dx, float dy, float size, float level, const Drop& d, float s)
-{
-    Particle p {};
-    p.x = x; p.y = y; p.w = p.h = size;
-    p.r = d.r; p.g = d.g; p.b = d.b;
-    const float len = std::hypot (dx, dy), tail = jmin (3.5f * size, 0.9f * len);
-    if (size < 1.5f)
-    {
-        // (far ones: a short streak is all that shows)
-        if (tail > 0.3f) splatLine (x + dx / len * tail, y + dy / len * tail, x, y, size, level, d.r, d.g, d.b, s);
-        else { p.kind = Kind::dot; splat (p, level, s); }
-        return;
-    }
-    if (tail > 0.3f * size)
-    {
-        const float ux = dx / len, uy = dy / len;
-        splatLine (x + ux * tail, y + uy * tail, x, y, 0.5f * size, 0.6f * level, d.r, d.g, d.b, s);
-    }
-    p.kind = Kind::blob;
-    splat (p, level, s);
-    p.x = x - 0.22f * size; p.y = y - 0.22f * size; p.w = p.h = jmax (0.5f, 0.3f * size);
-    p.r = p.g = p.b = 1.0f;
-    splat (p, 0.9f * level, s);
-}
-
-void Stripe::renderVenom (float s)
-{
-    const float e = envelope;
-    for (const auto& d : drops)
-    {
-        const float age = (float) elapsed - d.born;
-        if (age < 0.0f || age > d.life) continue;
-        const float u = jlimit (0.0f, 1.0f, age / jmax (0.001f, d.life));
-        Particle p {};
-        p.x = d.sx; p.y = d.sy; p.r = d.r; p.g = d.g; p.b = d.b; p.kind = Kind::blob;
-        switch (d.type)
-        {
-            case Drop::Type::spray:
-            case Drop::Type::glob:
-            {
-                // depth of field (in focus at 0.45 of the way): the far ones soft, the ones in focus sharp drops
-                // streaking, the nearest big discs, as dim as their light is spread
-                const float near = jlimit (0.0f, 1.0f, 1.1f - d.Z), z = jmax (0.04f, d.Z);
-                const float size = jmin (d.type == Drop::Type::glob ? 15.0f : 6.0f, d.size * 0.6f / z);
-                const float level = d.level * (0.06f + 1.0f * near * near) * jmin (1.0f, age / 0.08f) * e;
-                if (level <= 0.004f) break;
-                const float blur = jmin (9.0f, 0.9f * std::abs (1.0f / z - 1.0f / 0.45f));
-                if (blur < 1.3f) droplet (d.sx, d.sy, d.px - d.sx, d.py - d.sy, jmax (0.6f, size), level, d, s);
-                else
-                {
-                    const float spreadOut = (size * size) / ((size + 2.0f * blur) * (size + 2.0f * blur));
-                    if (d.Z < 0.45f) splatDisc (d.sx, d.sy, 0.5f * size + blur, 1.6f * level * jmax (0.04f, spreadOut), d.r, d.g, d.b, s);
-                    else splatGlow (d.sx, d.sy, 0.5f * size + 0.5f * blur, 0.5f * size + 0.5f * blur, level * jmax (0.25f, spreadOut), d.r, d.g, d.b, s);
-                }
-                break;
-            }
-            case Drop::Type::mist:
-            {
-                const float level = d.level * jlimit (0.0f, 1.0f, 1.1f - d.Z) * e;
-                if (level > 0.004f) splatLine (d.px, d.py, d.sx, d.sy, 0.5f, level, d.r, d.g, d.b, s);
-                break;
-            }
-            case Drop::Type::wave:
-            {
-                // the heart's pressure wave: two soft fronts running out from it, red turning to venom green
-                const float r = 260.0f * (1.0f - std::exp (-age / 0.3f)), k = jmin (1.0f, r / 220.0f);
-                const auto c = Colour (190, 10, 25).interpolatedWith (venomColour (0.3f), k);
-                for (float side : { -1.0f, 1.0f })
-                    splatGlow (heartX + side * r, glandY, 9.0f + 0.1f * r, 7.0f, d.level * (1.0f - u) * (1.0f - u) * e,
-                               c.getFloatRed(), c.getFloatGreen(), c.getFloatBlue(), s);
-                break;
-            }
-            case Drop::Type::ring:
-            {
-                // the splash ring: a thin ring of light spreading fast and fading
-                const float radius = d.size * (1.0f - std::exp (-age / 0.035f)), level = d.level * (1.0f - u) * (1.0f - u) * e;
-                p.kind = Kind::dot; p.w = p.h = 0.6f;
-                const int n = jlimit (6, 24, (int) (radius * 2.0f));
-                for (int k = 0; k < n; ++k)
-                {
-                    const float a = MathConstants<float>::twoPi * ((float) k + d.seed) / (float) n;
-                    p.x = d.sx + radius * std::cos (a); p.y = d.sy + 0.7f * radius * std::sin (a);
-                    splat (p, level, s);
-                }
-                break;
-            }
-            case Drop::Type::flash:
-                p.w = d.size * (0.5f + 0.8f * u); p.h = p.w * 0.45f;
-                splat (p, d.level * (1.0f - u) * (1.0f - u) * e, s);
-                break;
-            case Drop::Type::bead: case Drop::Type::track: break;        // (on the glass: renderGlass)
-        }
-    }
-}
-
-// ours: the heart, far away in the middle: soft layers of glow from a warm core through crimson and maroon into the
-// green haze, beating lub-dub (the beat resyncs to each strike); on a strike it squeezes, then swells
-void Stripe::renderGland (float s)
-{
-    if (envelope <= 0.005f) return;
-    const float t = std::fmod ((float) (elapsed - lastHeartbeat), 0.85f);
-    auto bump = [] (float x, float w) { return std::exp (-(x / w) * (x / w)); };
-    const float beatNow = bump (t, 0.045f) + 0.6f * bump (t - 0.17f, 0.045f);
-    const float swell = (1.0f + 0.22f * beatNow) * (1.0f - 0.35f * squeeze + 0.5f * jmax (0.0f, charge - squeeze));
-    const float e = envelope;
-    splatGlow (heartX, glandY, 60.0f * swell, 16.0f, (0.35f + 0.15f * beatNow + 0.2f * charge) * e, 0.30f, 0.0f, 0.03f, s);
-    splatGlow (heartX, glandY, 22.0f * swell, 8.0f * swell, (0.5f + 0.3f * beatNow + 0.4f * charge) * e, 0.85f, 0.03f, 0.07f, s);
-    splatGlow (heartX, glandY, 8.0f * swell, 4.5f * swell, (0.6f + 0.4f * beatNow + 0.5f * charge) * e, 1.0f, 0.18f, 0.12f, s);
-    splatGlow (heartX, glandY, 3.0f * swell, 2.2f * swell, (0.3f + 0.25f * beatNow + 0.3f * charge) * e, 1.0f, 0.45f, 0.3f, s);
-}
-
-//==============================================================================
-// ours: the glass. Its edges are darker (the tube's rim shades it), and it has dust and fine scratches (a fixed
-// pattern, drawn once per size) that show only where light falls on them
-void Stripe::prepareGlass (int w, int h, float s)
-{
-    glassW = w; glassH = h;
-    vignette.assign ((size_t) (w * h), 1.0f);
-    for (int j = 0; j < h; ++j)
-        for (int i = 0; i < w; ++i)
-        {
-            const float x = ((float) i + 0.5f) / s, y = ((float) j + 0.5f) / s;
-            const float ey = jmax (0.0f, 1.0f - jmin (y, height - y) / 5.0f), ex = jmax (0.0f, 1.0f - jmin (x, width - x) / 40.0f);
-            vignette[(size_t) (j * w + i)] = 1.0f - 0.35f * ey * ey - 0.4f * ex * ex;
-        }
-    dust.assign ((size_t) (w * h), 0.0f);
-    Random r (77);
-    for (int k = (w * h) / 700; --k >= 0;)
-        dust[(size_t) (r.nextInt (h) * w + r.nextInt (w))] += uniform (r, 0.15f, 0.6f);
-    for (int k = 0; k < 28; ++k)
-    {
-        // a scratch: a faint, slightly curved line, mostly along the stripe
-        float x = uniform (r, 0.0f, (float) w), y = uniform (r, 0.0f, (float) h);
-        float a = uniform (r, -0.5f, 0.5f) + (r.nextFloat() < 0.3f ? MathConstants<float>::halfPi : 0.0f);
-        const float len = uniform (r, 4.0f, 22.0f) * s, level = uniform (r, 0.06f, 0.16f), bend = 0.02f * gauss (r);
-        for (float t = 0.0f; t < len; t += 0.5f)
-        {
-            a += bend * 0.5f;
-            x += 0.5f * std::cos (a); y += 0.5f * std::sin (a);
-            const int ix = (int) x, iy = (int) y;
-            if (ix >= 0 && ix < w && iy >= 0 && iy < h) dust[(size_t) (iy * w + ix)] = jmax (dust[(size_t) (iy * w + ix)], level);
-        }
-    }
-}
-
-// what is on the glass: the wet tracks, the beads (lenses), and over them the glass's own reflection: a faint band of
-// light drifting slowly across it, and a thin line of light along its top edge
-void Stripe::renderGlass (float s)
-{
-    for (const auto& d : drops)
-        if (d.type == Drop::Type::track && (float) elapsed >= d.born && (float) elapsed - d.born <= d.life) wetTrack (d, s);
-    for (const auto& d : drops)
-        if (d.type == Drop::Type::bead && (float) elapsed >= d.born && (float) elapsed - d.born <= d.life) lens (d, s);
-    const float band = std::fmod ((float) elapsed * 0.035f, 1.6f) * width * 1.0f - 0.3f * width;   // (where it is now)
-    for (int j = 0; j < bufH; ++j)
-    {
-        const float y = ((float) j + 0.5f) / s;
-        const float edge = y < 1.5f ? 0.05f * (1.5f - y) / 1.5f : 0.0f;
-        const float c = band + 0.9f * y;                                   // (slanted)
-        const int i0 = jmax (0, (int) ((c - 90.0f) * s)), i1 = jmin (bufW - 1, (int) ((c + 90.0f) * s));
-        float* row = gloss.data() + (size_t) (j * bufW) * 3;
-        if (edge > 0.0f) for (int i = 0; i < bufW; ++i) { row[i * 3] += edge; row[i * 3 + 1] += edge; row[i * 3 + 2] += edge; }
-        for (int i = i0; i <= i1; ++i)
-        {
-            const float x = ((float) i + 0.5f) / s, t = (x - c) / 34.0f, v = 0.035f * std::exp (-t * t);
-            row[i * 3] += 0.85f * v; row[i * 3 + 1] += 0.95f * v; row[i * 3 + 2] += v;
-        }
-    }
-}
-
-// a bead of venom on the inside of the glass is a lens: it shows the scene behind it upside down and small, darker
-// towards its rim (light bent away), with a caustic at its foot (light gathered through it); it is lit from behind (a
-// bright rim on the side the heart's light comes from), and seen through the glass (a little dimmer, the glass's
-// reflections over it); just after it hits it is a flat, uneven film; drying, it shrinks
-void Stripe::lens (const Drop& d, float s)
-{
-    const float age = (float) elapsed - d.born, u = age / jmax (0.001f, d.life);
-    const float evaporate = jlimit (0.0f, 1.0f, (1.0f - u) / 0.35f);
-    if (evaporate <= 0.0f || envelope <= 0.002f) return;
-    const float size = d.size * std::sqrt (evaporate);
-    const float R = 0.5f * size * s * (1.0f + 0.8f * d.spread), Ry = R * (0.92f - 0.3f * d.spread);
-    if (R < 0.4f) return;
-    const float cx = (d.sx - left) * s, cy = (d.sy - top) * s;
-    const int i0 = jmax (0, (int) (cx - 1.3f * R - 1.0f)), i1 = jmin (bufW - 1, (int) (cx + 1.3f * R + 1.0f));
-    const int j0 = jmax (0, (int) (cy - 1.3f * Ry - 1.0f)), j1 = jmin (bufH - 1, (int) (cy + 1.3f * Ry + 1.0f));
-    const float* behind = scene.data() + (size_t) ((jlimit (0, bufH - 1, (int) cy) * bufW + jlimit (0, bufW - 1, (int) cx)) * 3);
-    const float glow = 0.3f * behind[0] + 0.55f * behind[1] + 0.15f * behind[2];
-    const float toLight = std::atan2 ((glandY - d.sy) * 3.0f, heartX - d.sx);       // (the heart's side, mostly along)
-    const float shown = jmin (1.0f, envelope * 1.5f) * jmin (1.0f, 6.0f * evaporate);
-    constexpr float minify = 2.6f;
-    for (int j = j0; j <= j1; ++j)
-        for (int i = i0; i <= i1; ++i)
-        {
-            const float dx = (float) i + 0.5f - cx, dy = (float) j + 0.5f - cy;
-            float rho = std::sqrt ((dx / R) * (dx / R) + (dy / Ry) * (dy / Ry));
-            if (d.spread > 0.02f)
-            {
-                const float th = std::atan2 (dy, dx), seed = MathConstants<float>::twoPi * d.seed;
-                rho /= 1.0f + d.spread * (0.16f * std::sin (5.0f * th + seed) + 0.08f * std::sin (9.0f * th + 2.0f * seed));
-            }
-            if (rho >= 1.1f) continue;
-            const float a = jlimit (0.0f, 1.0f, (1.05f - rho) / 0.1f) * shown;
-            const int sx = jlimit (0, bufW - 1, (int) (cx - dx * minify)), sy = jlimit (0, bufH - 1, (int) (cy - dy * minify));
-            const float* c = scene.data() + (size_t) ((sy * bufW + sx) * 3);
-            const float rim = jlimit (0.0f, 1.0f, (rho - 0.55f) / 0.45f), dark = 1.0f - 0.72f * rim * rim;
-            const float foot = dy > 0.0f ? dy / Ry : 0.0f, caustic = foot * std::exp (-((rho - 0.8f) / 0.11f) * ((rho - 0.8f) / 0.11f)) * (0.15f + 0.9f * glow);
-            const float facing = jmax (0.0f, std::cos (std::atan2 (dy / Ry, dx / R) - toLight));
-            const float backlit = facing * std::exp (-((rho - 0.88f) / 0.09f) * ((rho - 0.88f) / 0.09f)) * (0.12f + 0.8f * glow);
-            const float out[3] { 0.9f * (c[0] * dark + 0.05f * d.r + caustic * (0.4f + 0.6f * d.r) + backlit * (0.5f + 0.5f * d.r)),
-                                 0.9f * (c[1] * dark + 0.05f * d.g + caustic * (0.4f + 0.6f * d.g) + backlit * (0.5f + 0.5f * d.g)),
-                                 0.9f * (c[2] * dark + 0.05f * d.b + caustic * (0.4f + 0.6f * d.b) + backlit * (0.5f + 0.5f * d.b)) };
-            const size_t k = (size_t) (j * bufW + i);
-            float* f = front.data() + k * 3;
-            for (int ch = 0; ch < 3; ++ch) f[ch] = f[ch] * (1.0f - a) + a * out[ch];
-            cover[k] += a * (1.0f - cover[k]);
-        }
-}
-
-// the wet track a running bead leaves: a thin film, which bends what is behind it a little (sideways), with a faint line
-// of light along one edge, drying from its ends
-void Stripe::wetTrack (const Drop& d, float s)
-{
-    const float u = ((float) elapsed - d.born) / jmax (0.001f, d.life), a = 0.35f * (1.0f - u) * jmin (1.0f, envelope * 1.5f);
-    if (a <= 0.003f) return;
-    const float cx = (d.sx - left) * s, halfW = jmax (0.6f, 0.5f * d.size * s * (1.0f - 0.5f * u));
-    const int i0 = jmax (0, (int) (cx - halfW)), i1 = jmin (bufW - 1, (int) (cx + halfW));
-    const int j0 = jmax (0, (int) ((d.sy - 0.7f - top) * s)), j1 = jmin (bufH - 1, (int) ((d.sy + 0.7f - top) * s));
-    for (int j = j0; j <= j1; ++j)
-        for (int i = i0; i <= i1; ++i)
-        {
-            const int sx = jlimit (0, bufW - 1, (int) (cx - 1.6f * ((float) i + 0.5f - cx)));
-            const float* c = scene.data() + (size_t) ((j * bufW + sx) * 3);
-            const size_t k = (size_t) (j * bufW + i);
-            float* f = front.data() + k * 3;
-            for (int ch = 0; ch < 3; ++ch) f[ch] = f[ch] * (1.0f - a) + a * jmin (1.0f, 1.1f * c[ch]);
-            cover[k] += a * (1.0f - cover[k]);
-        }
-    // (its edge catches the light from behind, a little)
-    for (int j = j0; j <= j1; ++j)
-        if (i0 >= 0 && i0 < bufW) { float* px = front.data() + (size_t) ((j * bufW + i0) * 3); px[0] += 0.08f * a; px[1] += 0.1f * a; px[2] += 0.1f * a; }
-}
-
 void Stripe::paint (Graphics& g)
 {
     const float s = theme::pixelScale (g, *this);
     const int w = jmax (1, roundToInt (width * s)), h = jmax (1, roundToInt (height * s));
-    if (envelope <= 0.0f && background.isValid() && w == bufW && h == bufH && s == glowScale)
-        g.drawImage (background, Rectangle<float> (0.0f, 0.0f, width, height));     // (dark: only what is under it)
+    // (dark: only what is under it; ours: the scorpion stays faintly lit while the animation is on)
+    const bool dark = envelope <= 0.0f && ! (style == Style::scorpius && animated);      // (their glow fading included)
+    if (dark && background.isValid() && w == bufW && h == bufH && s == glowScale)
+        g.drawImage (background, Rectangle<float> (0.0f, 0.0f, width, height));
     else
     {
         render (w, h, s);

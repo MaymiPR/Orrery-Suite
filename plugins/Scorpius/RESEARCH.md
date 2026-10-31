@@ -442,3 +442,65 @@ coloured pillars, the glass's reflections), with our own take where the user ask
 - **The project's tempo (ours):** the ORION style's particles move at the pace above times the beats per second
   (tempo / 60: 2 times at 120 BPM; 1 ... 3.5 times; 2 times when the host gives no tempo), easing to a new tempo over
   ~0.5 s, the venom at half that pace (tempo / 120); the light's brightness still follows the level in real time.
+
+## UI round 11: the SCORPIUS style redone as a scorpion in light (ours, after the user's review)
+
+The venom-on-glass scene (round 7) read as noise in a stripe 36 px high, so the style was redesigned with the user,
+starting from mock-ups and a reference image of a scorpion drawn in glowing lines; the result is our own drawing:
+- **Two scorpions in neon,** back to back and mirrored in the middle of the tube, side on, their tails arched over
+  their backs towards each other, claws outwards (each drawn in its own units, ~145 × 35, scaled 0.84 into the tube,
+  the backs of their tails 3 px either side of x 444, y 290; the second a step out of time with the first): seven plates along its back and a dashed line
+  along its side, a carapace with a groove and eyes, small jaws, five tail segments each with a keel and two grains, a
+  bulb and a curved blade for its sting, jointed legs with claws, and heavy pincers with ridges and toothed fingers, resting on the ground.
+  Each stroke is lit in three layers by its distance to the pixel (a halo, a glow and a thin core; green on the body,
+  cyan-mint towards the claws and the sting) and trembles slightly; a faint glow fills the body; sparks run along the
+  outline. Its light is drawn in a layer of its own, held to white and bloomed at three widths (σ 7.3, 2.3 and 0.67
+  design px; the widest at half resolution), over the scorpion's span only.
+- **Motion:** they sway and breathe, their legs stepping a little, at half the ORION style's pace (the tempo). On every
+  **kick** their tails strike forwards over their heads in ~0.06 s and settle back over ~0.25 s (a kick mid-swing
+  strikes again from where the tails are), a pulse of light running up them and the stings flaring. Any beat (the
+  light's jumps) brightens them. (Striking on every beat, they struck at hats and snares too and never rested; a first
+  kick detector on the editor's 40 Hz low band missed back-to-back kicks and 808s. The claws closing with the
+  compressor's gain reduction could not be seen at this size and was dropped.)
+- **The kicks (dsp/Kick.h),** found on the audio thread every 2.5 ms in two bands: the sub (below 90 Hz; its peak over
+  25 ms 3 dB above a level that rises over 60 ms and follows a decay within 15 ms, above -28 dBFS) finds a kick or an
+  808 out of silence or out of a decayed tail; the punch (70 ... 200 Hz; its peak over 10 ms 4 dB above a 30 / 8 ms
+  level, above -30 dBFS, confirmed by the sub above -26 dBFS within 20 ms) finds a kick landing on one still ringing,
+  whose sub hardly rises (a kick sweeping down from 120 Hz onto a 50 Hz tail rose < 2 dB below 120 Hz). Either way the
+  sub must be at least half the punch (a snare's onset leaks to -19 dBFS in the sub but is 11 dB stronger in the
+  punch); for 60 ms after a kick both levels follow the peaks up, so a held 808 counts once. Tested
+  (ScorpiusTests): 24 of 24 sixteenth kicks at 140 BPM, also 12 dB quieter; 16 of 16 back-to-back 808s; 16 of 16 kicks
+  with 808s between; a held 808 once; hats and snares never.
+- **Motes:** they shed ~800 green motes a second at full brightness (more on a beat, none in silence) from their
+  outlines (not the details inside), 1.2 ... 3 design px across, each drawn as one glow drawn out along its way. They
+  keep off the scorpions so their lines stay legible: a map of design pixels, rebuilt each frame (1 on the lines and
+  inside the bodies, 0 ~2.5 px out), has them born just clear of the outline, pushed round it as they flow and faded
+  where they still cross it. Each keeps the brightness it was born with, and while the host's
+  transport runs the shedding and the scorpions' glow follow a level that rises with the light at once but fades over
+  ~1.5 s: with the light itself (which falls 50 dB/s) a kick at 60 BPM lit the whole stream and let it go dark before
+  the next one; now the stream's brightness holds within ~1 grey level through a beat. When the transport stops (or the
+  host stops calling the processor) the scorpions' glow and every mote follow the light itself, so they fade exactly
+  as fast as the ORION style does (filmed with a stop: both start fading on the same frame and are out ~0.6 s later). Each drifts off it for 0.15 ... 0.6 s, then streams out as the ORION style's streamers do (18 px/s plus
+  0.3 ... 0.46 × the distance from the middle) into the black holes past the ends (the ORION style's pull, funnel and
+  thinning, the same code), at three quarters of the ORION style's pace.
+- **The black holes reach 80 px into the tube (both styles; 150 before),** so the streams pinch into a line close to
+  the ends instead of a sixth of the way in.
+- **Silence and the switch:** with no sound the scorpion stays faintly lit and still (no motes); with the particle
+  animation off the stripe is dark, as before. Its light is reflected in the glass's lower rim as the ORION style's
+  band is (the reference's fixed dotted reflections stay the ORION style's).
+- Cost at 200 %: 4.4 ms a frame at full level, 3.4 ms in silence (the ORION style 4.3 ms). It had reached 8 ms: the
+  motes were drawn as a trail, a core and a halo each (3.7 ms) and the bloom blurred at three widths, two at full
+  resolution (1.6 ms); now one glow per mote, and both blurs at half resolution, added up there and brought back up
+  once.
+
+## UI round 12: the light through a sparse loop at 60 BPM (RefCapture film at 200 %)
+
+FL Studio's "DL Clubbed" loop (Packs/Loops, 8 beats at 60 BPM, Ogg Vorbis in a WAV; decoded and resampled to 48 kHz)
+twice, between 1 s and 3 s of silence. Its kicks decay below -90 dBFS for ~40 ms before the next hit four times a loop.
+- **The reference stays fully lit through the whole loop** (the stripe's light never below 0.87 of full); ours, which
+  at a stop took the loudest chunk of the last 0.15 s (round 6), dropped to ~0.45 at each gap: the light "flashing".
+- After the loop ends the reference holds ~0.2 s and fades over ~0.6 s, as a level falling from where it was.
+- So at a stop the level now only rises to the loudest of the last 0.15 s, never drops to it, and otherwise carries on
+  falling from where it was (`dsp/Light.h`; the round-6 tone stops are unchanged, the level there being the tone's).
+  Now ours never falls below 0.90 through the loop, and its end matches the reference's to ~0.05 of full brightness
+  (it is out ~0.07 s sooner at the very bottom, where the reference falls nearer 40 dB/s than 50).

@@ -41,7 +41,8 @@ original's own filters and curves, identified from its responses.
 - **Presets:** the nine factory presets of the original ("start me up" is the default); the save button stores your
   own as a `.scorpius` file in `Documents/Scorpius/Presets`.
 - **Settings** (gear): particle animation on / off and its style: "Orion" (the original's neon stream) or "Scorpius"
-  (ours, the default: venom from a beating heart, played by the music). Both move with the project's tempo.
+  (ours, the default: two scorpions drawn in green light, back to back, that shed motes into black holes at the ends,
+  strike on every kick). Both move with the project's tempo.
 - **Zoom:** 50 – 200 % from the UI Scale box.
 
 ## How close

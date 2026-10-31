@@ -1,8 +1,9 @@
 // Renders the Scorpius editor to a PNG for the visual comparison with the reference (tools/compare_ui.py):
 //   ScorpiusSnapshot out.png [--scale=2] [paramID=value ...] [--levels=inDb,outDb] [--audio] [--preset=name] [--slot=1]
-//                   [--style=orion|scorpius] [--bench] [--film=audio.f32,seconds,every]
+//                   [--style=orion|scorpius] [--bench] [--film=audio.f32,seconds,every[,stopAt]]
 // --film plays a file (float32, interleaved stereo, 48 kHz) through the processor and writes the stripe every
-// <every> frames of the editor's 40 Hz clock as out_NNNN.png (out without its extension).
+// <every> frames of the editor's 40 Hz clock as out_NNNN.png (out without its extension); from <stopAt> seconds on
+// the processor is no longer called, as when a host stops.
 // Parameter values are in real units (dB, 0 ... 1, Hz; driveColor 0 1 2, compMode 0 1); --levels freezes the I/O
 // meters, --audio sets the animations as for that input level.
 #include <juce_audio_processors/juce_audio_processors.h>
@@ -73,6 +74,7 @@ int main (int argc, char** argv)
             const int frames = (int) (raw.getSize() / 8);
             const float seconds = spec[1].getFloatValue();
             const int every = juce::jmax (1, spec[2].getIntValue());
+            const float stopAt = spec.size() > 3 ? spec[3].getFloatValue() : 1.0e9f;
             proc->setRateAndBufferSizeDetails (48000.0, 300);
             proc->prepareToPlay (48000.0, 300);
             juce::AudioBuffer<float> buf (2, 300);
@@ -82,7 +84,8 @@ int main (int argc, char** argv)
             const juce::Rectangle<int> area = juce::Rectangle<float> (10, 272, 868, 36).transformedBy (juce::AffineTransform::scale (scale)).toNearestInt();
             for (int tick = 0; tick < (int) (seconds * 40.0f) && pos + 1200 <= frames; ++tick)
             {
-                for (int b = 0; b < 4; ++b, pos += 300)
+                const bool stopped = (float) tick / 40.0f >= stopAt;
+                for (int b = 0; b < 4 && ! stopped; ++b, pos += 300)
                 {
                     for (int k = 0; k < 300; ++k)
                     {
@@ -91,7 +94,7 @@ int main (int argc, char** argv)
                     }
                     proc->processBlock (buf, midi);
                 }
-                ed->filmStep (tick / 40.0);
+                ed->filmStep (tick / 40.0, ! stopped);
                 if (tick % every != 0) continue;
                 auto img = ed->createComponentSnapshot (ed->getLocalBounds(), true, 1.0f).getClippedImage (area);
                 auto f = base.getSiblingFile (base.getFileName() + juce::String::formatted ("_%04d.png", tick));

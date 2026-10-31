@@ -25,7 +25,7 @@ public:
     // snapshot tool: freeze meters and animations at a given state
     void setTestLevels (float inDb, float outDb, bool audio);
     // the snapshot tool's films: moves the stripe on to a time of its own clock (after the processor ran up to it)
-    void filmStep (double now);
+    void filmStep (double now, bool playing = true);
 
 private:
     class Content : public juce::Component
@@ -153,7 +153,7 @@ private:
     float compGrDb = 0.0f;
     bool frozen = false;
     double lastTick = 0.0;
-    int lastBlocks = 0, lastBeats = 0;
+    int lastBlocks = 0, lastBeats = 0, lastKicks = 0;
     float idleSeconds = 0.0f, lightDb = -200.0f, lastLows = 0.0f, lastMids = 0.0f;
     void stepStripe (bool playing, float dt);
     juce::Image plateImage, knobShadow, grilleImage;

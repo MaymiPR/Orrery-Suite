@@ -9,7 +9,10 @@
 //   - each chunk's sample peak (dBFS); the level takes it when it jumps: by more than 4.5 dB up or down against the
 //     chunks of the last 120 ms, or after silence. Smooth changes leave it where it was (a tone ramp, however long,
 //     keeps its starting brightness), while music, whose peaks come and go, is followed as it fades;
-//   - when the sound stops (a chunk below -90 dBFS) the level takes the loudest chunk of the last 0.15 s;
+//   - when the sound stops (a chunk below -90 dBFS) the level rises to the loudest chunk of the last 0.15 s if that is
+//     louder, and otherwise carries on from where it was (filmed with FL Studio's DL Clubbed loop, whose kicks decay
+//     below -90 dBFS for ~40 ms before the next: the reference stays fully lit through them, and after the loop ends
+//     it holds and fades as a level falling from where it was);
 //   - it rises at once and falls at 50 dB/s.
 // The editor reads it on its own clock (and the beats: the times it jumped up).
 namespace sc
@@ -68,7 +71,7 @@ private:
         }
         else if (sounding)
         {
-            detector = -200.0f;
+            // (never lower than it was: a short gap in a decaying sample does not drop the light)
             for (int k = 1; k <= stopChunks; ++k) detector = juce::jmax (detector, history[(size_t) ((pos - k + size) % size)]);
             target = -200.0f;
         }

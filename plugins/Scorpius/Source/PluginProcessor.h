@@ -6,6 +6,7 @@
 #include "shared/dsp/LevelMeter.h"
 #include "dsp/Visuals.h"
 #include "dsp/Light.h"
+#include "dsp/Kick.h"
 #include "dsp/Engine.h"
 #include "dsp/Resampler.h"
 #include "dsp/ConverterFits.h"
@@ -63,8 +64,10 @@ public:
     std::atomic<float> compGr { 0.0f };
     sc::Visuals visuals;                     // what the circles follow (dsp/Visuals.h)
     sc::Light light;                         // what the stripe's light follows (dsp/Light.h)
+    sc::Kick kick;                           // the kicks the scorpions strike on (dsp/Kick.h)
     std::atomic<int> blocksProcessed { 0 };
     std::atomic<float> hostBpm { 0.0f };     // the project's tempo, as the host last gave it (0: it gives none)
+    std::atomic<int> hostPlaying { -1 };     // whether its transport runs (1), is stopped (0), or it does not say (-1)
 
 private:
     juce::ValueTree captureSlot() const;

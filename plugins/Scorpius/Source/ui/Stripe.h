@@ -23,16 +23,18 @@
 //   - its brightness follows a level the processor keeps (dsp/Light.h: the input's peak, taken when it jumps and when
 //     the sound stops, falling at 50 dB/s): dark below -72 dBFS, full from -40 dBFS up, ((dB + 72) / 32)^1.25 between,
 //     eased over ~30 ms on screen; with the particle animation off (settings), the stripe stays dark.
-// Our own style (settings, "SCORPIUS"): green venom shot at you, through a pane of glass. Far away in the middle beats a
-// crimson heart (Antares, the scorpion's red star) shading into a green haze; out of it comes venom (acid lime through
-// the controls' mint to deep teal) flying in 3-D towards the viewer, seen with depth of field: far drops small and
-// soft, those in focus sharp and streaking, the nearest big out-of-focus discs. Quiet music: a slow drip; louder: a
-// steady spray; each beat a strike (a burst, a ring, globs, and a pressure wave from the heart). Drops that reach the
-// glass behave as water on a window: they hit flat and spread (a thin uneven film, a splash ring, droplets flung off),
-// pull back into beads, and the beads are lenses: each shows the scene behind it upside down and small, darker at its
-// rim, with a bright caustic at its foot and a glint. Beads that touch merge; once heavy enough they slide down in fits
-// and starts, sweeping up the beads in their way and leaving a wet track, and they shrink as they dry. The glass itself:
-// a faint reflection drifting across it, darker edges, and dust and fine scratches that catch the light of the venom.
+// Our own style (settings, "SCORPIUS"): two scorpions drawn in green light in the middle of the tube, back to back
+// and mirrored, side on, their tails arched over their backs towards each other. Each has plates along its back, a
+// keel and grains on each tail segment, a bulb and a curved blade for its sting, jointed legs, and heavy pincers
+// with toothed fingers, resting on the ground. Their outlines are neon (a halo, a glow and a thin core, green on the
+// body and cyan- mint towards the claws and the sting) with sparks running along them, a faint glow fills their
+// bodies, and the whole of their light blooms as neon does in a photograph. They sway and breathe; on every kick
+// (dsp/Kick.h) their tails strike forwards over their heads with a pulse of light running up them. They shed green
+// motes all the time, more the louder the music and on each beat, which drift off them, flow round them rather than
+// across their lines, and stream out to the black holes past the ends as the ORION style's particles do (the same
+// pull, funnel and thinning). Their light is reflected in the glass's lower rim. When the transport stops they fade
+// as fast as the ORION style does. With no sound they stay faintly lit and still, shedding nothing; with the
+// particle animation off the stripe is dark.
 // The light is added (as light), computed per physical pixel and drawn as one image per frame of the editor's clock.
 namespace sc
 {
@@ -49,11 +51,16 @@ public:
     // the reference's particles, or ours
     enum class Style { orion, scorpius };
     void setStyle (Style);
-    // ours: the low and mid bands' levels (linear, as the circles read them: Visuals.h), for the venom
+    // the low and mid bands' levels (linear, as the circles read them: Visuals.h)
     void setBands (float lows, float mids);
+    // ours: a kick (dsp/Kick.h), for the scorpions' tails
+    void kick();
+    // ours: whether the host's transport runs (and it calls the processor): stopped, the scorpions' light fades as
+    // fast as the ORION style's does
+    void setPlaying (bool);
     // ours: the project's tempo (BPM; 0 when the host gives none): the ORION style's particles move at their pace times
-    // the beats per second (1 ... 3.5 times; 2 times without a tempo), the venom at half that; easing to a new tempo
-    // over ~0.5 s
+    // the beats per second (1 ... 3.5 times; 2 times without a tempo), the scorpion's motes at three quarters of that
+    // and the scorpion itself at half; easing to a new tempo over ~0.5 s
     void setTempo (float bpm);
     // paints what is under the stripe (in the editor's design coordinates), drawn once per scale
     std::function<void (juce::Graphics&)> paintBackground;
@@ -67,43 +74,6 @@ public:
 
 private:
     enum class Kind { dot, dash, faint, blob, flare, star };
-    // ours: the venom, in 3-D (x and y across, z the distance: 1 far, 0 at the glass), or on the glass
-    struct Drop
-    {
-        enum class Type { spray, glob, mist, bead, track, ring, flash, wave } type;
-        float X, Y, Z, vX, vY, vZ, size, r, g, b, level, born, life, seed, sx, sy, px, py;
-        bool wet;                    // a spray drop that lands on the glass (the rest fly past)
-        float slideAt, travel;       // a bead: when it started to run down (0: not yet), how far since its last track
-        float spread;                // a bead: how flat it still is from its impact (1 just hit ... 0 a round bead)
-    };
-    void fire (bool strike);
-    void emit (Drop::Type, float depth, float speed, float size, float level, float angle = -1.0f);
-    Drop onGlass (const Drop& from, Drop::Type, float x, float y, float size, float life, float delay);
-    void land (const Drop&);
-    void hitGlass (const Drop&);
-    void advanceVenom (float dt);
-    void coalesce();
-    void addDrop (const Drop&);
-    void renderVenom (float pxPerDesign);
-    void renderGland (float pxPerDesign);
-    void renderGlass (float pxPerDesign);
-    void lens (const Drop&, float pxPerDesign);
-    void wetTrack (const Drop&, float pxPerDesign);
-    void prepareGlass (int widthPx, int heightPx, float pxPerDesign);
-    void droplet (float x, float y, float dx, float dy, float size, float level, const Drop&, float pxPerDesign);
-    void splatLine (float x0, float y0, float x1, float y1, float width, float level, float r, float g, float b, float pxPerDesign);
-    void splatGlow (float x, float y, float rx, float ry, float level, float r, float g, float b, float pxPerDesign);
-    void splatDisc (float x, float y, float radius, float level, float r, float g, float b, float pxPerDesign);
-    std::vector<Drop> drops;
-    float sprayDue = 0.0f, globDue = 0.0f, mistDue = 0.0f, charge = 0.0f, squeeze = 0.0f, bass = 0.0f, mids = 0.0f;
-    double lastBurst = -1.0, lastHeartbeat = 0.0;
-    // ours: splats add to the canvas (the light by default); the scene behind the glass (the light over what is under
-    // it), and the glass's layers: how much the drops on it cover (one channel), what they show (the scene through
-    // them), glints and reflections on top, how much darker its edges are, its dust and scratches (one channel)
-    float* canvas = nullptr;
-    std::vector<float> scene, cover, front, gloss, vignette, dust;
-    std::vector<int> gridHead, gridNext;
-    int glassW = 0, glassH = 0;
     struct Particle
     {
         Kind kind;
@@ -118,16 +88,63 @@ private:
     void splat (const Particle&, float level, float pxPerDesign);
     void splatStar (const Particle&, float level, float pxPerDesign);
     void heavenly (const Particle&, float level, float age, float pxPerDesign);
+    void splatLine (float x0, float y0, float x1, float y1, float width, float level, float r, float g, float b, float pxPerDesign);
+    void splatGlow (float x, float y, float rx, float ry, float level, float r, float g, float b, float pxPerDesign);
 
+    // ours: the scorpion, as strokes of light (design coordinates), rebuilt each frame from its pose
+    enum class Part { body, detail, tail, telson, sting, arm, claw, finger, leg };
+    struct Stroke
+    {
+        std::vector<juce::Point<float>> pts;
+        float width, bright;
+        Part part;
+        float tint;                  // 0 its green ... 1 the cyan-mint of its tips
+        std::vector<float> along;    // the distance along it at each point
+    };
+    struct Dot { juce::Point<float> p; float r, level, tint; };              // an eye, a grain, a joint
+    struct Fill { juce::Point<float> p; float rx, ry, level; };            // the faint glow inside its body
+    // a mote it sheds: drifting off it, then streaming out to the black holes
+    struct Mote { float x, y, vx, vy, age, rise, expand, size, twinkle, r, g, b, level; float side; };
+    struct Runner { size_t stroke; float at, speed, bright; };
+    void buildScorpion (float strike, float time);
+    void advanceScorpion (float real, float paced);
+    void renderScorpion (float pxPerDesign);
+    void strokeNeon (const Stroke&, float level, float pxPerDesign);
+    // where the scorpions are: a grid of design pixels around them, 1 on their lines and inside their bodies falling to
+    // 0 ~2.5 px out, so the motes keep off them (born outside, pushed round, faded where they still cross)
+    void mapScorpions();
+    float onScorpion (float x, float y) const;
+    juce::Point<float> awayFromScorpion (float x, float y) const;
+    std::vector<float> scorpionMap;
+    static constexpr float mapLeft = 300.0f, mapTop = 270.0f;
+    static constexpr int mapW = 290, mapH = 40;
+    juce::Point<float> pointAlong (const Stroke&, float distance) const;
+    std::vector<Stroke> strokes;
+    std::vector<Dot> dots;
+    std::vector<Fill> fills;
+    std::vector<juce::Point<float>> spines[2];                               // the tails', from the body to the sting
+    std::vector<Mote> motes;
+    std::vector<Runner> runners;
+    juce::Point<float> stingTips[2], pincers[4];                             // (each scorpion's; two pincers each)
+    // strike: 1 on a kick, running down; struck: the tails' swing (0 ... 1), from strikeFrom when a kick came mid-swing
+    // presence: the light's level, rising with it at once but fading over ~1.5 s while the transport runs, for the
+    // scorpions' glow and their shedding (so at a slow tempo they do not go out between the hits); stopped, the light's
+    // level itself (fading as the ORION style's)
+    float strike = 0.0f, struck = 0.0f, strikeFrom = 0.0f, flash = 0.0f, moteDue = 0.0f, bodyTime = 0.0f, presence = 0.0f;
+    bool kicked = false, playing = true;
+    // the scorpion's light before it blooms, and the blurs it blooms with
+    std::vector<float> layer, region, half, blurred, mid, blurTmp, nearest;
+
+    float* canvas = nullptr;
     juce::Random rng { 1234 };
     std::vector<Particle> particles;
-    float envelope = 0.0f, levelIn = -200.0f, heart = 0.0f;
+    float envelope = 0.0f, levelIn = -200.0f, bass = 0.0f, mids = 0.0f;
     double lastTime = 0.0, elapsed = 0.0;
     float pace = 2.0f, paceTarget = 2.0f;
     bool animated = true, frozen = false, moving = false, beat = false;
     Style style = Style::orion;
-    std::vector<float> light, glow, glowHeart, under;   // RGB per physical pixel: this frame's light, the glow at full
-                                                        // brightness (and the heart's beat, ours), what is under it
+    std::vector<float> light, glow, under, scene;     // RGB per physical pixel: this frame's light, the glow at full
+                                                      // brightness, what is under it, the two added up
     int bufW = 0, bufH = 0;
     float glowScale = 0.0f;
     juce::Image image, background;

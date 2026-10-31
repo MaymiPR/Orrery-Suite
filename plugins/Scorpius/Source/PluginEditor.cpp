@@ -489,18 +489,22 @@ void ScorpiusEditor::stepStripe (bool playing, float dt)
     const int beats = proc.light.beatCount();
     const bool beat = beats != lastBeats;
     lastBeats = beats;
+    const int kicks = proc.kick.kickCount();
+    if (kicks != lastKicks) stripe.kick();
+    lastKicks = kicks;
     stripe.setStyle (proc.particleStyle.load() == 0 ? sc::Stripe::Style::orion : sc::Stripe::Style::scorpius);
     stripe.setBands (lastLows, lastMids);
     stripe.setTempo (proc.hostBpm.load());
+    stripe.setPlaying (playing && proc.hostPlaying.load() != 0);
     stripe.setInput (lightDb, beat, proc.animation.load());
 }
 
-void ScorpiusEditor::filmStep (double now)
+void ScorpiusEditor::filmStep (double now, bool playing)
 {
     stripe.clock = [now] { return now; };
     if (const float l = proc.visuals.takeLows(); l > 0.0f) lastLows = l;
     if (const float m = proc.visuals.takeMids(); m > 0.0f) lastMids = m;
-    stepStripe (true, 0.025f);
+    stepStripe (playing, 0.025f);
 }
 
 void ScorpiusEditor::setTestLevels (float inDb, float outDb, bool audio)

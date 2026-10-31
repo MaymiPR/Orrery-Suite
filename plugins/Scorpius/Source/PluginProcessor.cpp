@@ -90,6 +90,7 @@ void ScorpiusProcessor::prepareToPlay (double sampleRate, int block)
     outMeter.prepare (sampleRate);
     visuals.prepare (sampleRate);
     light.prepare (sampleRate);
+    kick.prepare (sampleRate);
     // the modules run at 48 kHz (their fits and learned models are made there); other rates are converted in and out,
     // as the reference does (MEASUREMENTS.md 2)
     resampling = std::abs (sampleRate - 48000.0) > 0.5;
@@ -153,7 +154,10 @@ void ScorpiusProcessor::processBlock (AudioBuffer<float>& buffer, MidiBuffer&)
     ScopedNoDenormals noDenormals;
     if (auto* head = getPlayHead())
         if (const auto position = head->getPosition())
+        {
             if (const auto bpm = position->getBpm()) hostBpm = (float) *bpm;
+            hostPlaying = position->getIsPlaying() ? 1 : 0;
+        }
     auto main = getBusBuffer (buffer, true, 0);
     const int n = main.getNumSamples();
     if (main.getNumChannels() < 2) return;
@@ -180,6 +184,7 @@ void ScorpiusProcessor::processBlock (AudioBuffer<float>& buffer, MidiBuffer&)
     inMeter.measure (main);
     visuals.process (main);
     light.process (main);
+    kick.process (main);
     const bool key = external && side.getNumChannels() >= 2;
     if (! resampling)
     {
