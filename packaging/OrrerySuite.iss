@@ -1,4 +1,4 @@
-; Windows installer for the whole Orrery Suite (Inno Setup 6). Built by .github/workflows/release.yml, or locally after a
+; Windows installer for the whole Orrery Suite (Inno Setup 7). Built by .github/workflows/release.yml, or locally after a
 ; Release build of every plug-in's _VST3, _CLAP and _Standalone targets:
 ;   pwsh packaging/make_iss_include.ps1 build      (writes packaging/plugins.iss.inc from plugins.txt)
 ;   iscc /DAppVersion=<version> packaging\OrrerySuite.iss          (writes dist\OrrerySuite-<version>-Windows-Setup.exe)
@@ -41,6 +41,11 @@ AppId={{CFCB62BB-FB41-4B4B-AB2C-4ED7523FCF0F}
 #endif
 ArchitecturesAllowed=x64compatible
 ArchitecturesInstallIn64BitMode=x64compatible
+; Inno Setup 7: a 64-bit Setup.exe (the default would still be 32-bit); AppVerName and TimeStampsInUTC are
+; stated because their defaults changed in 7 (name plus version with no localized word; UTC time stamps).
+SetupArchitecture=x64
+AppVerName=Orrery Suite {#AppVersion}
+TimeStampsInUTC=yes
 Compression=lzma2
 SolidCompression=yes
 WizardStyle=modern

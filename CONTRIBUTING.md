@@ -32,7 +32,7 @@ at each release (`release.yml`).
 
 ## Windows installer
 
-Made with Inno Setup 6:
+Made with Inno Setup 7 (7.1.1 or newer; the release workflow installs it):
 
 ```bash
 pwsh packaging/make_iss_include.ps1 build
