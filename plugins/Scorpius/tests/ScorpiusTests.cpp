@@ -605,6 +605,7 @@ static void benchModules()
 // the models' matrix kernel alone (12 channels, as the drive's): its multiply-adds per second
 static void benchKernel()
 {
+#if SC_AVX
     using namespace sc::dsp;
     const int C = 12, N = 256, d = 64, rowLen = d + N, reps = 200000;
     std::vector<float> rows ((size_t) (C * rowLen), 0.1f), W ((size_t) (2 * C * C * 2), 0.01f), B ((size_t) (2 * C), 0.0f), z ((size_t) (2 * C * N));
@@ -641,6 +642,9 @@ static void benchKernel()
         const double s = Time::highResolutionTicksToSeconds (Time::getHighResolutionTicks() - t0);
         std::printf ("AVX-512, twelve layers in turn: %.1f multiply-adds per ns\n", (double) reps2 * 12 * 2 * C * C * 2 * N / s / 1e9);
     }
+#else
+    std::printf ("the matrix kernels are x86 only (SSE / AVX / AVX-512)\n");
+#endif
 }
 
 int main (int argc, char** argv)
