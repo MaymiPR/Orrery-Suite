@@ -95,14 +95,17 @@ public:
     inline void process (double& l, double& r)
     {
         // the inter-sample level of the sample nTaps / 2 back (the interpolator's delay, taken from the look-ahead)
-        hist[0][hpos] = l; hist[1][hpos] = r;
-        hpos = (hpos + 1) % nTaps;
+        // (each sample written twice, nTaps apart, so the last nTaps are always in a row: no wrapping in the sums)
+        hist[0][hpos] = hist[0][hpos + nTaps] = l; hist[1][hpos] = hist[1][hpos + nTaps] = r;
+        hpos = hpos + 1 == nTaps ? 0 : hpos + 1;
         double m = 0, mPart = 0;
         for (int c = 0; c < 2; ++c)
             for (int ph = 0; ph < nSub; ++ph)
             {
                 double acc = 0;
-                for (int i = 0; i < nTaps; ++i) acc += interp[ph][i] * hist[c][(hpos + i) % nTaps];
+                const double* x = hist[c] + hpos;
+                const double* k = interp[ph];
+                for (int i = 0; i < nTaps; ++i) acc += k[i] * x[i];
                 m = std::max (m, std::abs (acc));
                 if (ph == reachPhases) mPart = std::max (mPart, std::abs (acc));
             }
@@ -201,7 +204,7 @@ private:
     double state = 1.0, planSlope = 0.0, planTarget = 1.0;
     bool planRelease = false;
     int lookahead = 38, window = 21, releaseSteps = 22, size = 64, pos = 0, hpos = 0, planLeft = 0;
-    double interp[kSub][kTaps] {}, hist[2][kTaps] {};
+    double interp[kSub][kTaps] {}, hist[2][2 * kTaps] {};
     std::vector<double> level, partial, sampleAbs, delay[2];
     int reachWhole = 0, reachPhases = 0;
     int peakTest = 0;

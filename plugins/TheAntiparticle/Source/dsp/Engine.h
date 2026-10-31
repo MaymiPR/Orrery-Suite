@@ -79,7 +79,7 @@ private:
     double fs = 48000.0, osRate = 48000.0;
     int osFactor = 1, selectedFactor = 1, maxBlock = 512, reportedLatency = 0, ctlLen = 128;
     Oversampler os;
-    std::vector<double> work[2], scWork[2];
+    std::vector<double> work[2], scWork[2], amounts;          // amounts: the character amount per sample of a stretch
 
     Biquad eq[3];
     // first stage (the parameters' own ramps, read at chunk ends), then the stage the DSP follows

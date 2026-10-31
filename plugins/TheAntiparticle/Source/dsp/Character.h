@@ -65,10 +65,34 @@ public:
     // one stereo sample in place; sc = the external side-chain sample (nullptr: the input drives the detectors)
     inline void process (double& l, double& r, const double* scL = nullptr, const double* scR = nullptr)
     {
-        if (atZero) for (auto& d : dyn) d.reset();
-        double bl[FirBank::kFilters], br[FirBank::kFilters], dl[3], dr[3];
+        double bl[FirBank::kFilters], br[FirBank::kFilters];
         firs.process (0, l, bl);
         firs.process (1, r, br);
+        bands (l, r, bl, br, scL, scR);
+    }
+    // the same for a stretch of n samples (up to maxStretch) in two passes: the crossover across all of them
+    // (crossover), then each sample's bands in turn (processAt)
+    static constexpr int maxStretch = 256;
+    void crossover (const double* l, const double* r, int n)
+    {
+        double* ol[FirBank::kFilters]; double* orr[FirBank::kFilters];
+        for (int b = 0; b < FirBank::kFilters; ++b) { ol[b] = split[0][b]; orr[b] = split[1][b]; }
+        firs.processBlock (0, l, n, ol);
+        firs.processBlock (1, r, n, orr);
+    }
+    inline void processAt (int i, double& l, double& r, const double* scL = nullptr, const double* scR = nullptr)
+    {
+        double bl[FirBank::kFilters], br[FirBank::kFilters];
+        for (int b = 0; b < FirBank::kFilters; ++b) { bl[b] = split[0][b][i]; br[b] = split[1][b][i]; }
+        bands (l, r, bl, br, scL, scR);
+    }
+
+private:
+    // the bands' processing of one stereo sample, given the crossover's outputs
+    inline void bands (double& l, double& r, const double* bl, const double* br, const double* scL, const double* scR)
+    {
+        if (atZero) for (auto& d : dyn) d.reset();
+        double dl[3], dr[3];
         const double* sl = bl + 3;      // what the nonlinear stages hear
         const double* sr = br + 3;
         if (scL != nullptr)
@@ -102,6 +126,7 @@ public:
         }
     }
 
+public:
     // deepest wet-path reduction (dB, positive) per band since the last call: low, mid, high
     void takeGr (float* out)
     {
@@ -118,5 +143,6 @@ private:
     Band st[3];
     BandDynamics dyn[3];
     double grMax[3] {};
+    double split[2][FirBank::kFilters][maxStretch] {};     // a stretch's crossover outputs (crossover, processAt)
 };
 }

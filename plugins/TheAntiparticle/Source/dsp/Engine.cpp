@@ -5,6 +5,7 @@ namespace ap::dsp
 namespace
 {
 constexpr int kSub = 16;                                        // parameter ramps advance per 16 samples
+static_assert (kSub * 8 <= Character::maxStretch, "a stretch (kSub samples, oversampled) must fit the character section's buffers");
 // with oversampling the reference's path is its filters' delay plus a fraction of a sample, measured per rate at 2x and
 // 4x (nulltest/os_rates_fit.py: the whole path's delay fitted with the designed filters in place); its 8x is its 4x
 // exactly 2 samples later (music -64.8 dB that way; its bypassed path alone fits 1.95)
@@ -34,6 +35,7 @@ void Engine::prepare (double sampleRate, int block, int oversampling, const Tuni
     const double osLatency = os.latency();
     for (auto& w : work) w.assign ((size_t) kSub, 0.0);
     for (auto& w : scWork) w.assign ((size_t) (kSub * osFactor), 0.0);
+    amounts.assign ((size_t) (kSub * osFactor), 0.0);
 
     // the fixed delay is a fixed time; with oversampling the reference's path is a little longer
     const double pathDelay = coreDelay (fs, t) + (selectedFactor > 1 ? osLatency + oversamplingResidual (fs, selectedFactor) + t.osDelayAdd : 0.0);
@@ -173,9 +175,11 @@ void Engine::process (float* l, float* r, const float* scL, const float* scR, in
             double* u[2] { w[0], w[1] };
             const int mu = m * osFactor;
             if (osFactor > 1) os.up (w[0], w[1], m, u[0], u[1]);
+            // in two passes: the EQ and the fixed-delay path sample by sample, then (the character section on) its
+            // crossover across the stretch and its bands sample by sample. The same steps in the same order per sample
             for (int i = 0; i < mu; ++i)
             {
-                if (amountMoving && i % osFactor == 0) character.setAmount (amount.next());
+                if (amountMoving && i % osFactor == 0) amounts[(size_t) i] = amount.next();
                 if (eqEverySample && i % osFactor == 0)
                 {
                     double db[3];
@@ -190,9 +194,19 @@ void Engine::process (float* l, float* r, const float* scL, const float* scR, in
                 double da = a, db = b;         // the fixed-delay path runs all the time (the switch to it is instant)
                 core.process (da, db);
                 if (charBypass) { a = da; b = db; }
-                else if (useSc) character.process (a, b, &sc[0][i], &sc[1][i]);
-                else character.process (a, b);
                 u[0][i] = a; u[1][i] = b;
+            }
+            if (! charBypass)
+            {
+                character.crossover (u[0], u[1], mu);
+                for (int i = 0; i < mu; ++i)
+                {
+                    if (amountMoving && i % osFactor == 0) character.setAmount (amounts[(size_t) i]);
+                    double a = u[0][i], b = u[1][i];
+                    if (useSc) character.processAt (i, a, b, &sc[0][i], &sc[1][i]);
+                    else character.processAt (i, a, b);
+                    u[0][i] = a; u[1][i] = b;
+                }
             }
             if (osFactor > 1) os.down (w[0], w[1], m);
 

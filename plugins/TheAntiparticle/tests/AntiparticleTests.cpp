@@ -1,5 +1,7 @@
 // Unit tests for The Antiparticle: the DSP blocks (Source/dsp) and the processor. Run: AntiparticleTests (exit code 0 =
 // all passed). The match with the reference itself is the null-test suite (nulltest/nulltest.py, NULLTESTS.md).
+// AntiparticleTests benchplugin: the whole plug-in's share of a core;  AntiparticleTests render out.f32 [Name=value ...]:
+// drums through the plug-in, to compare builds sample for sample.
 #include <cmath>
 #include <cstdio>
 #include <random>
@@ -343,9 +345,78 @@ static void testSilenceAndExtremes()
     t.forceOversampling = 0;
 }
 
-int main()
+// the whole plug-in's CPU as a host drives it: its default settings, drum-like noise bursts, 20 s of stereo audio at
+// 48 and 44.1 kHz, in 512-sample blocks and in irregular blocks of 1 ... 512 (as FL Studio delivers them); prints the
+// share of one core it takes
+static void benchPlugin()
+{
+    for (double fs : { 48000.0, 44100.0 })
+        for (int irregular = 0; irregular < 2; ++irregular)
+        {
+            AntiparticleProcessor p;
+            p.setRateAndBufferSizeDetails (fs, 512);
+            p.prepareToPlay (fs, 512);
+            const int total = (int) (20.0 * fs);
+            juce::AudioBuffer<float> b (2, 512);
+            juce::MidiBuffer midi;
+            juce::Random rng (7), sizes (3);
+            double t = 0.0, busy = 0.0;
+            for (int done = 0; done < total;)
+            {
+                const int n = irregular ? 1 + sizes.nextInt (512) : 512;
+                b.setSize (2, n, false, false, true);
+                for (int i = 0; i < n; ++i, t += 1.0 / fs)
+                {
+                    const double ph = std::fmod (t, 0.5);
+                    const float v = (float) (0.5 * std::exp (-ph * 12.0) * (std::sin (juce::MathConstants<double>::twoPi * 55.0 * ph) + 0.3 * (rng.nextDouble() * 2 - 1)));
+                    b.setSample (0, i, v); b.setSample (1, i, v);
+                }
+                const auto t0 = juce::Time::getHighResolutionTicks();
+                p.processBlock (b, midi);
+                busy += juce::Time::highResolutionTicksToSeconds (juce::Time::getHighResolutionTicks() - t0);
+                done += n;
+            }
+            std::printf ("whole plug-in, %.1f kHz, %s blocks: %.1f %% of a core\n", fs / 1000.0, irregular ? "irregular" : "512", 100.0 * busy / 20.0);
+        }
+}
+
+// renders drum-like bursts through the plug-in (48 kHz, irregular blocks) into out (float32, interleaved stereo), with
+// parameters set by their names and displayed values (Name=value): to compare builds sample for sample
+static void renderPlugin (const char* out, int argc, char** argv)
+{
+    std::unique_ptr<AntiparticleProcessor> p (makeProcessor (48000.0, 512));
+    for (int i = 3; i < argc; ++i)
+    {
+        const juce::String a (argv[i]);
+        setParam (*p, a.upToFirstOccurrenceOf ("=", false, false).toRawUTF8(), a.fromFirstOccurrenceOf ("=", false, false).getFloatValue());
+    }
+    juce::AudioBuffer<float> b (2, 512);
+    juce::MidiBuffer midi;
+    juce::Random rng (7), sizes (3);
+    std::vector<float> y;
+    double t = 0.0;
+    for (int done = 0; done < 10 * 48000;)
+    {
+        const int n = 1 + sizes.nextInt (512);
+        b.setSize (2, n, false, false, true);
+        for (int i = 0; i < n; ++i, t += 1.0 / 48000.0)
+        {
+            const double ph = std::fmod (t, 0.5);
+            const float v = (float) (0.9 * std::exp (-ph * 8.0) * (std::sin (juce::MathConstants<double>::twoPi * 55.0 * ph) + 0.3 * (rng.nextDouble() * 2 - 1)));
+            b.setSample (0, i, v); b.setSample (1, i, 0.8f * v);
+        }
+        p->processBlock (b, midi);
+        for (int i = 0; i < n; ++i) { y.push_back (b.getSample (0, i)); y.push_back (b.getSample (1, i)); }
+        done += n;
+    }
+    juce::File (juce::File::getCurrentWorkingDirectory().getChildFile (out)).replaceWithData (y.data(), y.size() * sizeof (float));
+}
+
+int main (int argc, char** argv)
 {
     juce::ScopedJuceInitialiser_GUI init;
+    if (argc > 1 && juce::String (argv[1]) == "benchplugin") { benchPlugin(); return 0; }
+    if (argc > 2 && juce::String (argv[1]) == "render") { renderPlugin (argv[2], argc, argv); return 0; }
     testBiquads();
     testFracDelay();
     testFirBank();

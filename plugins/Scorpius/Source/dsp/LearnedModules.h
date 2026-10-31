@@ -52,12 +52,14 @@ public:
         int mem = 0;
         for (auto& f : model) for (auto& k : f) mem = std::max (mem, k[0].memory());
         for (auto& h : history) h.assign ((size_t) mem, 0.0);
-        warm.assign ((size_t) mem, 0.0);
+        warm.assign ((size_t) mem, 0.0); heard.assign ((size_t) mem, 0.0);
+        historyAt = 0;
     }
     void reset()
     {
         for (auto& f : model) for (auto& k : f) for (auto& m : k) m.reset();
         for (auto& h : history) std::fill (h.begin(), h.end(), 0.0);
+        historyAt = 0;
         active0 = active1 = -1;
     }
     void setMode (int freqHz)
@@ -81,17 +83,28 @@ public:
                 for (int c = 0; c < 2; ++c)
                 {
                     model[f][k][c].reset();
-                    if (active0 >= 0) model[f][k][c].process (history[c].data(), warm.data(), (int) history[c].size());
+                    if (active0 >= 0)
+                    {
+                        // (the ring of the latest input, oldest first)
+                        const auto& h = history[c];
+                        std::copy (h.begin() + historyAt, h.end(), heard.begin());
+                        std::copy (h.begin(), h.begin() + historyAt, heard.begin() + ((int) h.size() - historyAt));
+                        model[f][k][c].process (heard.data(), warm.data(), (int) h.size());
+                    }
                 }
         active0 = first; active1 = last;
         for (int k = first; k <= last; ++k)
             for (int c = 0; c < 2; ++c) model[f][k][c].process (ch[c], tmp[k][c].data(), n);
-        for (int c = 0; c < 2; ++c)          // the latest input, for the next model coming in
+        // the latest input, for the next model coming in (a ring: historyAt its oldest sample)
         {
-            auto& h = history[c];
-            const int keep = (int) h.size() - n;
-            if (keep > 0) { std::move (h.begin() + n, h.end(), h.begin()); std::copy (ch[c], ch[c] + n, h.begin() + keep); }
-            else std::copy (ch[c] + (n - (int) h.size()), ch[c] + n, h.begin());
+            const int size = (int) history[0].size();
+            for (int c = 0; c < 2; ++c)
+            {
+                auto& h = history[c];
+                int at = historyAt;
+                for (int i = std::max (0, n - size); i < n; ++i) { h[(size_t) at] = ch[c][i]; if (++at == size) at = 0; }
+            }
+            historyAt = (int) ((historyAt + std::min (n, size)) % size);
         }
         for (int i = 0; i < n; ++i)
         {
@@ -117,7 +130,8 @@ public:
 
 private:
     LearnedWaveNet model[2][4][2];        // [frequency][amount node][channel]
-    std::vector<double> tmp[4][2], amounts, history[2], warm;
+    std::vector<double> tmp[4][2], amounts, history[2], warm, heard;
+    int historyAt = 0;
     int current = -1, active0 = -1, active1 = -1;          // the models running (amount nodes)
 };
 
