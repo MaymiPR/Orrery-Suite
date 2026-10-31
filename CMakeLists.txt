@@ -14,18 +14,18 @@ set(CMAKE_MSVC_RUNTIME_LIBRARY "MultiThreaded$<$<CONFIG:Debug>:Debug>")
 include(FetchContent)
 FetchContent_Declare(JUCE
     GIT_REPOSITORY https://github.com/juce-framework/JUCE.git
-    GIT_TAG 8.0.16-security
+    GIT_TAG 9.0.4
     GIT_SHALLOW ON)
 FetchContent_MakeAvailable(JUCE)
 # A tag can be moved: build only from the commit it pointed to when chosen
 # (unless FETCHCONTENT_SOURCE_DIR_JUCE points at a JUCE of your own).
-set(ORRERY_JUCE_COMMIT ea77444750de45e036e0279bb0291144bf8e3688)
+set(ORRERY_JUCE_COMMIT 3fb5cbc0340758596dac39f7c8de47d562b4896e)
 if(NOT FETCHCONTENT_SOURCE_DIR_JUCE)
     find_package(Git REQUIRED)
     execute_process(COMMAND ${GIT_EXECUTABLE} rev-parse HEAD WORKING_DIRECTORY ${juce_SOURCE_DIR}
         OUTPUT_VARIABLE juce_commit OUTPUT_STRIP_TRAILING_WHITESPACE)
     if(NOT juce_commit STREQUAL ORRERY_JUCE_COMMIT)
-        message(FATAL_ERROR "JUCE 8.0.16-security is at ${juce_commit}, expected ${ORRERY_JUCE_COMMIT}")
+        message(FATAL_ERROR "JUCE 9.0.4 is at ${juce_commit}, expected ${ORRERY_JUCE_COMMIT}")
     endif()
 endif()
 
